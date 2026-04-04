@@ -18,21 +18,33 @@ export class TerminalManager {
   spawn(paneId: string, cols: number, rows: number, cwd?: string): void {
     this.dispose(paneId)
     const shell = defaultShell()
-    const proc = pty.spawn(shell, [], {
-      name: 'xterm-256color',
-      cols,
-      rows,
-      cwd: cwd || homedir(),
-      env: process.env as Record<string, string>
-    })
-    this.procs.set(paneId, proc)
-    proc.onData((data) => {
-      this.win.webContents.send('pty:data', { paneId, data })
-    })
-    proc.onExit(({ exitCode }) => {
-      this.procs.delete(paneId)
-      this.win.webContents.send('pty:exit', { paneId, exitCode })
-    })
+    const args = process.platform !== 'win32' ? ['--login'] : []
+    try {
+      const proc = pty.spawn(shell, args, {
+        name: 'xterm-256color',
+        cols: Math.max(1, cols || 80),
+        rows: Math.max(1, rows || 24),
+        cwd: cwd || homedir(),
+        env: process.env as Record<string, string>
+      })
+      this.procs.set(paneId, proc)
+      proc.onData((data) => {
+        if (!this.win.isDestroyed() && !this.win.webContents.isDestroyed()) {
+          this.win.webContents.send('pty:data', { paneId, data })
+        }
+      })
+      proc.onExit(({ exitCode }) => {
+        this.procs.delete(paneId)
+        if (!this.win.isDestroyed() && !this.win.webContents.isDestroyed()) {
+          this.win.webContents.send('pty:exit', { paneId, exitCode })
+        }
+      })
+    } catch (e) {
+      if (!this.win.isDestroyed() && !this.win.webContents.isDestroyed()) {
+        this.win.webContents.send('pty:data', { paneId, data: `\r\nError launching PTY: ${e instanceof Error ? e.message : String(e)}\r\n` })
+        this.win.webContents.send('pty:exit', { paneId, exitCode: 1 })
+      }
+    }
   }
 
   write(paneId: string, data: string): void {
@@ -46,7 +58,15 @@ export class TerminalManager {
   dispose(paneId: string): void {
     const p = this.procs.get(paneId)
     if (p) {
-      p.kill()
+      // Send EOF to allow bash/zsh to flush .zsh_history gracefully
+      try {
+        p.write('\x04') // Ctrl+D
+      } catch {
+        /* ignore */
+      }
+      setTimeout(() => {
+        try { p.kill() } catch { /* ignore */ }
+      }, 300)
       this.procs.delete(paneId)
     }
   }

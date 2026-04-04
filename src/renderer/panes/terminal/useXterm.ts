@@ -25,8 +25,10 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(host)
+    let webgl: WebglAddon | null = null
     try {
-      term.loadAddon(new WebglAddon())
+      webgl = new WebglAddon()
+      term.loadAddon(webgl)
     } catch {
       /* DOM renderer fallback */
     }
@@ -40,27 +42,48 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
       if (id === paneId) term.writeln('\r\n[Process exited]')
     })
 
-    fit.fit()
+    if (host.clientWidth > 0 && host.clientHeight > 0) {
+      try { fit.fit() } catch { /* ignore */ }
+    }
     void window.ananke.pty.spawn(paneId, term.cols, term.rows, cwd || undefined)
 
     const sub = term.onData((data) => {
       void window.ananke.pty.write(paneId, data)
     })
 
+    let resizeFrame: number
     const ro = new ResizeObserver(() => {
-      fit.fit()
-      void window.ananke.pty.resize(paneId, term.cols, term.rows)
+      cancelAnimationFrame(resizeFrame)
+      resizeFrame = requestAnimationFrame(() => {
+        try {
+          if (!termRef.current) return // component already unmounted
+          if (!host.clientWidth || !host.clientHeight) return
+          fit.fit()
+          if (term.cols && term.rows) {
+            void window.ananke.pty.resize(paneId, term.cols, term.rows)
+          }
+        } catch {
+          /* DOM dimensions invalid, ignore resize */
+        }
+      })
     })
     ro.observe(host)
 
     /* scrollback prop updates use the following effect so we do not respawn the PTY */
     return () => {
+      cancelAnimationFrame(resizeFrame)
       ro.disconnect()
       sub.dispose()
       d()
       x()
       void window.ananke.pty.dispose(paneId)
-      term.dispose()
+      
+      host.style.display = 'none'
+      setTimeout(() => {
+        try { webgl?.dispose() } catch {}
+        try { term.dispose() } catch {}
+      }, 50)
+      
       termRef.current = null
       fitRef.current = null
     }
@@ -71,5 +94,5 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     if (t) t.options.scrollback = clampScrollback(scrollback)
   }, [scrollback])
 
-  return { hostRef, fitRef }
+  return { hostRef, fitRef, termRef }
 }

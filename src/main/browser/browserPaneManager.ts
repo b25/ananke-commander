@@ -39,7 +39,7 @@ export class BrowserPaneManager {
     return [...(this.histories.get(paneId) ?? [])]
   }
 
-  createOrShow(paneId: string, url: string, bounds: Electron.Rectangle): void {
+  layout(paneId: string, bounds: Electron.Rectangle): void {
     let view = this.views.get(paneId)
     if (!view) {
       view = new WebContentsView({
@@ -62,20 +62,37 @@ export class BrowserPaneManager {
       this.views.set(paneId, view)
     }
     view.setBounds(bounds)
-    const target = isNavigationAllowed(url) ? url : 'https://example.com/'
+  }
+
+  navigate(paneId: string, url: string): void {
+    const view = this.views.get(paneId)
+    if (!view) return
+    const target = isNavigationAllowed(url) ? url : 'about:blank'
     void view.webContents.loadURL(target)
   }
 
-  setBounds(paneId: string, bounds: Electron.Rectangle): void {
-    this.views.get(paneId)?.setBounds(bounds)
+  goBack(paneId: string): void {
+    this.views.get(paneId)?.webContents.goBack()
+  }
+
+  goForward(paneId: string): void {
+    this.views.get(paneId)?.webContents.goForward()
+  }
+
+  stop(paneId: string): void {
+    this.views.get(paneId)?.webContents.stop()
   }
 
   destroy(paneId: string): void {
     const view = this.views.get(paneId)
     if (!view) return
     this.histories.delete(paneId)
-    this.mainWindow.contentView.removeChildView(view)
-    view.webContents.close()
+    if (!this.mainWindow.isDestroyed()) {
+      try { this.mainWindow.contentView.removeChildView(view) } catch {}
+    }
+    if (!view.webContents.isDestroyed()) {
+      try { view.webContents.close() } catch {}
+    }
     this.views.delete(paneId)
   }
 

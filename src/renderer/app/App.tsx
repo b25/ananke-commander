@@ -30,13 +30,17 @@ export function App() {
     void refresh()
   }, [refresh])
 
-  const ws = snap?.workspaces.find((w) => w.id === snap.activeWorkspaceId)
+  let ws = snap?.workspaces.find((w) => w.id === snap.activeWorkspaceId)
+  if (snap && !ws && snap.workspaces.length > 0) {
+    ws = snap.workspaces[0]
+    // Silently auto-correct state next tick
+    void window.ananke.state.setActiveWorkspace(ws.id)
+  }
 
   const setActivePane = useCallback(
-    async (id: string | null) => {
+    async (id: string) => {
       if (!ws) return
-      const panes = ws.panes
-      setSnap(await window.ananke.state.replacePanes(ws.id, panes, id))
+      setSnap(await window.ananke.state.setActivePane(ws.id, id))
     },
     [ws]
   )
@@ -44,8 +48,7 @@ export function App() {
   const updatePane = useCallback(
     async (paneId: string, next: PaneState) => {
       if (!ws) return
-      const panes = ws.panes.map((p) => (p.id === paneId ? next : p))
-      setSnap(await window.ananke.state.replacePanes(ws.id, panes, ws.activePaneId))
+      setSnap(await window.ananke.state.updatePane(ws.id, paneId, next))
     },
     [ws]
   )
@@ -82,7 +85,7 @@ export function App() {
           id,
           type: 'browser',
           title: 'Browser',
-          url: 'https://example.com/'
+          url: 'about:blank'
         } satisfies BrowserPaneState
       } else {
         p = { id, type: 'notes', title: 'Notes', body: '' } satisfies NotesPaneState
@@ -95,10 +98,12 @@ export function App() {
 
   const renderPane = (pane: PaneState) => {
     const isActive = ws!.activePaneId === pane.id
-    const onTileClick = () => void setActivePane(pane.id)
+    const onTileClick = () => {
+      if (!isActive) void setActivePane(pane.id)
+    }
     if (pane.type === 'file-browser') {
       return (
-        <div key={pane.id} onClick={onTileClick} role="presentation">
+        <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
           <FileBrowserPane
             pane={pane}
             isActive={isActive}
@@ -111,7 +116,7 @@ export function App() {
     }
     if (pane.type === 'terminal') {
       return (
-        <div key={pane.id} onClick={onTileClick} role="presentation">
+        <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
           <TerminalPane
             pane={pane}
             isActive={isActive}
@@ -123,7 +128,7 @@ export function App() {
     }
     if (pane.type === 'browser') {
       return (
-        <div key={pane.id} onClick={onTileClick} role="presentation">
+        <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
           <BrowserPlaceholderPane
             pane={pane}
             isActive={isActive}
@@ -134,7 +139,7 @@ export function App() {
       )
     }
     return (
-      <div key={pane.id} onClick={onTileClick} role="presentation">
+      <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
         <NotesPane
           pane={pane}
           isActive={isActive}
@@ -162,29 +167,31 @@ export function App() {
         }}
       />
       <div className="main-stage">
-        <div className="toolbar">
-          <span className="muted">{ws.name}</span>
-          <select
-            aria-label="Add pane"
-            defaultValue=""
-            onChange={(e) => {
-              const v = e.target.value as PaneType | ''
-              e.target.value = ''
-              if (v) void addPane(v)
-            }}
-          >
-            <option value="">+ Pane</option>
-            <option value="file-browser">File browser</option>
-            <option value="terminal">Terminal</option>
-            <option value="browser">Browser</option>
-            <option value="notes">Notes</option>
-          </select>
-          <button type="button" onClick={() => setDrawer(drawer === 'recent' ? 'none' : 'recent')}>
-            Recent
-          </button>
-          <button type="button" onClick={() => setDrawer(drawer === 'settings' ? 'none' : 'settings')}>
-            Settings
-          </button>
+        <div className="toolbar toolbar-thin">
+          <span className="muted" style={{ marginRight: 8, fontSize: '11px', whiteSpace: 'nowrap' }}>{ws.name}</span>
+          <div style={{ display: 'flex', gap: '4px', borderRight: '1px solid var(--border)', paddingRight: '8px', marginRight: '4px' }}>
+            <button type="button" className="btn-thin" onClick={() => void addPane('file-browser')}>🗂 Files</button>
+            <button type="button" className="btn-thin" onClick={() => void addPane('terminal')}>🖥 Terminal</button>
+            <button type="button" className="btn-thin" onClick={() => void addPane('browser')}>🌐 Browser</button>
+            <button type="button" className="btn-thin" onClick={() => void addPane('notes')}>📝 Notes</button>
+          </div>
+          <div style={{ flex: 1 }} />
+          <div style={{ display: 'flex', gap: '4px', borderRight: '1px solid var(--border)', paddingRight: '8px', marginRight: '4px' }}>
+            <button type="button" className="btn-thin" title="Read F3" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F3' }))}>F3 Read</button>
+            <button type="button" className="btn-thin" title="Edit F4" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F4' }))}>F4 Edit</button>
+            <button type="button" className="btn-thin" title="Copy F5" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F5' }))}>F5 Copy</button>
+            <button type="button" className="btn-thin" title="Move F6" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F6' }))}>F6 Move</button>
+            <button type="button" className="btn-thin" title="Delete F8" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F8' }))}>F8 Delete</button>
+            <button type="button" className="btn-thin" title="Archive" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'Arc' }))}>Archive</button>
+          </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button type="button" className="btn-thin" onClick={() => setDrawer(drawer === 'recent' ? 'none' : 'recent')}>
+              Recent
+            </button>
+            <button type="button" className="btn-thin" onClick={() => setDrawer(drawer === 'settings' ? 'none' : 'settings')}>
+              Settings
+            </button>
+          </div>
         </div>
         <PaneGrid>{ws.panes.map((p) => renderPane(p))}</PaneGrid>
       </div>

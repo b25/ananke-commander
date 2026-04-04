@@ -149,6 +149,13 @@ export class StateStore {
     this.store.set('workspaces', workspaces)
   }
 
+  setActiveWorkspacePane(workspaceId: string, activePaneId: string | null): void {
+    const workspaces = this.store.get('workspaces').map((ws) =>
+      ws.id === workspaceId ? { ...ws, activePaneId } : ws
+    )
+    this.store.set('workspaces', workspaces)
+  }
+
   addWorkspace(name: string): WorkspaceState {
     const ws = createDefaultWorkspace()
     ws.name = name

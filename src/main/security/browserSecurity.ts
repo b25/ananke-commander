@@ -9,10 +9,14 @@ const TRUSTED_HOSTS = new Set([
 
 export function isNavigationAllowed(url: string): boolean {
   try {
-    const u = new URL(url)
+    let check = url
+    if (!check.startsWith('http') && !check.startsWith('about:') && !check.startsWith('data:')) {
+      check = 'https://' + check
+    }
+    const u = new URL(check)
     if (u.protocol === 'about:' || u.protocol === 'data:') return true
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return false
-    return TRUSTED_HOSTS.has(u.hostname)
+    return true // Allow all valid web protocols for commander browser pane
   } catch {
     return false
   }

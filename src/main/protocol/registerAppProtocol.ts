@@ -46,7 +46,11 @@ export async function handleAppProtocolRequest(
 
   if (devServerUrl) {
     const target = new URL(pathname + url.search, devServerUrl).toString()
-    return net.fetch(target, { bypassCustomProtocolHandlers: true })
+    try {
+      return await net.fetch(target, { bypassCustomProtocolHandlers: true })
+    } catch {
+      // ignore
+    }
   }
 
   const safe = normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, '')
@@ -74,7 +78,7 @@ export async function handleAppProtocolRequest(
 }
 
 export async function registerAppProtocolHandler(rendererDir: string): Promise<void> {
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL || process.env.VITE_DEV_SERVER_URL
 
   await protocol.handle(SCHEME, (request) =>
     handleAppProtocolRequest(request, rendererDir, devServerUrl)

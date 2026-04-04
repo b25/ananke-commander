@@ -20,6 +20,10 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/preload/index.ts')
+        },
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].cjs'
         }
       }
     }
@@ -29,6 +33,14 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: resolve(__dirname, 'src/renderer/index.html')
+      }
+    },
+    server: {
+      allowedHosts: true,
+      hmr: {
+        protocol: 'ws',
+        host: 'localhost',
+        port: 5173
       }
     },
     plugins: [react()]
