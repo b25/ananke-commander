@@ -64,6 +64,8 @@ function migrateLegacyStateIfNeeded(): void {
 
 export class StateStore {
   private store: Store<StoreSchema>
+  private pendingPatch: Partial<AppStateSnapshot> = {}
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor() {
     migrateLegacyStateIfNeeded()
@@ -79,15 +81,30 @@ export class StateStore {
   }
 
   getSnapshot(): AppStateSnapshot {
-    return {
+    const disk: AppStateSnapshot = {
       workspaces: this.store.get('workspaces'),
       activeWorkspaceId: this.store.get('activeWorkspaceId'),
       settings: this.store.get('settings'),
       recentlyClosed: this.store.get('recentlyClosed')
     }
+    return { ...disk, ...this.pendingPatch }
   }
 
   setSnapshot(patch: Partial<AppStateSnapshot>): void {
+    Object.assign(this.pendingPatch, patch)
+    if (this.debounceTimer) clearTimeout(this.debounceTimer)
+    this.debounceTimer = setTimeout(() => {
+      this.flushSnapshot()
+    }, 300)
+  }
+
+  flushSnapshot(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer)
+      this.debounceTimer = null
+    }
+    const patch = this.pendingPatch
+    this.pendingPatch = {}
     if (patch.workspaces !== undefined) this.store.set('workspaces', patch.workspaces)
     if (patch.activeWorkspaceId !== undefined) this.store.set('activeWorkspaceId', patch.activeWorkspaceId)
     if (patch.settings !== undefined) this.store.set('settings', patch.settings)
