@@ -29,6 +29,36 @@ let folderSizeMgr: FolderSizeManager | null = null
 let terminals: TerminalManager | null = null
 let browserPanes: BrowserPaneManager | null = null
 
+function getTerminals(): TerminalManager {
+  if (!terminals) terminals = new TerminalManager(mainWindow!)
+  return terminals
+}
+
+function getFileJobs(): FileJobManager {
+  if (!fileJobs) fileJobs = new FileJobManager(mainWindow!)
+  return fileJobs
+}
+
+function getFolderSizeMgr(): FolderSizeManager {
+  if (!folderSizeMgr) folderSizeMgr = new FolderSizeManager(mainWindow!)
+  return folderSizeMgr
+}
+
+function getBrowserPanes(): BrowserPaneManager {
+  if (!browserPanes) {
+    browserPanes = new BrowserPaneManager(mainWindow!, {
+      maxEntries: () => stateStore!.getSettings().privacy.browserHistoryMax,
+      shouldRecord: () => !stateStore!.getSettings().privacy.privateMode,
+      onHistory: (paneId, urls) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('browser:history', { paneId, urls })
+        }
+      }
+    })
+  }
+  return browserPanes
+}
+
 let protocolRegistered = false
 let ipcRegistered = false
 
@@ -96,8 +126,8 @@ function registerIpcHandlers(): void {
         max
       )
     }
-    if (pane?.type === 'terminal') terminals!.dispose(paneId)
-    if (pane?.type === 'browser') browserPanes!.destroy(paneId)
+    if (pane?.type === 'terminal') getTerminals().dispose(paneId)
+    if (pane?.type === 'browser') getBrowserPanes().destroy(paneId)
     stateStore!.replaceWorkspacePanes(workspaceId, panes, active)
     return stateStore!.getSnapshot()
   })
@@ -174,54 +204,54 @@ function registerIpcHandlers(): void {
     'fileJob:start',
     (_e, kind: 'copy' | 'move' | 'delete', sources: string[], destDir?: string) => {
       if (kind === 'delete') {
-        return fileJobs!.runJob('delete', sources.map((s) => resolve(s)))
+        return getFileJobs().runJob('delete', sources.map((s) => resolve(s)))
       }
       if (!destDir) throw new Error('destDir required')
-      return fileJobs!.runJob(kind, sources.map((s) => resolve(s)), resolve(destDir))
+      return getFileJobs().runJob(kind, sources.map((s) => resolve(s)), resolve(destDir))
     }
   )
 
   ipcMain.handle('fileJob:cancel', () => {
-    fileJobs!.cancel()
+    getFileJobs().cancel()
   })
 
   ipcMain.handle('fs:startFolderSize', (_e, dirPath: string) => {
-    return folderSizeMgr!.start(resolve(dirPath))
+    return getFolderSizeMgr().start(resolve(dirPath))
   })
 
   ipcMain.handle('fs:cancelFolderSize', (_e, requestId: string) => {
-    folderSizeMgr!.cancel(requestId)
+    getFolderSizeMgr().cancel(requestId)
   })
 
   ipcMain.handle('pty:spawn', (_e, paneId: string, cols: number, rows: number, cwd?: string) => {
-    terminals!.spawn(paneId, cols, rows, cwd)
+    getTerminals().spawn(paneId, cols, rows, cwd)
   })
 
   ipcMain.handle('pty:write', (_e, paneId: string, data: string) => {
-    terminals!.write(paneId, data)
+    getTerminals().write(paneId, data)
   })
 
   ipcMain.handle('pty:resize', (_e, paneId: string, cols: number, rows: number) => {
-    terminals!.resize(paneId, cols, rows)
+    getTerminals().resize(paneId, cols, rows)
   })
 
   ipcMain.handle('pty:dispose', (_e, paneId: string) => {
-    terminals!.dispose(paneId)
+    getTerminals().dispose(paneId)
   })
 
   ipcMain.handle(
     'browser:layout',
     (_e, paneId: string, url: string, bounds: Electron.Rectangle) => {
-      browserPanes!.createOrShow(paneId, url, bounds)
+      getBrowserPanes().createOrShow(paneId, url, bounds)
     }
   )
 
   ipcMain.handle('browser:getHistory', (_e, paneId: string) => {
-    return browserPanes!.getHistory(paneId)
+    return getBrowserPanes().getHistory(paneId)
   })
 
   ipcMain.handle('browser:destroy', (_e, paneId: string) => {
-    browserPanes!.destroy(paneId)
+    getBrowserPanes().destroy(paneId)
   })
 
   ipcMain.handle('shell:openExternal', async (_e, url: string) => {
@@ -295,22 +325,14 @@ async function createWindow(): Promise<void> {
   mainWindow = win
 
   stateStore = new StateStore()
-  fileJobs = new FileJobManager(win)
-  folderSizeMgr = new FolderSizeManager(win)
-  terminals = new TerminalManager(win)
-  browserPanes = new BrowserPaneManager(win, {
-    maxEntries: () => stateStore!.getSettings().privacy.browserHistoryMax,
-    shouldRecord: () => !stateStore!.getSettings().privacy.privateMode,
-    onHistory: (paneId, urls) => {
-      if (!win.isDestroyed()) {
-        win.webContents.send('browser:history', { paneId, urls })
-      }
-    }
-  })
 
   registerIpcHandlers()
 
   await win.loadURL(appEntryUrl())
+
+  if (!app.isPackaged) {
+    win.webContents.openDevTools()
+  }
 
   win.on('closed', () => {
     fileJobs?.dispose()
