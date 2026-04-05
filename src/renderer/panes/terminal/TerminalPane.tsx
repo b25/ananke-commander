@@ -49,7 +49,6 @@ export function TerminalPane({ pane, isActive, scrollback, onClose }: Props) {
           className="terminal-host" 
           onContextMenu={(e) => {
             e.preventDefault()
-            void window.ananke.shell.popTerminalMenu()
           }}
         />
       </div>

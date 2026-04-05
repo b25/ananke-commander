@@ -12,7 +12,7 @@
     "build:app": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "postinstall": "electron-rebuild -f -w node-pty || true"
+    "postinstall": "CXXFLAGS=\"-isystem $(xcrun --show-sdk-path)/usr/include/c++/v1\" electron-rebuild -f -w node-pty || true"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.13.23",

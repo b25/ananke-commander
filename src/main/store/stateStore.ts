@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import Store from 'electron-store'
-import { copyFileSync, existsSync } from 'node:fs'
+import { copyFileSync, existsSync, statSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -12,6 +12,29 @@ import type {
   WorkspaceState
 } from '../../shared/contracts.js'
 import { DEFAULT_SETTINGS } from '../../shared/contracts.js'
+
+function isValidDir(p: string): boolean {
+  try {
+    return statSync(p).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function sanitizePaths(workspaces: WorkspaceState[]): WorkspaceState[] {
+  const home = homedir()
+  return workspaces.map((ws) => ({
+    ...ws,
+    panes: ws.panes.map((pane) => {
+      if (pane.type !== 'file-browser') return pane
+      return {
+        ...pane,
+        leftPath: isValidDir(pane.leftPath) ? pane.leftPath : home,
+        rightPath: isValidDir(pane.rightPath) ? pane.rightPath : home
+      }
+    })
+  }))
+}
 
 function createDefaultWorkspace(): WorkspaceState {
   const paneId = randomUUID()
@@ -82,7 +105,7 @@ export class StateStore {
 
   getSnapshot(): AppStateSnapshot {
     const disk: AppStateSnapshot = {
-      workspaces: this.store.get('workspaces'),
+      workspaces: sanitizePaths(this.store.get('workspaces')),
       activeWorkspaceId: this.store.get('activeWorkspaceId'),
       settings: this.store.get('settings'),
       recentlyClosed: this.store.get('recentlyClosed')
