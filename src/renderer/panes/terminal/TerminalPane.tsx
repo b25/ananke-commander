@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalPaneState } from '../../../shared/contracts'
 import { PaneHeader } from '../../layout/PaneHeader'
@@ -12,7 +12,16 @@ type Props = {
 }
 
 export function TerminalPane({ pane, isActive, scrollback, onClose }: Props) {
-  const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, scrollback)
+  const [termTitle, setTermTitle] = useState(`🖥 ${pane.cwd}`)
+  const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, scrollback, (title) => {
+    // Shells usually set the title to 'user@host: dir' or similar. We enforce the icon.
+    // Replace 'user@host:' to only show the working directory.
+    let cleanTitle = title.replace(/^🖥\s*/, '')
+    cleanTitle = cleanTitle.replace(/^[^@\s]+@[^:\s]+:\s*/, '')
+    
+    // Fallback locally if the shell sent an empty title for some reason
+    setTermTitle(`🖥 ${cleanTitle || pane.cwd}`)
+  })
 
   useEffect(() => {
     if (isActive) {
@@ -33,7 +42,7 @@ export function TerminalPane({ pane, isActive, scrollback, onClose }: Props) {
 
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
-      <PaneHeader title={pane.title} onClose={onClose} />
+      <PaneHeader title={termTitle} onClose={onClose} />
       <div className="pane-body">
         <div 
           ref={hostRef} 

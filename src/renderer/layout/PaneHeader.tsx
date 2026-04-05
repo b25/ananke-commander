@@ -12,7 +12,7 @@ export function PaneHeader({ title, onClose, needsAttention, actions }: Props) {
     <div className="pane-header">
       <span className="title">{title}</span>
       {actions}
-      <button type="button" onClick={onClose} title="Close pane">
+      <button type="button" className="pane-close-btn" onClick={onClose} title="Close pane">
         ×
       </button>
     </div>
