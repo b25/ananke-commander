@@ -33,7 +33,26 @@ const api = {
     quickOp: (op: 'mkdir' | 'delete', target: string, paths?: string[]) =>
       ipcRenderer.invoke('fs:quickOp', op, target, paths),
     readUtf8: (filePath: string): Promise<string> => ipcRenderer.invoke('fs:readUtf8', filePath),
-    writeUtf8: (filePath: string, text: string) => ipcRenderer.invoke('fs:writeUtf8', filePath, text)
+    writeUtf8: (filePath: string, text: string) => ipcRenderer.invoke('fs:writeUtf8', filePath, text),
+    startFolderSize: (dirPath: string): Promise<string> =>
+      ipcRenderer.invoke('fs:startFolderSize', dirPath),
+    cancelFolderSize: (requestId: string): Promise<void> =>
+      ipcRenderer.invoke('fs:cancelFolderSize', requestId),
+    onFolderSizeProgress: (cb: (msg: { requestId: string; dirPath: string; partialSize: number; filesScanned: number }) => void) => {
+      const fn = (_: unknown, msg: { requestId: string; dirPath: string; partialSize: number; filesScanned: number }) => cb(msg)
+      ipcRenderer.on('fs:folderSize:progress', fn)
+      return () => ipcRenderer.removeListener('fs:folderSize:progress', fn)
+    },
+    onFolderSizeDone: (cb: (msg: { requestId: string; dirPath: string; totalSize: number }) => void) => {
+      const fn = (_: unknown, msg: { requestId: string; dirPath: string; totalSize: number }) => cb(msg)
+      ipcRenderer.on('fs:folderSize:done', fn)
+      return () => ipcRenderer.removeListener('fs:folderSize:done', fn)
+    },
+    onFolderSizeError: (cb: (msg: { requestId: string; dirPath: string; message: string }) => void) => {
+      const fn = (_: unknown, msg: { requestId: string; dirPath: string; message: string }) => cb(msg)
+      ipcRenderer.on('fs:folderSize:error', fn)
+      return () => ipcRenderer.removeListener('fs:folderSize:error', fn)
+    }
   },
 
   fileJob: {
