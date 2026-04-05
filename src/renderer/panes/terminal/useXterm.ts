@@ -28,6 +28,10 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     let webgl: WebglAddon | null = null
     try {
       webgl = new WebglAddon()
+      webgl.onContextLoss(() => {
+        try { webgl?.dispose() } catch { /* ignore */ }
+        webgl = null
+      })
       term.loadAddon(webgl)
     } catch {
       /* DOM renderer fallback */
