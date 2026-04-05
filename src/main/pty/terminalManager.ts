@@ -10,9 +10,34 @@ function defaultShell(): string {
 export class TerminalManager {
   private win: BrowserWindow
   private procs = new Map<string, pty.IPty>()
+  private buffers = new Map<string, string[]>()
+  private flushTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(win: BrowserWindow) {
     this.win = win
+  }
+
+  private startFlushing(): void {
+    if (this.flushTimer) return
+    this.flushTimer = setInterval(() => this.flushAll(), 8)
+  }
+
+  private stopFlushing(): void {
+    if (this.flushTimer) {
+      clearInterval(this.flushTimer)
+      this.flushTimer = null
+    }
+  }
+
+  private flushAll(): void {
+    for (const [paneId, chunks] of this.buffers) {
+      if (chunks.length === 0) continue
+      const data = chunks.join('')
+      this.buffers.set(paneId, [])
+      if (!this.win.isDestroyed() && !this.win.webContents.isDestroyed()) {
+        this.win.webContents.send('pty:data', { paneId, data })
+      }
+    }
   }
 
   spawn(paneId: string, cols: number, rows: number, cwd?: string): void {
@@ -28,10 +53,11 @@ export class TerminalManager {
         env: process.env as Record<string, string>
       })
       this.procs.set(paneId, proc)
+      this.buffers.set(paneId, [])
+      this.startFlushing()
       proc.onData((data) => {
-        if (!this.win.isDestroyed() && !this.win.webContents.isDestroyed()) {
-          this.win.webContents.send('pty:data', { paneId, data })
-        }
+        const buf = this.buffers.get(paneId)
+        if (buf) buf.push(data)
       })
       proc.onExit(({ exitCode }) => {
         this.procs.delete(paneId)
@@ -58,6 +84,16 @@ export class TerminalManager {
   dispose(paneId: string): void {
     const p = this.procs.get(paneId)
     if (p) {
+      // Flush any buffered data before removing the session
+      const pending = this.buffers.get(paneId)
+      if (pending && pending.length > 0) {
+        const data = pending.join('')
+        if (!this.win.isDestroyed() && !this.win.webContents.isDestroyed()) {
+          this.win.webContents.send('pty:data', { paneId, data })
+        }
+      }
+      this.buffers.delete(paneId)
+
       // Send EOF to allow bash/zsh to flush .zsh_history gracefully
       try {
         p.write('\x04') // Ctrl+D
@@ -68,6 +104,7 @@ export class TerminalManager {
         try { p.kill() } catch { /* ignore */ }
       }, 300)
       this.procs.delete(paneId)
+      if (this.procs.size === 0) this.stopFlushing()
     }
   }
 
