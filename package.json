@@ -15,6 +15,7 @@
     "postinstall": "electron-rebuild -f -w node-pty || true"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.23",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
@@ -42,9 +43,18 @@
   "build": {
     "appId": "com.ananke.commander",
     "productName": "Ananke Commander",
-    "directories": { "output": "release" },
-    "files": ["out/**/*", "package.json"],
-    "mac": { "category": "public.app-category.developer-tools" },
-    "win": { "target": "nsis" }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": "nsis"
+    }
   }
 }

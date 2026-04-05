@@ -1,12 +1,14 @@
-import { useState, type KeyboardEvent, useRef, useEffect } from 'react'
+import { useEffect, useRef, type KeyboardEvent } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { ListDirEntry } from '../../../shared/contracts'
 import { parentDir } from '../../lib/pathUtils'
+
+const ROW_HEIGHT = 16
 
 function formatSize(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
-  return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
 type Props = {
@@ -17,7 +19,6 @@ type Props = {
   onPathChange: (p: string) => void
   onSelect: (paths: string[], additive: boolean) => void
   onActivate: (entry: ListDirEntry) => void
-  isActive: boolean
 }
 
 export function FileList({
@@ -27,105 +28,152 @@ export function FileList({
   focused,
   onPathChange,
   onSelect,
-  onActivate,
-  isActive
+  onActivate
 }: Props) {
-  const [folderSizes, setFolderSizes] = useState<Record<string, number>>({})
-  const [calculating, setCalculating] = useState<Set<string>>(new Set())
-  const containerRef = useRef<HTMLDivElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const anchorIdxRef = useRef<number>(0)
 
-  useEffect(() => {
-    // Clear calculated sizes when path changes
-    setFolderSizes({})
-    setCalculating(new Set())
-  }, [path])
-
+  // Build display entries: ".." parent entry (if not at root) + actual entries
   const norm = path.replace(/[/\\]+$/, '') || path
   const atRoot = norm === '/' || /^[A-Za-z]:$/.test(norm)
-  
-  const displayEntries = atRoot
-    ? entries
-    : [
-        { name: '..', path: parentDir(path), isDirectory: true, size: 0, mtimeMs: 0 } as ListDirEntry,
-        ...entries
-      ]
 
-  useEffect(() => {
-    if (!focused || selected.size !== 1) return
-    const el = containerRef.current?.querySelector('.file-row.selected')
-    if (el) {
-      el.scrollIntoView({ block: 'nearest' })
-    }
-  }, [selected, focused])
+  const parentEntry: ListDirEntry | null = atRoot
+    ? null
+    : { name: '..', path: parentDir(path), isDirectory: true, size: 0, mtimeMs: 0 }
 
+  const displayEntries = parentEntry ? [parentEntry, ...entries] : [...entries]
+
+  const virtualizer = useVirtualizer({
+    count: displayEntries.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 15
+  })
+
+  // Focus the wrapper when this panel is focused
   useEffect(() => {
-    if (focused && isActive) {
-      containerRef.current?.focus()
+    if (focused) {
+      wrapRef.current?.focus()
     }
-  }, [focused, isActive])
+  }, [focused])
+
+  // Find current cursor index from selection
+  const getCursorIdx = (): number => {
+    if (selected.size === 0) return 0
+    const lastSelected = [...selected][selected.size - 1]
+    const idx = displayEntries.findIndex((e) => e.path === lastSelected)
+    return idx >= 0 ? idx : 0
+  }
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const onlyStr = selected.size === 1 ? [...selected][0] : null
-    let idx = displayEntries.findIndex((x) => x.path === onlyStr)
-    
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      if (idx < displayEntries.length - 1) onSelect([displayEntries[idx + 1].path], false)
-      else if (idx === -1 && displayEntries.length > 0) onSelect([displayEntries[0].path], false)
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      if (idx > 0) onSelect([displayEntries[idx - 1].path], false)
-      else if (idx === -1 && displayEntries.length > 0) onSelect([displayEntries[0].path], false)
-    } else if (e.key === 'Home') {
-      e.preventDefault()
-      if (displayEntries.length > 0) onSelect([displayEntries[0].path], false)
-    } else if (e.key === 'End') {
-      e.preventDefault()
-      if (displayEntries.length > 0) onSelect([displayEntries[displayEntries.length - 1].path], false)
-    } else if (e.key === 'PageUp') {
-      e.preventDefault()
-      if (displayEntries.length > 0) {
-        const nextIdx = Math.max(0, (idx === -1 ? 0 : idx) - 10)
-        onSelect([displayEntries[nextIdx].path], false)
+    const cursorIdx = getCursorIdx()
+
+    switch (e.key) {
+      case 'ArrowDown': {
+        e.preventDefault()
+        const nextIdx = Math.min(cursorIdx + 1, displayEntries.length - 1)
+        if (e.shiftKey) {
+          // Range select from anchor to nextIdx
+          const anchor = anchorIdxRef.current
+          const start = Math.min(anchor, nextIdx)
+          const end = Math.max(anchor, nextIdx)
+          const paths = displayEntries.slice(start, end + 1).map((en) => en.path)
+          onSelect(paths, false)
+        } else {
+          anchorIdxRef.current = nextIdx
+          onSelect([displayEntries[nextIdx].path], false)
+        }
+        virtualizer.scrollToIndex(nextIdx, { align: 'auto' })
+        break
       }
-    } else if (e.key === 'PageDown') {
-      e.preventDefault()
-      if (displayEntries.length > 0) {
-        const nextIdx = Math.min(displayEntries.length - 1, (idx === -1 ? 0 : idx) + 10)
-        onSelect([displayEntries[nextIdx].path], false)
+      case 'ArrowUp': {
+        e.preventDefault()
+        const nextIdx = Math.max(cursorIdx - 1, 0)
+        if (e.shiftKey) {
+          const anchor = anchorIdxRef.current
+          const start = Math.min(anchor, nextIdx)
+          const end = Math.max(anchor, nextIdx)
+          const paths = displayEntries.slice(start, end + 1).map((en) => en.path)
+          onSelect(paths, false)
+        } else {
+          anchorIdxRef.current = nextIdx
+          onSelect([displayEntries[nextIdx].path], false)
+        }
+        virtualizer.scrollToIndex(nextIdx, { align: 'auto' })
+        break
       }
-    } else if (e.key === 'Enter') {
-      if (!onlyStr) return
-      const entry = displayEntries.find((x) => x.path === onlyStr)
-      if (!entry) return
-      e.preventDefault()
-      if (entry.name === '..') {
-        onPathChange(entry.path)
-      } else {
+      case 'PageDown': {
+        e.preventDefault()
+        const pageSize = Math.floor((scrollRef.current?.clientHeight ?? 0) / ROW_HEIGHT)
+        const nextIdx = Math.min(cursorIdx + pageSize, displayEntries.length - 1)
+        anchorIdxRef.current = nextIdx
+        onSelect([displayEntries[nextIdx].path], false)
+        virtualizer.scrollToIndex(nextIdx, { align: 'auto' })
+        break
+      }
+      case 'PageUp': {
+        e.preventDefault()
+        const pageSize = Math.floor((scrollRef.current?.clientHeight ?? 0) / ROW_HEIGHT)
+        const nextIdx = Math.max(cursorIdx - pageSize, 0)
+        anchorIdxRef.current = nextIdx
+        onSelect([displayEntries[nextIdx].path], false)
+        virtualizer.scrollToIndex(nextIdx, { align: 'auto' })
+        break
+      }
+      case 'Home': {
+        e.preventDefault()
+        anchorIdxRef.current = 0
+        onSelect([displayEntries[0].path], false)
+        virtualizer.scrollToIndex(0, { align: 'auto' })
+        break
+      }
+      case 'End': {
+        e.preventDefault()
+        const lastIdx = displayEntries.length - 1
+        anchorIdxRef.current = lastIdx
+        onSelect([displayEntries[lastIdx].path], false)
+        virtualizer.scrollToIndex(lastIdx, { align: 'auto' })
+        break
+      }
+      case 'Enter': {
+        if (selected.size !== 1) return
+        const only = [...selected][0]
+        const entry = displayEntries.find((x) => x.path === only)
+        if (!entry) return
+        e.preventDefault()
         onActivate(entry)
+        break
       }
-    } else if (e.key === ' ') {
-      if (!onlyStr) return
-      const entry = displayEntries.find((x) => x.path === onlyStr)
-      if (!entry || !entry.isDirectory || entry.name === '..') return
-      e.preventDefault()
-      
-      const p = entry.path
-      setCalculating((prev) => new Set([...prev, p]))
-      void window.ananke.fs.getFolderSize(p).then((sz) => {
-        setFolderSizes((prev) => ({ ...prev, [p]: sz }))
-        setCalculating((prev) => {
-          const next = new Set(prev)
-          next.delete(p)
-          return next
-        })
-      })
+      default:
+        break
+    }
+  }
+
+  const handleRowClick = (
+    entry: ListDirEntry,
+    index: number,
+    ev: React.MouseEvent
+  ) => {
+    if (ev.shiftKey) {
+      // Range select from anchor to clicked index
+      const anchor = anchorIdxRef.current
+      const start = Math.min(anchor, index)
+      const end = Math.max(anchor, index)
+      const paths = displayEntries.slice(start, end + 1).map((en) => en.path)
+      onSelect(paths, false)
+    } else if (ev.metaKey || ev.ctrlKey) {
+      anchorIdxRef.current = index
+      onSelect([entry.path], true)
+    } else {
+      anchorIdxRef.current = index
+      onSelect([entry.path], false)
     }
   }
 
   return (
     <div
-      ref={containerRef}
+      ref={wrapRef}
       className={`file-list-wrap ${focused ? 'focused' : ''}`}
       tabIndex={0}
       onKeyDown={onKeyDown}
@@ -133,34 +181,59 @@ export function FileList({
       <div className="path-bar" title={path}>
         {path}
       </div>
-      <div className="file-rows" style={{ overflow: 'auto', flex: 1 }}>
-        {displayEntries.map((e) => {
-          const isSelected = selected.has(e.path)
-          const isCalc = calculating.has(e.path)
-          const fSize = folderSizes[e.path]
-          const isParent = e.name === '..'
-          return (
-            <div
-              key={e.path}
-              className={`file-row ${isSelected ? 'selected' : ''} ${isCalc ? 'calculating' : ''}`}
-              onClick={(ev) => {
-                containerRef.current?.focus()
-                onSelect([e.path], ev.metaKey || ev.ctrlKey)
-              }}
-              onDoubleClick={() => isParent ? onPathChange(e.path) : onActivate(e)}
-            >
-              <div className="file-row-content">
-                <span className="name">{isParent ? '⤴️ ' : e.isDirectory ? '🗂 ' : '📄 '}{e.name}</span>
-                <span className="muted">
-                  {e.isDirectory ? (fSize !== undefined ? formatSize(fSize) : '') : formatSize(e.size)}
+      <div
+        ref={scrollRef}
+        style={{ overflow: 'auto', flex: 1 }}
+      >
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative'
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const entry = displayEntries[virtualRow.index]
+            const isSelected = selected.has(entry.path)
+            const isParent = entry.name === '..'
+
+            return (
+              <div
+                key={entry.path}
+                className={`file-row ${isSelected ? 'selected' : ''}`}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`
+                }}
+                onClick={(ev) => {
+                  if (isParent) return
+                  handleRowClick(entry, virtualRow.index, ev)
+                }}
+                onDoubleClick={() => {
+                  if (isParent) {
+                    onPathChange(parentDir(path))
+                  } else {
+                    onActivate(entry)
+                  }
+                }}
+              >
+                <span className="name" title={entry.name}>
+                  {entry.isDirectory ? '\uD83D\uDCC1 ' : ''}
+                  {entry.name}
                 </span>
+                {!isParent && (
+                  <span className="muted">
+                    {entry.isDirectory ? '' : formatSize(entry.size)}
+                  </span>
+                )}
               </div>
-              {isCalc && (
-                <div className="file-row-calc-msg">Calculating size...</div>
-              )}
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
