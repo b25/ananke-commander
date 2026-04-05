@@ -1,16 +1,4 @@
-:root {
-  color-scheme: dark;
-  --bg: #0d0f12;
-  --rail: #12151a;
-  --pane: #161a20;
-  --header: #1c2128;
-  --border: #2d333b;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --accent: #388bfd;
-  --attention: #388bfd;
-  --danger: #f85149;
-}
+@import './tokens.css';
 
 * {
   box-sizing: border-box;
