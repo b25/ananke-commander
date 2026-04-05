@@ -18,6 +18,10 @@ const api = {
       ipcRenderer.invoke('state:addWorkspace', name),
     setActiveWorkspace: (id: string): Promise<AppStateSnapshot> =>
       ipcRenderer.invoke('state:setActiveWorkspace', id),
+    setActivePane: (workspaceId: string, paneId: string): Promise<AppStateSnapshot> =>
+      ipcRenderer.invoke('state:setActivePane', workspaceId, paneId),
+    updatePane: (workspaceId: string, paneId: string, next: PaneState): Promise<AppStateSnapshot> =>
+      ipcRenderer.invoke('state:updatePane', workspaceId, paneId, next),
     closePane: (workspaceId: string, paneId: string): Promise<AppStateSnapshot> =>
       ipcRenderer.invoke('state:closePane', workspaceId, paneId),
     removeRecentlyClosed: (entryId: string): Promise<AppStateSnapshot> =>
@@ -98,9 +102,12 @@ const api = {
   browser: {
     layout: (
       paneId: string,
-      url: string,
       bounds: { x: number; y: number; width: number; height: number }
-    ) => ipcRenderer.invoke('browser:layout', paneId, url, bounds),
+    ) => ipcRenderer.invoke('browser:layout', paneId, bounds),
+    navigate: (paneId: string, url: string) => ipcRenderer.invoke('browser:navigate', paneId, url),
+    goBack: (paneId: string) => ipcRenderer.invoke('browser:goBack', paneId),
+    goForward: (paneId: string) => ipcRenderer.invoke('browser:goForward', paneId),
+    stop: (paneId: string) => ipcRenderer.invoke('browser:stop', paneId),
     getHistory: (paneId: string): Promise<string[]> => ipcRenderer.invoke('browser:getHistory', paneId),
     onHistory: (cb: (msg: { paneId: string; urls: string[] }) => void) => {
       const fn = (_: unknown, msg: { paneId: string; urls: string[] }) => cb(msg)

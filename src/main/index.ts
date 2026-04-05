@@ -70,6 +70,8 @@ function preloadScriptPath(): string {
   const dir = join(dirname(fileURLToPath(import.meta.url)), '../preload')
   const mjs = join(dir, 'index.mjs')
   if (existsSync(mjs)) return mjs
+  const cjs = join(dir, 'index.cjs')
+  if (existsSync(cjs)) return cjs
   return join(dir, 'index.js')
 }
 
@@ -110,6 +112,16 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('state:setActiveWorkspace', (_e, id: string) => {
     stateStore!.setActiveWorkspace(id)
+    return stateStore!.getSnapshot()
+  })
+
+  ipcMain.handle('state:setActivePane', (_e, workspaceId: string, paneId: string) => {
+    stateStore!.setActiveWorkspacePane(workspaceId, paneId)
+    return stateStore!.getSnapshot()
+  })
+
+  ipcMain.handle('state:updatePane', (_e, workspaceId: string, paneId: string, next: PaneState) => {
+    stateStore!.updatePane(workspaceId, paneId, () => next)
     return stateStore!.getSnapshot()
   })
 
@@ -167,7 +179,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('fs:listDir', async (_e, dirPath: string) => {
     const abs = resolve(dirPath)
     const entries = await readdir(abs, { withFileTypes: true })
-    const out = await Promise.all(
+    const results = await Promise.allSettled(
       entries.map(async (e) => {
         const p = join(abs, e.name)
         const st = await stat(p)
@@ -180,6 +192,7 @@ function registerIpcHandlers(): void {
         }
       })
     )
+    const out = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
     out.sort((a, b) => {
       if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
       return a.name.localeCompare(b.name)
@@ -241,10 +254,26 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(
     'browser:layout',
-    (_e, paneId: string, url: string, bounds: Electron.Rectangle) => {
-      getBrowserPanes().createOrShow(paneId, url, bounds)
+    (_e, paneId: string, bounds: Electron.Rectangle) => {
+      getBrowserPanes().layout(paneId, bounds)
     }
   )
+
+  ipcMain.handle('browser:navigate', (_e, paneId: string, url: string) => {
+    getBrowserPanes().navigate(paneId, url)
+  })
+
+  ipcMain.handle('browser:goBack', (_e, paneId: string) => {
+    getBrowserPanes().goBack(paneId)
+  })
+
+  ipcMain.handle('browser:goForward', (_e, paneId: string) => {
+    getBrowserPanes().goForward(paneId)
+  })
+
+  ipcMain.handle('browser:stop', (_e, paneId: string) => {
+    getBrowserPanes().stop(paneId)
+  })
 
   ipcMain.handle('browser:getHistory', (_e, paneId: string) => {
     return getBrowserPanes().getHistory(paneId)

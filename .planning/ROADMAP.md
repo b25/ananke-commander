@@ -61,7 +61,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Create tokens.css with all design token definitions and wire into global.css
+- [x] 03-01-PLAN.md — Create tokens.css with all design token definitions and wire into global.css
 - [ ] 03-02-PLAN.md — Replace all hardcoded values in global.css with token references and add reduced-motion guard
 
 ### Phase 4: UX Audit & Component CSS Migration
