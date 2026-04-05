@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileBrowserPaneState, ListDirEntry, PaneState } from '../../../shared/contracts'
 import { joinPath } from '../../lib/pathUtils'
 import { FileList } from './FileList'
+import { FileEditor } from './FileEditor'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { ArchiveDialog } from './ArchiveDialog'
 
@@ -21,37 +22,12 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [destPaneId, setDestPaneId] = useState<string>('')
   const [fileJobLine, setFileJobLine] = useState<string | null>(null)
-  const [editorState, setEditorState] = useState<{ path: string; text: string; readOnly: boolean } | null>(null)
+  const [editorState, setEditorState] = useState<{
+    path: string
+    text: string
+    readOnly: boolean
+  } | null>(null)
   const activeJobId = useRef<string | null>(null)
-
-  const openEditor = async (readOnly: boolean) => {
-    // Determine active path/selection dynamically
-    const paths = pane.focusedSide === 'left' ? pane.leftSelection : pane.rightSelection
-    if (!paths.length) return
-    const p = paths[0]
-    setFileJobLine(readOnly ? 'Reading...' : 'Loading for edit...')
-    try {
-      const text = await window.ananke.fs.readUtf8(p)
-      setEditorState({ path: p, text, readOnly })
-    } catch (e) {
-      alert(e instanceof Error ? e.message : String(e))
-    } finally {
-      setFileJobLine(null)
-    }
-  }
-
-  const saveEditor = async (newText: string) => {
-    if (!editorState) return
-    setFileJobLine('Saving...')
-    try {
-      await window.ananke.fs.writeUtf8(editorState.path, newText)
-      setEditorState(null)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : String(e))
-    } finally {
-      setFileJobLine(null)
-    }
-  }
 
   const leftSel = new Set(pane.leftSelection)
   const rightSel = new Set(pane.rightSelection)
@@ -89,9 +65,9 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     async (side: 'left' | 'right', entry: ListDirEntry) => {
       if (entry.isDirectory) {
         if (side === 'left') {
-          onUpdate({ ...pane, focusedSide: 'left', leftPath: entry.path, leftSelection: [pane.leftPath] })
+          onUpdate({ ...pane, focusedSide: 'left', leftPath: entry.path })
         } else {
-          onUpdate({ ...pane, focusedSide: 'right', rightPath: entry.path, rightSelection: [pane.rightPath] })
+          onUpdate({ ...pane, focusedSide: 'right', rightPath: entry.path })
         }
         return
       }
@@ -101,14 +77,43 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     [onUpdate, pane]
   )
 
+  const openEditor = useCallback(
+    async (readOnly: boolean) => {
+      if (selectedPaths.length !== 1) return
+      const filePath = selectedPaths[0]
+      // Only open files, not directories
+      const side = pane.focusedSide === 'left' ? leftEntries : rightEntries
+      const entry = side.find((e) => e.path === filePath)
+      if (!entry || entry.isDirectory) return
+      try {
+        const text = await window.ananke.fs.readUtf8(filePath)
+        setEditorState({ path: filePath, text, readOnly })
+      } catch (err) {
+        alert(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [selectedPaths, pane.focusedSide, leftEntries, rightEntries]
+  )
+
+  const saveEditor = useCallback(
+    async (newText: string) => {
+      if (!editorState) return
+      try {
+        await window.ananke.fs.writeUtf8(editorState.path, newText)
+        setEditorState(null)
+      } catch (err) {
+        alert(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [editorState]
+  )
+
   const doDelete = useCallback(async () => {
     if (!selectedPaths.length) return
     await window.ananke.fs.quickOp('delete', '', selectedPaths)
     refreshBoth()
     onUpdate({ ...pane, leftSelection: [], rightSelection: [] })
   }, [pane, onUpdate, refreshBoth, selectedPaths])
-
-  const [layout, setLayout] = useState<'split' | 'single'>('split')
 
   useEffect(() => {
     if (!copyOpen && !moveOpen && !archiveOpen) return
@@ -127,63 +132,6 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   useEffect(() => {
     if (!isActive) return
     const onKey = (e: KeyboardEvent) => {
-      // Editor intercept
-      if (editorState) {
-        if (e.key === 'Escape') setEditorState(null)
-        // If F4 inside editor, safe to save? Maybe too complex. Just handle Escape.
-        return
-      }
-
-      if (e.key === 'Tab') {
-        e.preventDefault()
-        if (layout === 'split') {
-          const nextSide = pane.focusedSide === 'left' ? 'right' : 'left'
-          const targetEntries = nextSide === 'left' ? leftEntries : rightEntries
-          const currentSelection = nextSide === 'left' ? pane.leftSelection : pane.rightSelection
-          
-          if (currentSelection.length > 0) {
-            onUpdate({ ...pane, focusedSide: nextSide })
-          } else {
-            const firstPath = targetEntries.length > 0 ? targetEntries[0].path : (nextSide === 'left' ? pane.leftPath : pane.rightPath)
-            onUpdate({ 
-              ...pane, 
-              focusedSide: nextSide,
-              [nextSide === 'left' ? 'leftSelection' : 'rightSelection']: [firstPath]
-            })
-          }
-        }
-      }
-      
-      if (e.key === 'ArrowLeft' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault()
-        if (layout === 'split') {
-          const rp = pane.rightSelection.length ? pane.rightSelection[0] : pane.rightPath
-          const entry = rightEntries.find(x => x.path === rp)
-          const target = (entry && entry.isDirectory) ? entry.path : pane.rightPath
-          onUpdate({ ...pane, leftPath: target, leftSelection: [target] })
-        }
-      }
-
-      if (e.key === 'ArrowRight' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault()
-        if (layout === 'split') {
-          const lp = pane.leftSelection.length ? pane.leftSelection[0] : pane.leftPath
-          const entry = leftEntries.find(x => x.path === lp)
-          const target = (entry && entry.isDirectory) ? entry.path : pane.leftPath
-          onUpdate({ ...pane, rightPath: target, rightSelection: [target] })
-        }
-      }
-
-      if (e.key === 'F2') {
-        e.preventDefault()
-        if (!selectedPaths.length) return
-        const src = selectedPaths[0]
-        const oldName = src.match(/[^/\\]+$/)?.[0] || ''
-        const newName = prompt(`Rename ${oldName} to:`, oldName)
-        if (newName && newName !== oldName) {
-           void window.ananke.fs.quickOp('rename', src, undefined, newName).then(refreshBoth)
-        }
-      }
       if (e.key === 'F3') {
         e.preventDefault()
         void openEditor(true)
@@ -194,21 +142,11 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       }
       if (e.key === 'F5') {
         e.preventDefault()
-        setDestPaneId(layout === 'split' ? '__internal__' : '')
         setCopyOpen(true)
       }
       if (e.key === 'F6') {
         e.preventDefault()
-        setDestPaneId(layout === 'split' ? '__internal__' : '')
         setMoveOpen(true)
-      }
-      if (e.key === 'F7') {
-        e.preventDefault()
-        const folderName = prompt('New directory name:', 'NewFolder')
-        if (folderName) {
-           const outPath = joinPath(activePath, folderName)
-           void window.ananke.fs.quickOp('mkdir', outPath).then(refreshBoth)
-        }
       }
       if (e.key === 'F8') {
         e.preventDefault()
@@ -219,7 +157,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isActive, selectedPaths, doDelete, editorState, layout, pane, leftEntries, rightEntries])
+  }, [isActive, selectedPaths, doDelete, openEditor])
 
   useEffect(() => {
     const offP = window.ananke.fileJob.onProgress((msg) => {
@@ -248,34 +186,11 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       offE()
     }
   }, [])
-  useEffect(() => {
-    if (!isActive) return
-    const onGlobalAction = (e: Event) => {
-      const detail = (e as CustomEvent).detail
-      if (detail === 'F3') void openEditor(true)
-      if (detail === 'F4') void openEditor(false)
-      if (detail === 'F5') setCopyOpen(true)
-      if (detail === 'F6') setMoveOpen(true)
-      if (detail === 'F8') {
-        if (!selectedPaths.length) return
-        if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
-        void doDelete()
-      }
-      if (detail === 'Arc') setArchiveOpen(true)
-    }
-    window.addEventListener('global-action', onGlobalAction)
-    return () => window.removeEventListener('global-action', onGlobalAction)
-  }, [isActive, selectedPaths, doDelete])
 
   const runCopyOrMove = async (kind: 'copy' | 'move') => {
-    let destDir = ''
-    if (destPaneId === '__internal__') {
-      destDir = pane.focusedSide === 'left' ? pane.rightPath : pane.leftPath
-    } else {
-      const destPane = fileBrowserDests.find((p) => p.id === destPaneId)
-      if (destPane) destDir = destPane.focusedSide === 'left' ? destPane.leftPath : destPane.rightPath
-    }
-    if (!destDir || !selectedPaths.length) return
+    const destPane = fileBrowserDests.find((p) => p.id === destPaneId)
+    if (!destPane || !selectedPaths.length) return
+    const destDir = destPane.focusedSide === 'left' ? destPane.leftPath : destPane.rightPath
     setCopyOpen(false)
     setMoveOpen(false)
     setFileJobLine(kind === 'copy' ? 'Copy…' : 'Move…')
@@ -292,23 +207,9 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
 
   const suggestedArchive = joinPath(activePath, 'archive.zip')
 
-  const [splitRatio, setSplitRatio] = useState(0.5)
-
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
-      <PaneHeader 
-        title={pane.title} 
-        onClose={onClose} 
-        actions={
-          <button 
-            type="button" 
-            onClick={() => setLayout(layout === 'split' ? 'single' : 'split')}
-            style={{ padding: '2px 8px', fontSize: '11px', marginRight: '8px' }}
-          >
-            {layout === 'split' ? 'Show Single Panel' : 'Show Split Panels'}
-          </button>
-        } 
-      />
+      <PaneHeader title={pane.title} onClose={onClose} />
       <div className="pane-body">
         <div className="file-browser">
           {fileJobLine && (
@@ -324,75 +225,62 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
             </div>
           )}
           <div className="file-browser-main">
-            <div className="lists">
-              {(layout === 'split' || pane.focusedSide === 'left') && (
-                <div style={{ flex: layout === 'split' ? splitRatio : 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <FileList
-                    path={pane.leftPath}
-                    entries={leftEntries}
-                    selected={leftSel}
-                    focused={pane.focusedSide === 'left'}
-                    isActive={isActive}
-                    onPathChange={(p) => onUpdate({ ...pane, leftPath: p, leftSelection: [pane.leftPath] })}
-                    onSelect={(paths, add) => {
-                      const next = add ? new Set([...pane.leftSelection, ...paths]) : new Set(paths)
-                      onUpdate({
-                        ...pane,
-                        focusedSide: 'left',
-                        leftSelection: [...next]
-                      })
-                    }}
-                    onActivate={(entry) => void activateEntry('left', entry)}
-                  />
-                </div>
-              )}
-              {layout === 'split' && (
-                <div
-                  className="pane-stack__gutter"
-                  role="separator"
-                  aria-orientation="vertical"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    const startX = e.clientX
-                    const startR = splitRatio
-                    const row = e.currentTarget.parentElement!
-                    const startW = row.getBoundingClientRect().width
-                    const onMove = (ev: MouseEvent) => {
-                      const dx = ev.clientX - startX
-                      const delta = startW > 0 ? dx / startW : 0
-                      setSplitRatio(Math.min(0.88, Math.max(0.12, startR + delta)))
-                    }
-                    const onUp = () => {
-                      window.removeEventListener('mousemove', onMove)
-                      window.removeEventListener('mouseup', onUp)
-                    }
-                    window.addEventListener('mousemove', onMove)
-                    window.addEventListener('mouseup', onUp)
-                  }}
-                />
-              )}
-              {(layout === 'split' || pane.focusedSide === 'right') && (
-                <div style={{ flex: layout === 'split' ? 1 - splitRatio : 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <FileList
-                    path={pane.rightPath}
-                    entries={rightEntries}
-                    selected={rightSel}
-                    focused={pane.focusedSide === 'right'}
-                    isActive={isActive}
-                    onPathChange={(p) => onUpdate({ ...pane, rightPath: p, rightSelection: [pane.rightPath] })}
-                    onSelect={(paths, add) => {
-                      const next = add ? new Set([...pane.rightSelection, ...paths]) : new Set(paths)
-                      onUpdate({
-                        ...pane,
-                        focusedSide: 'right',
-                        rightSelection: [...next]
-                      })
-                    }}
-                    onActivate={(entry) => void activateEntry('right', entry)}
-                  />
-                </div>
-              )}
-            </div>
+          <div className="lists">
+            <FileList
+              path={pane.leftPath}
+              entries={leftEntries}
+              selected={leftSel}
+              focused={pane.focusedSide === 'left'}
+              onPathChange={(p) => onUpdate({ ...pane, leftPath: p })}
+              onSelect={(paths, add) => {
+                const next = add ? new Set([...pane.leftSelection, ...paths]) : new Set(paths)
+                onUpdate({
+                  ...pane,
+                  focusedSide: 'left',
+                  leftSelection: [...next]
+                })
+              }}
+              onActivate={(entry) => void activateEntry('left', entry)}
+            />
+            <FileList
+              path={pane.rightPath}
+              entries={rightEntries}
+              selected={rightSel}
+              focused={pane.focusedSide === 'right'}
+              onPathChange={(p) => onUpdate({ ...pane, rightPath: p })}
+              onSelect={(paths, add) => {
+                const next = add ? new Set([...pane.rightSelection, ...paths]) : new Set(paths)
+                onUpdate({
+                  ...pane,
+                  focusedSide: 'right',
+                  rightSelection: [...next]
+                })
+              }}
+              onActivate={(entry) => void activateEntry('right', entry)}
+            />
+          </div>
+          <div className="file-ops">
+            <button type="button" title="Copy F5" onClick={() => setCopyOpen(true)}>
+              F5
+            </button>
+            <button type="button" title="Move F6" onClick={() => setMoveOpen(true)}>
+              F6
+            </button>
+            <button
+              type="button"
+              title="Delete F8"
+              onClick={() => {
+                if (!selectedPaths.length) return
+                if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
+                void doDelete()
+              }}
+            >
+              F8
+            </button>
+            <button type="button" title="Pack / unpack" onClick={() => setArchiveOpen(true)}>
+              Arc
+            </button>
+          </div>
           </div>
         </div>
       </div>
@@ -409,18 +297,15 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
               onChange={(e) => setDestPaneId(e.target.value)}
               style={{ width: '100%', marginBottom: 12 }}
             >
-              <option value="">— choose destination —</option>
-              {layout === 'split' && (
-                <option value="__internal__">This Pane: {pane.focusedSide === 'left' ? pane.rightPath : pane.leftPath}</option>
-              )}
+              <option value="">— choose —</option>
               {fileBrowserDests.map((p) => (
                 <option key={p.id} value={p.id}>
-                  Other Pane: {p.title} → {p.focusedSide === 'left' ? p.leftPath : p.rightPath}
+                  {p.title} → {p.focusedSide === 'left' ? p.leftPath : p.rightPath}
                 </option>
               ))}
             </select>
-            {!fileBrowserDests.length && layout === 'single' && (
-              <p className="muted">Add another file browser pane in this workspace or switch to Split layout.</p>
+            {!fileBrowserDests.length && (
+              <p className="muted">Add another file browser pane in this workspace.</p>
             )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button type="button" onClick={() => { setCopyOpen(false); setMoveOpen(false) }}>Cancel</button>
@@ -454,42 +339,13 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       )}
 
       {editorState && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setEditorState(null)}>
-          <div className="modal" style={{ width: '80%', height: '80%', maxWidth: 'none', display: 'flex', flexDirection: 'column' }} role="dialog" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: '14px', margin: 0, paddingBottom: '8px' }}>
-              {editorState.readOnly ? `Viewing: ${editorState.path}` : `Editing: ${editorState.path}`}
-            </h2>
-            <textarea
-              defaultValue={editorState.text}
-              readOnly={editorState.readOnly}
-              id="file-editor-textarea"
-              spellCheck={false}
-              style={{
-                flex: 1, marginTop: 8, marginBottom: 16, width: '100%',
-                resize: 'none', fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace', 
-                fontSize: '13px', lineHeight: '1.6', whiteSpace: 'pre', tabSize: 4,
-                padding: 16, background: '#0d1117', color: '#e6edf3',
-                border: '1px solid var(--border)', borderRadius: '6px', outline: 'none',
-                boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)', overflow: 'auto'
-              }}
-            />
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexShrink: 0 }}>
-              <button type="button" onClick={() => setEditorState(null)}>Cancel</button>
-              {!editorState.readOnly && (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    const el = document.getElementById('file-editor-textarea') as HTMLTextAreaElement
-                    void saveEditor(el.value)
-                  }}
-                >
-                  Save File (F4)
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <FileEditor
+          path={editorState.path}
+          text={editorState.text}
+          readOnly={editorState.readOnly}
+          onSave={saveEditor}
+          onClose={() => setEditorState(null)}
+        />
       )}
     </div>
   )

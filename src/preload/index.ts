@@ -14,10 +14,6 @@ const api = {
       panes: PaneState[],
       activeId: string | null
     ): Promise<AppStateSnapshot> => ipcRenderer.invoke('state:replacePanes', wsId, panes, activeId),
-    setActivePane: (wsId: string, paneId: string): Promise<AppStateSnapshot> =>
-      ipcRenderer.invoke('state:setActivePane', wsId, paneId),
-    updatePane: (wsId: string, paneId: string, next: PaneState): Promise<AppStateSnapshot> =>
-      ipcRenderer.invoke('state:updatePane', wsId, paneId, next),
     addWorkspace: (name: string): Promise<AppStateSnapshot> =>
       ipcRenderer.invoke('state:addWorkspace', name),
     setActiveWorkspace: (id: string): Promise<AppStateSnapshot> =>
@@ -34,11 +30,10 @@ const api = {
 
   fs: {
     listDir: (dirPath: string): Promise<ListDirEntry[]> => ipcRenderer.invoke('fs:listDir', dirPath),
-    getFolderSize: (dirPath: string): Promise<number> => ipcRenderer.invoke('fs:getFolderSize', dirPath),
-    quickOp: (op: 'mkdir' | 'delete' | 'rename', target: string, paths?: string[], newName?: string) =>
-      ipcRenderer.invoke('fs:quickOp', op, target, paths, newName),
-    writeUtf8: (filePath: string, text: string) => ipcRenderer.invoke('fs:writeUtf8', filePath, text),
-    readUtf8: (filePath: string): Promise<string> => ipcRenderer.invoke('fs:readUtf8', filePath)
+    quickOp: (op: 'mkdir' | 'delete', target: string, paths?: string[]) =>
+      ipcRenderer.invoke('fs:quickOp', op, target, paths),
+    readUtf8: (filePath: string): Promise<string> => ipcRenderer.invoke('fs:readUtf8', filePath),
+    writeUtf8: (filePath: string, text: string) => ipcRenderer.invoke('fs:writeUtf8', filePath, text)
   },
 
   fileJob: {
@@ -84,12 +79,9 @@ const api = {
   browser: {
     layout: (
       paneId: string,
+      url: string,
       bounds: { x: number; y: number; width: number; height: number }
-    ) => ipcRenderer.invoke('browser:layout', paneId, bounds),
-    navigate: (paneId: string, url: string) => ipcRenderer.invoke('browser:navigate', paneId, url),
-    goBack: (paneId: string) => ipcRenderer.invoke('browser:goBack', paneId),
-    goForward: (paneId: string) => ipcRenderer.invoke('browser:goForward', paneId),
-    stop: (paneId: string) => ipcRenderer.invoke('browser:stop', paneId),
+    ) => ipcRenderer.invoke('browser:layout', paneId, url, bounds),
     getHistory: (paneId: string): Promise<string[]> => ipcRenderer.invoke('browser:getHistory', paneId),
     onHistory: (cb: (msg: { paneId: string; urls: string[] }) => void) => {
       const fn = (_: unknown, msg: { paneId: string; urls: string[] }) => cb(msg)
@@ -102,8 +94,7 @@ const api = {
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
     /** Empty string on success; otherwise an error message from the OS. */
-    openPath: (filePath: string): Promise<string> => ipcRenderer.invoke('shell:openPath', filePath),
-    popTerminalMenu: (): Promise<void> => ipcRenderer.invoke('shell:popTerminalMenu')
+    openPath: (filePath: string): Promise<string> => ipcRenderer.invoke('shell:openPath', filePath)
   },
 
   dialog: {
