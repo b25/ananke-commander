@@ -179,17 +179,31 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px;
+  padding: 0 8px;
+  height: 19px;
+  flex-shrink: 0;
   background: var(--header);
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
 }
 
 .pane-header .title {
   flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.pane-close-btn {
+  height: 19px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
 }
 
 .pane-body {

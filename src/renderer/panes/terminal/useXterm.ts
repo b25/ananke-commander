@@ -7,7 +7,7 @@ function clampScrollback(n: number): number {
   return Math.min(50_000, Math.max(100, Math.floor(n) || 1000))
 }
 
-export function useXterm(paneId: string, cwd: string | undefined, scrollback: number) {
+export function useXterm(paneId: string, cwd: string | undefined, scrollback: number, onTitleChange?: (title: string) => void) {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -51,6 +51,10 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
       void window.ananke.pty.write(paneId, data)
     })
 
+    const subTitle = term.onTitleChange((title) => {
+      if (onTitleChange) onTitleChange(title)
+    })
+
     let resizeFrame: number
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(resizeFrame)
@@ -74,6 +78,7 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
       cancelAnimationFrame(resizeFrame)
       ro.disconnect()
       sub.dispose()
+      subTitle.dispose()
       d()
       x()
       void window.ananke.pty.dispose(paneId)
