@@ -335,6 +335,7 @@ async function createWindow(): Promise<void> {
   }
 
   win.on('closed', () => {
+    stateStore?.flushSnapshot()
     fileJobs?.dispose()
     fileJobs = null
     folderSizeMgr?.dispose()
