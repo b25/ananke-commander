@@ -1,6 +1,6 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell, Menu } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { existsSync } from 'node:fs'
-import { mkdir, readdir, stat, rm, writeFile, readFile, rename } from 'node:fs/promises'
+import { mkdir, readdir, readFile, stat, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, normalize, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -36,8 +36,6 @@ function rendererDist(): string {
 
 function preloadScriptPath(): string {
   const dir = join(dirname(fileURLToPath(import.meta.url)), '../preload')
-  const cjs = join(dir, 'index.cjs')
-  if (existsSync(cjs)) return cjs
   const mjs = join(dir, 'index.mjs')
   if (existsSync(mjs)) return mjs
   return join(dir, 'index.js')
@@ -83,16 +81,6 @@ function registerIpcHandlers(): void {
     return stateStore!.getSnapshot()
   })
 
-  ipcMain.handle('state:setActivePane', (_e, workspaceId: string, paneId: string) => {
-    stateStore!.setActiveWorkspacePane(workspaceId, paneId)
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:updatePane', (_e, workspaceId: string, paneId: string, next: PaneState) => {
-    stateStore!.updatePane(workspaceId, paneId, () => next)
-    return stateStore!.getSnapshot()
-  })
-
   ipcMain.handle('state:closePane', (_e, workspaceId: string, paneId: string) => {
     const ws = stateStore!.getWorkspace(workspaceId)
     if (!ws) return stateStore!.getSnapshot()
@@ -134,28 +122,29 @@ function registerIpcHandlers(): void {
     return stateStore!.getSnapshot()
   })
 
+  ipcMain.handle('fs:readUtf8', async (_e, filePath: string) => {
+    const abs = resolve(filePath)
+    return readFile(abs, 'utf8')
+  })
+
   ipcMain.handle('fs:writeUtf8', async (_e, filePath: string, text: string) => {
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, text, 'utf8')
   })
 
-  ipcMain.handle('fs:readUtf8', async (_e, filePath: string) => {
-    return await readFile(filePath, 'utf8')
-  })
-
   ipcMain.handle('fs:listDir', async (_e, dirPath: string) => {
     const abs = resolve(dirPath)
-    const entries = await readdir(abs, { withFileTypes: true }).catch(() => [])
+    const entries = await readdir(abs, { withFileTypes: true })
     const out = await Promise.all(
       entries.map(async (e) => {
         const p = join(abs, e.name)
-        const st = await stat(p).catch(() => null)
+        const st = await stat(p)
         return {
           name: e.name,
           path: p,
           isDirectory: e.isDirectory(),
-          size: st?.size ?? 0,
-          mtimeMs: st?.mtimeMs ?? 0
+          size: st.size,
+          mtimeMs: st.mtimeMs
         }
       })
     )
@@ -166,35 +155,11 @@ function registerIpcHandlers(): void {
     return out
   })
 
-  ipcMain.handle('fs:getFolderSize', async (_e, dirPath: string) => {
-    const abs = resolve(dirPath)
-    let total = 0
-    async function calc(p: string) {
-      try {
-        const s = await stat(p)
-        if (s.isDirectory()) {
-          const ents = await readdir(p, { withFileTypes: true })
-          await Promise.all(ents.map(e => calc(join(p, e.name))))
-        } else {
-          total += s.size
-        }
-      } catch {
-        // ignore access errors
-      }
-    }
-    await calc(abs)
-    return total
-  })
-
   ipcMain.handle(
     'fs:quickOp',
-    async (_e, op: 'mkdir' | 'delete' | 'rename', target: string, paths?: string[], newName?: string) => {
+    async (_e, op: 'mkdir' | 'delete', target: string, paths?: string[]) => {
       if (op === 'mkdir') {
         await mkdir(target, { recursive: true })
-        return
-      }
-      if (op === 'rename' && newName) {
-        await rename(resolve(target), resolve(dirname(target), newName))
         return
       }
       if (paths?.length) {
@@ -236,26 +201,10 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(
     'browser:layout',
-    (_e, paneId: string, bounds: Electron.Rectangle) => {
-      browserPanes!.layout(paneId, bounds)
+    (_e, paneId: string, url: string, bounds: Electron.Rectangle) => {
+      browserPanes!.createOrShow(paneId, url, bounds)
     }
   )
-
-  ipcMain.handle('browser:navigate', (_e, paneId: string, url: string) => {
-    browserPanes!.navigate(paneId, url)
-  })
-
-  ipcMain.handle('browser:goBack', (_e, paneId: string) => {
-    browserPanes!.goBack(paneId)
-  })
-
-  ipcMain.handle('browser:goForward', (_e, paneId: string) => {
-    browserPanes!.goForward(paneId)
-  })
-
-  ipcMain.handle('browser:stop', (_e, paneId: string) => {
-    browserPanes!.stop(paneId)
-  })
 
   ipcMain.handle('browser:getHistory', (_e, paneId: string) => {
     return browserPanes!.getHistory(paneId)
@@ -272,17 +221,6 @@ function registerIpcHandlers(): void {
   ipcMain.handle('shell:openPath', async (_e, filePath: string) => {
     const abs = normalize(resolve(filePath))
     return shell.openPath(abs)
-  })
-
-  ipcMain.handle('shell:popTerminalMenu', () => {
-    const win = focusedOrMain()
-    if (!win) return
-    const template = [
-      { role: 'copy' as const },
-      { role: 'paste' as const }
-    ]
-    const menu = Menu.buildFromTemplate(template)
-    menu.popup({ window: win })
   })
 
   ipcMain.handle('dialog:pickDirectory', async () => {
@@ -362,7 +300,6 @@ async function createWindow(): Promise<void> {
   registerIpcHandlers()
 
   await win.loadURL(appEntryUrl())
-  win.webContents.openDevTools({ mode: 'detach' })
 
   win.on('closed', () => {
     fileJobs?.dispose()
