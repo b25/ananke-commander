@@ -10,6 +10,7 @@ import {
 } from './protocol/registerAppProtocol.js'
 import { StateStore } from './store/stateStore.js'
 import { FileJobManager } from './jobs/fileJobManager.js'
+import { FolderSizeManager } from './jobs/folderSizeManager.js'
 import { TerminalManager } from './pty/terminalManager.js'
 import { BrowserPaneManager } from './browser/browserPaneManager.js'
 import { isNavigationAllowed } from './security/browserSecurity.js'
@@ -24,6 +25,7 @@ registerPrivilegedAppScheme()
 let mainWindow: BrowserWindow | null = null
 let stateStore: StateStore | null = null
 let fileJobs: FileJobManager | null = null
+let folderSizeMgr: FolderSizeManager | null = null
 let terminals: TerminalManager | null = null
 let browserPanes: BrowserPaneManager | null = null
 
@@ -183,6 +185,14 @@ function registerIpcHandlers(): void {
     fileJobs!.cancel()
   })
 
+  ipcMain.handle('fs:startFolderSize', (_e, dirPath: string) => {
+    return folderSizeMgr!.start(resolve(dirPath))
+  })
+
+  ipcMain.handle('fs:cancelFolderSize', (_e, requestId: string) => {
+    folderSizeMgr!.cancel(requestId)
+  })
+
   ipcMain.handle('pty:spawn', (_e, paneId: string, cols: number, rows: number, cwd?: string) => {
     terminals!.spawn(paneId, cols, rows, cwd)
   })
@@ -286,6 +296,7 @@ async function createWindow(): Promise<void> {
 
   stateStore = new StateStore()
   fileJobs = new FileJobManager(win)
+  folderSizeMgr = new FolderSizeManager(win)
   terminals = new TerminalManager(win)
   browserPanes = new BrowserPaneManager(win, {
     maxEntries: () => stateStore!.getSettings().privacy.browserHistoryMax,
@@ -304,6 +315,8 @@ async function createWindow(): Promise<void> {
   win.on('closed', () => {
     fileJobs?.dispose()
     fileJobs = null
+    folderSizeMgr?.dispose()
+    folderSizeMgr = null
     terminals?.disposeAll()
     terminals = null
     browserPanes?.destroyAll()

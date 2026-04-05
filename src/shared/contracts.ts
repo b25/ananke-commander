@@ -112,3 +112,27 @@ export interface FileJobPayload {
   sources: string[]
   destDir?: string
 }
+
+export interface FolderSizeRequest {
+  requestId: string
+  dirPath: string
+}
+
+export interface FolderSizeProgress {
+  requestId: string
+  dirPath: string
+  partialSize: number
+  filesScanned: number
+}
+
+export interface FolderSizeDone {
+  requestId: string
+  dirPath: string
+  totalSize: number
+}
+
+export interface FolderSizeError {
+  requestId: string
+  dirPath: string
+  message: string
+}
