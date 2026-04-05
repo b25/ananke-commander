@@ -45,9 +45,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — WebGL addon context-loss handler (PERF-03) + PTY output buffering with 8ms flush (PERF-04)
-- [ ] 02-02-PLAN.md — StateStore debounced setSnapshot with pending patch merge (PERF-06)
-- [ ] 02-03-PLAN.md — Lazy manager initialization, DevTools guard, flushSnapshot on close (PERF-05, PERF-06)
+- [x] 02-01-PLAN.md — WebGL addon context-loss handler (PERF-03) + PTY output buffering with 8ms flush (PERF-04)
+- [x] 02-02-PLAN.md — StateStore debounced setSnapshot with pending patch merge (PERF-06)
+- [x] 02-03-PLAN.md — Lazy manager initialization, DevTools guard, flushSnapshot on close (PERF-05, PERF-06)
 
 ### Phase 3: Design Token System
 **Goal**: All visual values flow from a single token system, and animations respect user preferences
@@ -58,11 +58,11 @@ Plans:
   2. Typography across all panes uses consistent sizes, line heights, and font weights from the token system
   3. Spacing (padding, margins, gaps) across all pane components follows a consistent scale from tokens
   4. All CSS animations and transitions are suppressed when the user has `prefers-reduced-motion: reduce` enabled
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md — Create tokens.css with all design token definitions and wire into global.css
+- [ ] 03-02-PLAN.md — Replace all hardcoded values in global.css with token references and add reduced-motion guard
 
 ### Phase 4: UX Audit & Component CSS Migration
 **Goal**: UX layout is documented with actionable recommendations, and all component CSS uses design tokens
@@ -102,6 +102,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. File Browser Performance | 2/3 | In Progress|  |
 | 2. Terminal & Startup Performance | 0/3 | Not started | - |
-| 3. Design Token System | 0/0 | Not started | - |
+| 3. Design Token System | 0/2 | Not started | - |
 | 4. UX Audit & Component CSS Migration | 0/0 | Not started | - |
 | 5. UX Implementation | 0/0 | Not started | - |
