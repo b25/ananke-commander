@@ -1,0 +1,59 @@
+/* src/renderer/styles/tokens.css
+ * Single source of truth for all design tokens.
+ * Phase 3 (CSS-01, CSS-02, CSS-03).
+ */
+:root {
+  color-scheme: dark;
+
+  /* Colors: Surfaces */
+  --bg: #0d0f12;
+  --rail: #12151a;
+  --pane: #161a20;
+  --header: #1c2128;
+  --border: #2d333b;
+
+  /* Colors: Text */
+  --text: #e6edf3;
+  --muted: #8b949e;
+
+  /* Colors: Semantic */
+  --accent: #388bfd;
+  --attention: #388bfd;
+  --danger: #f85149;
+
+  /* Colors: Interactive States (D-11) */
+  --hover: #21262d;
+  --selected: #264f78;
+
+  /* Spacing (D-04) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+
+  /* Spacing: Supplementary (D-05 — values not on 4/8/12/16/24 scale) */
+  --space-gap: 6px;
+  --space-inset: 10px;
+
+  /* Typography: Size (D-06 — tokenized as-is, no value changes) */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+
+  /* Typography: Weight (D-07) */
+  --weight-normal: 400;
+  --weight-medium: 500;
+
+  /* Typography: Family */
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  /* Border Radius (D-03 — fixes undefined --radius-sm bug) */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
