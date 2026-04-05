@@ -1,7 +1,8 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react'
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { ListDirEntry } from '../../../shared/contracts'
 import { parentDir } from '../../lib/pathUtils'
+import { useFolderSize, type FolderSizeState } from './useFolderSize'
 
 const ROW_HEIGHT = 16
 
@@ -9,6 +10,15 @@ function formatSize(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function renderFolderSize(state: FolderSizeState | undefined): ReactNode {
+  if (!state || state.status === 'idle') return null
+  if (state.status === 'calculating') return <span className="size-calculating" />
+  if (state.status === 'streaming') return <span className="size-streaming">{formatSize(state.size ?? 0)}</span>
+  if (state.status === 'done') return formatSize(state.size ?? 0)
+  if (state.status === 'error') return '--'
+  return null
 }
 
 type Props = {
@@ -33,6 +43,7 @@ export function FileList({
   const wrapRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const anchorIdxRef = useRef<number>(0)
+  const { sizes: folderSizes, startCalculation } = useFolderSize(path)
 
   // Build display entries: ".." parent entry (if not at root) + actual entries
   const norm = path.replace(/[/\\]+$/, '') || path
@@ -136,6 +147,15 @@ export function FileList({
         virtualizer.scrollToIndex(lastIdx, { align: 'auto' })
         break
       }
+      case ' ': {
+        if (selected.size !== 1) return
+        const onlyStr = [...selected][0]
+        const spaceEntry = displayEntries.find((x) => x.path === onlyStr)
+        if (!spaceEntry || !spaceEntry.isDirectory || spaceEntry.name === '..') return
+        e.preventDefault()
+        void startCalculation(spaceEntry.path)
+        break
+      }
       case 'Enter': {
         if (selected.size !== 1) return
         const only = [...selected][0]
@@ -227,7 +247,7 @@ export function FileList({
                 </span>
                 {!isParent && (
                   <span className="muted">
-                    {entry.isDirectory ? '' : formatSize(entry.size)}
+                    {entry.isDirectory ? renderFolderSize(folderSizes[entry.path]) : formatSize(entry.size)}
                   </span>
                 )}
               </div>
