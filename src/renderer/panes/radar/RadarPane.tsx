@@ -123,6 +123,7 @@ export function RadarPane({ pane, isActive, onUpdate, onClose }: Props) {
             width={dimensions.width}
             height={dimensions.height}
             onDrillDown={drillDown}
+            onSelect={setSelectedPath}
             selectedPath={selectedPath}
           />
         )}

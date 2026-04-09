@@ -8,6 +8,7 @@ type Props = {
   width: number
   height: number
   onDrillDown: (path: string) => void
+  onSelect: (path: string) => void
   selectedPath?: string
 }
 
@@ -20,7 +21,7 @@ function formatSize(bytes: number): string {
 
 const depthOpacities = [0.9, 0.7, 0.5, 0.35, 0.25]
 
-export function SunburstChart({ data, width, height, onDrillDown, selectedPath }: Props) {
+export function SunburstChart({ data, width, height, onDrillDown, onSelect, selectedPath }: Props) {
   const radius = Math.min(width, height) / 2
 
   const root = useMemo(() => {
@@ -86,6 +87,9 @@ export function SunburstChart({ data, width, height, onDrillDown, selectedPath }
                 transition: prefersReducedMotion ? 'none' : 'fill 0.15s'
               }}
               onClick={() => {
+                if (d.data.isDirectory) onSelect(d.data.path)
+              }}
+              onDoubleClick={() => {
                 if (d.data.isDirectory) onDrillDown(d.data.path)
               }}
             >
