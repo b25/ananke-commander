@@ -2,18 +2,20 @@
 
 ## Overview
 
-This milestone takes Ananke Commander from functional-but-sluggish to fast-and-polished. We start by eliminating the two biggest performance bottlenecks (file list virtualization and folder size calculation), then optimize terminal rendering and startup, establish a CSS design token system, audit the UX layout, and finally implement the UX improvements. Every phase delivers measurable improvement — the app should feel noticeably better after each one.
+This milestone takes Ananke Commander from functional-but-sluggish to fast-and-polished. We start by eliminating the two biggest performance bottlenecks (file list virtualization and folder size calculation), then optimize terminal rendering and startup, establish a CSS design token system, fix critical UI regressions, add 2D radar navigation, audit the UX layout, and finally implement the UX improvements. Every phase delivers measurable improvement — the app should feel noticeably better after each one.
 
 ## Phases
 
 **Phase Numbering:**
 - Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+- Decimal phases (3.1, 4.1): Urgent insertions (marked with INSERTED)
 
 - [ ] **Phase 1: File Browser Performance** - Virtualize file list and move folder size calculation off the render thread
 - [ ] **Phase 2: Terminal & Startup Performance** - WebGL renderer, IPC batching, lazy startup, debounced state persistence
 - [ ] **Phase 3: Design Token System** - CSS custom properties for colors, spacing, typography, and motion-safe animations
+- [ ] **Phase 3.1: Critical Bug Fixes** [INSERTED] - Fix PaneGrid overflow clipping 3rd+ panes; wire toolbar F-key buttons to actual handlers
 - [ ] **Phase 4: UX Audit & Component CSS Migration** - Document UX improvement recommendations and migrate all component CSS to tokens
+- [ ] **Phase 4.1: 2D Radar Navigation** [INSERTED] - Disk-space sunburst/treemap pane for visual, spatial directory navigation
 - [ ] **Phase 5: UX Implementation** - Reorganize workspace rail, pane headers, and context menus based on audit findings
 
 ## Phase Details
@@ -62,7 +64,22 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md — Create tokens.css with all design token definitions and wire into global.css
-- [ ] 03-02-PLAN.md — Replace all hardcoded values in global.css with token references and add reduced-motion guard
+- [x] 03-02-PLAN.md — Replace all hardcoded values in global.css with token references and add reduced-motion guard
+
+### Phase 3.1: Critical Bug Fixes [INSERTED]
+**Goal**: All features that existed before Phase 3 work correctly — panes can be added, toolbar buttons are functional
+**Depends on**: Phase 3
+**Requirements**: BUG-01, BUG-02
+**Success Criteria** (what must be TRUE):
+  1. Adding a 3rd, 4th, or 5th pane to a workspace renders all panes visibly without any being clipped or hidden
+  2. Clicking the F3 Read, F4 Edit, F5 Copy, F6 Move, F8 Delete, and Archive toolbar buttons triggers the correct action in the active file browser pane (or shows a helpful no-op message if no file browser is active)
+  3. PaneGrid layout with 3+ panes scrolls or wraps correctly so every pane is reachable
+  4. Copy/Move dialog is reachable even when only one file browser pane exists (allow same-pane copy with a path picker)
+**Plans**: 2 plans
+
+Plans:
+- [x] 03.1-01-PLAN.md — Fix PaneGrid overflow clipping and multi-pane layout
+- [ ] 03.1-02-PLAN.md — Wire global toolbar F-key buttons to active pane handlers
 
 ### Phase 4: UX Audit & Component CSS Migration
 **Goal**: UX layout is documented with actionable recommendations, and all component CSS uses design tokens
@@ -77,6 +94,22 @@ Plans:
 Plans:
 - [ ] 04-01: TBD
 - [ ] 04-02: TBD
+
+### Phase 4.1: 2D Radar Navigation [INSERTED]
+**Goal**: Users can visually explore disk usage and navigate the filesystem spatially via a radar/sunburst pane
+**Depends on**: Phase 3.1
+**Requirements**: NAV-01, NAV-02
+**Success Criteria** (what must be TRUE):
+  1. A new "Radar" pane type is available and can be added from the toolbar
+  2. The radar pane renders a zoomable sunburst or treemap showing directory sizes for the current root path
+  3. Clicking a directory segment navigates into it (drill-down); a back button or parent ring navigates up
+  4. The radar reads live data via the existing IPC folder-size / listDir infrastructure — no new main-process code required
+  5. Selecting a directory in the radar and pressing Enter (or double-click) opens that path in the active file browser pane
+**Plans**: 2 plans
+
+Plans:
+- [ ] 04.1-01-PLAN.md — RadarPane component — sunburst layout engine (d3-hierarchy + React SVG)
+- [ ] 04.1-02-PLAN.md — Drill-down navigation, breadcrumb, toolbar integration, and file-browser sync
 
 ### Phase 5: UX Implementation
 **Goal**: Workspace rail, pane headers, and context menus are reorganized for better ergonomics based on audit findings
@@ -96,12 +129,14 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 4.1 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. File Browser Performance | 2/3 | In Progress|  |
-| 2. Terminal & Startup Performance | 0/3 | Not started | - |
-| 3. Design Token System | 0/2 | Not started | - |
-| 4. UX Audit & Component CSS Migration | 0/0 | Not started | - |
-| 5. UX Implementation | 0/0 | Not started | - |
+| 1. File Browser Performance | 2/3 | In Progress |  |
+| 2. Terminal & Startup Performance | 3/3 | Complete | ✓ |
+| 3. Design Token System | 2/2 | Complete | ✓ |
+| 3.1. Critical Bug Fixes [INSERTED] | 0/2 | Not started | - |
+| 4. UX Audit & Component CSS Migration | 0/2 | Not started | - |
+| 4.1. 2D Radar Navigation [INSERTED] | 0/2 | Not started | - |
+| 5. UX Implementation | 0/2 | Not started | - |
