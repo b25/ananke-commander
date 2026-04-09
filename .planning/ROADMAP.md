@@ -79,7 +79,7 @@ Plans:
 
 Plans:
 - [x] 03.1-01-PLAN.md — Fix PaneGrid overflow clipping and multi-pane layout
-- [ ] 03.1-02-PLAN.md — Wire global toolbar F-key buttons to active pane handlers
+- [x] 03.1-02-PLAN.md — Wire global toolbar F-key buttons to active pane handlers
 
 ### Phase 4: UX Audit & Component CSS Migration
 **Goal**: UX layout is documented with actionable recommendations, and all component CSS uses design tokens
@@ -136,7 +136,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 4.1 -> 5
 | 1. File Browser Performance | 2/3 | In Progress |  |
 | 2. Terminal & Startup Performance | 3/3 | Complete | ✓ |
 | 3. Design Token System | 2/2 | Complete | ✓ |
-| 3.1. Critical Bug Fixes [INSERTED] | 0/2 | Not started | - |
+| 3.1. Critical Bug Fixes [INSERTED] | 2/2 | Complete | ✓ |
 | 4. UX Audit & Component CSS Migration | 0/2 | Not started | - |
 | 4.1. 2D Radar Navigation [INSERTED] | 0/2 | Not started | - |
 | 5. UX Implementation | 0/2 | Not started | - |
