@@ -5,6 +5,7 @@ import { FileList } from './FileList'
 import { FileEditor } from './FileEditor'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { ArchiveDialog } from './ArchiveDialog'
+import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 
 type Props = {
   pane: FileBrowserPaneState
@@ -27,6 +28,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     text: string
     readOnly: boolean
   } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string } | null>(null)
   const activeJobId = useRef<string | null>(null)
 
   const leftSel = new Set(pane.leftSelection)
@@ -114,6 +116,24 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     refreshBoth()
     onUpdate({ ...pane, leftSelection: [], rightSelection: [] })
   }, [pane, onUpdate, refreshBoth, selectedPaths])
+
+  const onFileContextMenu = useCallback(
+    (e: React.MouseEvent, entry: ListDirEntry) => {
+      e.preventDefault()
+      const side = pane.focusedSide
+      const sel = side === 'left' ? pane.leftSelection : pane.rightSelection
+      if (!sel.includes(entry.path)) {
+        onUpdate({
+          ...pane,
+          ...(side === 'left'
+            ? { leftSelection: [entry.path] }
+            : { rightSelection: [entry.path] })
+        })
+      }
+      setCtxMenu({ x: e.clientX, y: e.clientY, path: entry.path })
+    },
+    [pane, onUpdate]
+  )
 
   useEffect(() => {
     if (!copyOpen && !moveOpen && !archiveOpen) return
@@ -242,6 +262,31 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
 
   const suggestedArchive = joinPath(activePath, 'archive.zip')
 
+  const ctxItems: ContextMenuItem[] = ctxMenu
+    ? [
+        {
+          label: 'Open', shortcut: 'Enter', onClick: () => {
+            const entries = pane.focusedSide === 'left' ? leftEntries : rightEntries
+            const entry = entries.find((e) => e.path === ctxMenu.path)
+            if (entry) void activateEntry(pane.focusedSide, entry)
+          }
+        },
+        { label: 'Read', shortcut: 'F3', onClick: () => void openEditor(true) },
+        { label: 'Edit', shortcut: 'F4', onClick: () => void openEditor(false) },
+        { label: 'Copy…', shortcut: 'F5', onClick: () => setCopyOpen(true) },
+        { label: 'Move…', shortcut: 'F6', onClick: () => setMoveOpen(true) },
+        { label: 'Archive…', onClick: () => setArchiveOpen(true) },
+        { label: '', separator: true, onClick: () => {} },
+        {
+          label: 'Delete', shortcut: 'F8', danger: true, onClick: () => {
+            if (!selectedPaths.length) return
+            if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
+            void doDelete()
+          }
+        },
+      ]
+    : []
+
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
       <PaneHeader title={pane.title} paneType="file-browser" onClose={onClose} />
@@ -276,6 +321,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 })
               }}
               onActivate={(entry) => void activateEntry('left', entry)}
+              onContextMenu={onFileContextMenu}
             />
             <FileList
               path={pane.rightPath}
@@ -292,6 +338,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 })
               }}
               onActivate={(entry) => void activateEntry('right', entry)}
+              onContextMenu={onFileContextMenu}
             />
           </div>
           <div className="file-ops">
@@ -316,6 +363,14 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
               Arc
             </button>
           </div>
+          {ctxMenu && (
+            <ContextMenu
+              x={ctxMenu.x}
+              y={ctxMenu.y}
+              items={ctxItems}
+              onClose={() => setCtxMenu(null)}
+            />
+          )}
           </div>
         </div>
       </div>

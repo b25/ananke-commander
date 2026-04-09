@@ -29,6 +29,7 @@ type Props = {
   onPathChange: (p: string) => void
   onSelect: (paths: string[], additive: boolean) => void
   onActivate: (entry: ListDirEntry) => void
+  onContextMenu?: (e: React.MouseEvent, entry: ListDirEntry) => void
 }
 
 export function FileList({
@@ -38,7 +39,8 @@ export function FileList({
   focused,
   onPathChange,
   onSelect,
-  onActivate
+  onActivate,
+  onContextMenu
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -232,6 +234,10 @@ export function FileList({
                 onClick={(ev) => {
                   if (isParent) return
                   handleRowClick(entry, virtualRow.index, ev)
+                }}
+                onContextMenu={(e) => {
+                  if (isParent) return
+                  onContextMenu?.(e, entry)
                 }}
                 onDoubleClick={() => {
                   if (isParent) {
