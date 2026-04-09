@@ -28,7 +28,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
 
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
-      <PaneHeader title={pane.title} onClose={onClose} />
+      <PaneHeader title={pane.title} paneType="notes" onClose={onClose} />
       <div className="pane-body">
         <div className="notes-editor">
           <input

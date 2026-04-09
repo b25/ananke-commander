@@ -77,7 +77,7 @@ export function BrowserPlaceholderPane({ pane, isActive, onClose, onUpdate }: Pr
 
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
-      <PaneHeader title={pane.title} onClose={onClose} />
+      <PaneHeader title={pane.title} paneType="browser" onClose={onClose} />
       <div className="pane-body">
         <div style={{ padding: 8, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6 }} className="muted">
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>

@@ -60,7 +60,7 @@ export function RadarPane({ pane, isActive, onUpdate, onClose }: Props) {
 
   return (
     <div className="pane-tile" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <PaneHeader title={pane.title} onClose={onClose} />
+      <PaneHeader title={pane.title} paneType="radar" onClose={onClose} />
       <div
         style={{
           padding: '2px 8px',

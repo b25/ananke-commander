@@ -42,7 +42,7 @@ export function TerminalPane({ pane, isActive, scrollback, onClose }: Props) {
 
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
-      <PaneHeader title={termTitle} onClose={onClose} />
+      <PaneHeader title={termTitle} paneType="terminal" onClose={onClose} />
       <div className="pane-body">
         <div 
           ref={hostRef} 

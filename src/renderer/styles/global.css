@@ -216,6 +216,20 @@ select {
   border-radius: var(--radius-sm);
 }
 
+.pane-type-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.pane-attention-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--attention);
+  flex-shrink: 0;
+}
+
 .pane-body {
   flex: 1;
   min-height: 0;
