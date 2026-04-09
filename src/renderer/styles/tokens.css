@@ -25,6 +25,13 @@
   --hover: #21262d;
   --selected: #264f78;
 
+  /* Colors: Overlays */
+  --overlay-bg: rgba(0, 0, 0, 0.55);
+  --accent-pulse: rgba(56, 139, 253, 0.3);
+
+  /* Colors: On-accent text */
+  --text-on-accent: #ffffff;
+
   /* Spacing (D-04) */
   --space-xs: 4px;
   --space-sm: 8px;
