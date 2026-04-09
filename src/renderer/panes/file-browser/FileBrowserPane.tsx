@@ -160,6 +160,25 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   }, [isActive, selectedPaths, doDelete, openEditor])
 
   useEffect(() => {
+    if (!isActive) return
+    const onGlobalAction = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail
+      if (detail === 'F3') void openEditor(true)
+      else if (detail === 'F4') void openEditor(false)
+      else if (detail === 'F5') setCopyOpen(true)
+      else if (detail === 'F6') setMoveOpen(true)
+      else if (detail === 'F8') {
+        if (!selectedPaths.length) return
+        if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
+        void doDelete()
+      }
+      else if (detail === 'Arc') setArchiveOpen(true)
+    }
+    window.addEventListener('global-action', onGlobalAction)
+    return () => window.removeEventListener('global-action', onGlobalAction)
+  }, [isActive, openEditor, selectedPaths, doDelete])
+
+  useEffect(() => {
     const offP = window.ananke.fileJob.onProgress((msg) => {
       if (msg.jobId !== activeJobId.current) return
       const cur = typeof msg.current === 'string' ? msg.current : ''
