@@ -89,7 +89,7 @@ Plans:
   1. A UX audit document exists covering workspace rail, pane controls, and context menus with specific improvement recommendations
   2. Every component CSS file references design tokens instead of hardcoded color, spacing, and typography values
   3. Visual appearance is unchanged after CSS migration (no regressions — tokens reproduce existing values)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [x] 04-01-PLAN.md — UX audit doc + CSS token cleanup
