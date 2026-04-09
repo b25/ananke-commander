@@ -108,7 +108,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04.1-01-PLAN.md — RadarPane component — sunburst layout engine (d3-hierarchy + React SVG)
+- [x] 04.1-01-PLAN.md — RadarPane component — sunburst layout engine (d3-hierarchy + React SVG)
 - [ ] 04.1-02-PLAN.md — Drill-down navigation, breadcrumb, toolbar integration, and file-browser sync
 
 ### Phase 5: UX Implementation
@@ -138,5 +138,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 4.1 -> 5
 | 3. Design Token System | 2/2 | Complete | ✓ |
 | 3.1. Critical Bug Fixes [INSERTED] | 2/2 | Complete | ✓ |
 | 4. UX Audit & Component CSS Migration | 0/2 | Not started | - |
-| 4.1. 2D Radar Navigation [INSERTED] | 0/2 | Not started | - |
+| 4.1. 2D Radar Navigation [INSERTED] | 1/2 | In Progress|  |
 | 5. UX Implementation | 0/2 | Not started | - |
