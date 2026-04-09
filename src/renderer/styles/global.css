@@ -31,7 +31,7 @@ button:hover {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 input,
@@ -78,6 +78,18 @@ select {
   border-color: var(--accent);
   color: var(--text);
   box-shadow: 0 0 0 1px var(--accent);
+}
+
+.ws-pill--add {
+  border-style: dashed;
+  color: var(--muted);
+  background: transparent;
+}
+
+.ws-pill--add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
 }
 
 .main-stage {
@@ -395,7 +407,7 @@ select {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--overlay-bg);
   z-index: 200;
   display: flex;
   align-items: center;
@@ -420,7 +432,7 @@ select {
   display: inline-block;
   width: 48px;
   height: 8px;
-  background: rgba(92, 103, 255, 0.3);
+  background: var(--accent-pulse);
   border-radius: var(--radius-xs);
   animation: pulse-op 1.5s infinite;
 }
