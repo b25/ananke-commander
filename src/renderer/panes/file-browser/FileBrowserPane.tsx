@@ -179,6 +179,22 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   }, [isActive, openEditor, selectedPaths, doDelete])
 
   useEffect(() => {
+    if (!isActive) return
+    const onRadarNav = (e: Event) => {
+      const path = (e as CustomEvent<string>).detail
+      if (!path) return
+      onUpdate({
+        ...pane,
+        ...(pane.focusedSide === 'left'
+          ? { leftPath: path, focusedSide: 'left' as const }
+          : { rightPath: path, focusedSide: 'right' as const })
+      })
+    }
+    window.addEventListener('radar-navigate', onRadarNav)
+    return () => window.removeEventListener('radar-navigate', onRadarNav)
+  }, [isActive, pane, onUpdate])
+
+  useEffect(() => {
     const offP = window.ananke.fileJob.onProgress((msg) => {
       if (msg.jobId !== activeJobId.current) return
       const cur = typeof msg.current === 'string' ? msg.current : ''

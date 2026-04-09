@@ -6,6 +6,7 @@ import type {
   NotesPaneState,
   PaneState,
   PaneType,
+  RadarPaneState,
   TerminalPaneState
 } from '../../shared/contracts'
 import { WorkspaceRail } from '../layout/WorkspaceRail'
@@ -88,6 +89,14 @@ export function App() {
           title: 'Browser',
           url: 'about:blank'
         } satisfies BrowserPaneState
+      } else if (type === 'radar') {
+        p = {
+          id,
+          type: 'radar',
+          title: 'Radar',
+          rootPath: home,
+          pathHistory: []
+        } satisfies RadarPaneState
       } else {
         p = { id, type: 'notes', title: 'Notes', body: '' } satisfies NotesPaneState
       }
@@ -187,6 +196,7 @@ export function App() {
             <button type="button" className="btn-thin" onClick={() => void addPane('terminal')}>🖥 Terminal</button>
             <button type="button" className="btn-thin" onClick={() => void addPane('browser')}>🌐 Browser</button>
             <button type="button" className="btn-thin" onClick={() => void addPane('notes')}>📝 Notes</button>
+            <button type="button" className="btn-thin" onClick={() => void addPane('radar')}>📡 Radar</button>
           </div>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'flex', gap: '4px', borderRight: '1px solid var(--border)', paddingRight: '8px', marginRight: '4px' }}>
