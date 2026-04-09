@@ -15,6 +15,7 @@ import { FileBrowserPane } from '../panes/file-browser/FileBrowserPane'
 import { TerminalPane } from '../panes/terminal/TerminalPane'
 import { BrowserPlaceholderPane } from '../panes/browser/BrowserPlaceholderPane'
 import { NotesPane } from '../panes/notes/NotesPane'
+import { RadarPane } from '../panes/radar/RadarPane'
 import { NotesSettings } from '../settings/NotesSettings'
 import { PrivacySettings } from '../settings/PrivacySettings'
 
@@ -134,6 +135,18 @@ export function App() {
             isActive={isActive}
             onClose={() => void closePane(pane.id)}
             onUpdate={(next) => void updatePane(pane.id, next)}
+          />
+        </div>
+      )
+    }
+    if (pane.type === 'radar') {
+      return (
+        <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
+          <RadarPane
+            pane={pane}
+            isActive={isActive}
+            onUpdate={(next) => void updatePane(pane.id, next)}
+            onClose={() => void closePane(pane.id)}
           />
         </div>
       )

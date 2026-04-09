@@ -1,4 +1,4 @@
-export type PaneType = 'file-browser' | 'terminal' | 'browser' | 'notes'
+export type PaneType = 'file-browser' | 'terminal' | 'browser' | 'notes' | 'radar'
 
 export interface PrivacySettings {
   terminalHistoryMax: number
@@ -49,11 +49,18 @@ export interface NotesPaneState extends PaneStateBase {
   body: string
 }
 
+export interface RadarPaneState extends PaneStateBase {
+  type: 'radar'
+  rootPath: string
+  pathHistory: string[]
+}
+
 export type PaneState =
   | FileBrowserPaneState
   | TerminalPaneState
   | BrowserPaneState
   | NotesPaneState
+  | RadarPaneState
 
 export interface RecentlyClosedEntry {
   id: string
