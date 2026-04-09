@@ -244,7 +244,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
 
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
-      <PaneHeader title={pane.title} onClose={onClose} />
+      <PaneHeader title={pane.title} paneType="file-browser" onClose={onClose} />
       <div className="pane-body">
         <div className="file-browser">
           {fileJobLine && (
