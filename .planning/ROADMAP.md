@@ -92,8 +92,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [x] 04-01-PLAN.md — UX audit doc + CSS token cleanup
+- [x] 04-02-PLAN.md — Verification and ROADMAP update
 
 ### Phase 4.1: 2D Radar Navigation [INSERTED]
 **Goal**: Users can visually explore disk usage and navigate the filesystem spatially via a radar/sunburst pane
@@ -137,6 +137,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 4.1 -> 5
 | 2. Terminal & Startup Performance | 3/3 | Complete | ✓ |
 | 3. Design Token System | 2/2 | Complete | ✓ |
 | 3.1. Critical Bug Fixes [INSERTED] | 2/2 | Complete | ✓ |
-| 4. UX Audit & Component CSS Migration | 0/2 | Not started | - |
+| 4. UX Audit & Component CSS Migration | 2/2 | Complete | ✓ |
 | 4.1. 2D Radar Navigation [INSERTED] | 2/2 | Complete | ✓ |
 | 5. UX Implementation | 1/2 | In Progress|  |
