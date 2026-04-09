@@ -146,10 +146,13 @@ select {
 .pane-stack--grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-auto-rows: 1fr;
+  grid-auto-rows: minmax(200px, 1fr);
   gap: var(--space-xs);
-  align-content: start;
-  overflow: hidden;
+  overflow: auto;
+}
+
+.pane-wrapper {
+  display: contents;
 }
 
 .pane-tile {
