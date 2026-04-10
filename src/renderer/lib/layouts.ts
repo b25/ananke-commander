@@ -59,8 +59,54 @@ export const LAYOUTS: Layout[] = [
       { xFrac: 0.5, yFrac: T,     wFrac: 0.5, hFrac: T },
       { xFrac: 0.5, yFrac: T * 2, wFrac: 0.5, hFrac: T }
     ]
+  },
+  {
+    id: '6-grid',
+    label: '2×3',
+    slots: [
+      { xFrac: 0,   yFrac: 0,     wFrac: 0.5, hFrac: T },
+      { xFrac: 0.5, yFrac: 0,     wFrac: 0.5, hFrac: T },
+      { xFrac: 0,   yFrac: T,     wFrac: 0.5, hFrac: T },
+      { xFrac: 0.5, yFrac: T,     wFrac: 0.5, hFrac: T },
+      { xFrac: 0,   yFrac: T * 2, wFrac: 0.5, hFrac: T },
+      { xFrac: 0.5, yFrac: T * 2, wFrac: 0.5, hFrac: T },
+    ]
   }
 ]
+
+/** Slot counts for all known layouts. */
+export const LAYOUT_SLOTS: Record<string, number> = {
+  'full':    1,
+  'halves':  2,
+  '1h-2v':   3,
+  '4-quad':  4,
+  '1h-3v':   4,
+  '6-grid':  6,
+}
+
+/**
+ * Auto-progression path: adding panes advances through these tiers only.
+ * Manual layouts (1h-2v, 1h-3v) are available in LayoutPicker but not in auto-progression.
+ */
+export const LAYOUT_PROGRESSION = ['full', 'halves', '4-quad', '6-grid'] as const
+export type ProgressionLayoutId = typeof LAYOUT_PROGRESSION[number]
+
+/**
+ * Return the next auto-progression layout ID, or null if already at max.
+ * If currentId is a manual layout (not in progression), find the next progression
+ * tier above its slot count.
+ */
+export function nextProgressionLayout(currentId: string): string | null {
+  const idx = (LAYOUT_PROGRESSION as readonly string[]).indexOf(currentId)
+  if (idx !== -1) {
+    // In progression — return next tier
+    return idx < LAYOUT_PROGRESSION.length - 1 ? LAYOUT_PROGRESSION[idx + 1] : null
+  }
+  // Manual layout — find the first progression tier with more slots
+  const currentSlots = LAYOUT_SLOTS[currentId] ?? 1
+  const next = LAYOUT_PROGRESSION.find(id => LAYOUT_SLOTS[id] > currentSlots)
+  return next ?? null
+}
 
 /** Pick the best default layout for N panes on a screen. */
 export function bestLayout(n: number): Layout {
@@ -68,7 +114,8 @@ export function bestLayout(n: number): Layout {
   if (n === 2) return LAYOUTS[1]  // halves
   if (n === 3) return LAYOUTS[2]  // 1h-2v
   if (n === 4) return LAYOUTS[3]  // 4-quad
-  return LAYOUTS[4]               // 1h-3v (handles 4; extras stay put)
+  if (n <= 6)  return LAYOUTS[5]  // 6-grid
+  return LAYOUTS[5]               // max — extras stay put
 }
 
 const MIN_W = 300

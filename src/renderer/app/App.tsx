@@ -12,10 +12,11 @@ import { NotesPane } from '../panes/notes/NotesPane'
 import { RadarPane } from '../panes/radar/RadarPane'
 import { NotesSettings } from '../settings/NotesSettings'
 import { PrivacySettings } from '../settings/PrivacySettings'
-import { LAYOUTS, applyLayout, bestLayout } from '../lib/layouts'
+import { LAYOUTS, LAYOUT_SLOTS, applyLayout, bestLayout, nextProgressionLayout } from '../lib/layouts'
 
 const MIN_W = 300
 const MIN_H = 200
+const MAX_WINDOWS_PER_WORKSPACE = 24
 
 function applyFractions(panes: PaneState[], vpW: number, vpH: number): PaneState[] {
   return panes.map((p) => ({ ...p, x: p.xPct * vpW, y: p.yPct * vpH, width: Math.max(MIN_W, p.wPct * vpW), height: Math.max(MIN_H, p.hPct * vpH) }))
@@ -36,6 +37,12 @@ export function App() {
   const dismissTomlError = useCallback(() => {
     if (tomlErrorTimer.current) { clearTimeout(tomlErrorTimer.current); tomlErrorTimer.current = null }
     setTomlError(null)
+  }, [])
+  const [addError, setAddError] = useState<string | null>(null)
+  const addErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dismissAddError = useCallback(() => {
+    if (addErrorTimer.current) { clearTimeout(addErrorTimer.current); addErrorTimer.current = null }
+    setAddError(null)
   }, [])
   const refresh = useCallback(async () => { setSnap(await window.ananke.state.get()) }, [])
   useEffect(() => { void refresh() }, [refresh])
@@ -117,24 +124,66 @@ export function App() {
 
   const addPane = useCallback(async (type: PaneType) => {
     if (!ws) return
+
+    // Hard cap across all screens
+    if (ws.panes.length >= MAX_WINDOWS_PER_WORKSPACE) {
+      if (addErrorTimer.current) clearTimeout(addErrorTimer.current)
+      setAddError('Maximum 24 windows per workspace reached')
+      addErrorTimer.current = setTimeout(() => setAddError(null), 4000)
+      return
+    }
+
+    const panesOnScrn = (idx: number): number => {
+      const col = idx % 2, row = Math.floor(idx / 2)
+      return ws.panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row).length
+    }
+    const slotsOnScrn = (idx: number): number => LAYOUT_SLOTS[ws.screenLayouts?.[idx] ?? ''] ?? 1
+
+    // Determine target screen and layout
+    let tIdx = activeScreen
+    let tCol = screenCol
+    let tRow = screenRow
+    let tLayoutId = ws.screenLayouts?.[tIdx] ?? 'full'
+
+    if (panesOnScrn(tIdx) >= (LAYOUT_SLOTS[tLayoutId] ?? 1)) {
+      const nextLId = nextProgressionLayout(tLayoutId)
+      if (nextLId) {
+        // Advance layout on current screen
+        tLayoutId = nextLId
+      } else {
+        // Try spill to another screen
+        const spillIdx = ([0, 1, 2, 3] as const).find(i => i !== tIdx && panesOnScrn(i) < slotsOnScrn(i))
+        if (spillIdx !== undefined) {
+          tIdx = spillIdx
+          tCol = spillIdx % 2
+          tRow = Math.floor(spillIdx / 2)
+          tLayoutId = ws.screenLayouts?.[tIdx] ?? 'full'
+          await window.ananke.state.setCanvasOffset(ws.id, tCol * vpW, tRow * vpH)
+        } else {
+          if (addErrorTimer.current) clearTimeout(addErrorTimer.current)
+          setAddError('Maximum 24 windows per workspace reached')
+          addErrorTimer.current = setTimeout(() => setAddError(null), 4000)
+          return
+        }
+      }
+    }
+
     const id = crypto.randomUUID()
     const home = await window.ananke.getPath('home')
     const wPct = 0.5, hPct = 0.5
     const w = Math.round(wPct * vpW), h = Math.round(hPct * vpH)
-    const px = screenCol * vpW, py = screenRow * vpH
-    const base = { id, x: px, y: py, width: w, height: h, xPct: px / vpW, yPct: py / vpH, wPct, hPct }
+    const base = { id, x: tCol * vpW, y: tRow * vpH, width: w, height: h, xPct: tCol, yPct: tRow, wPct, hPct }
     let p: PaneState
     if (type === 'file-browser') p = { ...base, type: 'file-browser', title: 'Files', leftPath: home, rightPath: home, focusedSide: 'left', leftSelection: [], rightSelection: [] } satisfies FileBrowserPaneState
     else if (type === 'terminal') p = { ...base, type: 'terminal', title: 'Terminal', cwd: home } satisfies TerminalPaneState
     else if (type === 'browser') p = { ...base, type: 'browser', title: 'Browser', url: 'about:blank' } satisfies BrowserPaneState
     else if (type === 'radar') p = { ...base, type: 'radar', title: 'Radar', rootPath: home, pathHistory: [] } satisfies RadarPaneState
     else p = { ...base, type: 'notes', title: 'Notes', body: '' } satisfies NotesPaneState
+
     const newPanes = [...ws.panes, p]
-    const newCount = newPanes.filter(q => Math.floor(q.xPct) === screenCol && Math.floor(q.yPct) === screenRow).length
-    const layoutId = ws.screenLayouts?.[activeScreen] ?? bestLayout(newCount).id
-    const layout = LAYOUTS.find(l => l.id === layoutId) ?? bestLayout(newCount)
-    const arranged = applyLayout(newPanes, layout, screenCol, screenRow, vpW, vpH)
-    await window.ananke.state.setScreenLayout(ws.id, activeScreen, layout.id)
+    const layout = LAYOUTS.find(l => l.id === tLayoutId) ?? bestLayout(newPanes.filter(q => Math.floor(q.xPct) === tCol && Math.floor(q.yPct) === tRow).length)
+    const arranged = applyLayout(newPanes, layout, tCol, tRow, vpW, vpH)
+    await window.ananke.state.setScreenLayout(ws.id, tIdx, layout.id)
     setSnap(await window.ananke.state.replacePanes(ws.id, arranged, id))
   }, [ws, vpW, vpH, screenCol, screenRow, activeScreen])
 
@@ -201,9 +250,15 @@ export function App() {
         }} />
       <div className="main-stage">
         {tomlError && (
-          <div className="toml-error-banner">
+          <div className="app-error-banner">
             ⚠ workspace.toml error: {tomlError}
             <button type="button" onClick={dismissTomlError}>✕</button>
+          </div>
+        )}
+        {addError && (
+          <div className="app-error-banner app-error-banner--warn">
+            ⚠ {addError}
+            <button type="button" onClick={dismissAddError}>✕</button>
           </div>
         )}
         <div className="toolbar toolbar-thin">
