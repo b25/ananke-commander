@@ -122,6 +122,28 @@ const MIN_W = 300
 const MIN_H = 200
 
 /**
+ * True if every slot in the layout produces a pane at least MIN_W × MIN_H px.
+ */
+export function layoutFits(layout: Layout, vpW: number, vpH: number): boolean {
+  return layout.slots.every(s => s.wFrac * vpW >= MIN_W && s.hFrac * vpH >= MIN_H)
+}
+
+/**
+ * Return intentId if it fits; otherwise walk LAYOUT_PROGRESSION descending to
+ * find the largest layout that fits. Always returns at least 'full'.
+ */
+export function fittingLayout(intentId: string, vpW: number, vpH: number): string {
+  const intentLayout = LAYOUTS.find(l => l.id === intentId)
+  if (intentLayout && layoutFits(intentLayout, vpW, vpH)) return intentId
+  for (let i = LAYOUT_PROGRESSION.length - 1; i >= 0; i--) {
+    const candId = LAYOUT_PROGRESSION[i]
+    const cand = LAYOUTS.find(l => l.id === candId)!
+    if (layoutFits(cand, vpW, vpH)) return candId
+  }
+  return 'full'
+}
+
+/**
  * Reposition all panes on the current screen into the given layout.
  * Panes on other screens are untouched.
  */

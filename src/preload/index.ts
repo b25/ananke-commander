@@ -34,6 +34,10 @@ const api = {
       ipcRenderer.invoke('state:setCanvasOffset', wsId, x, y),
     setScreenLayout: (wsId: string, screenIndex: number, layoutId: string): Promise<AppStateSnapshot> =>
       ipcRenderer.invoke('state:setScreenLayout', wsId, screenIndex, layoutId),
+    setIntentLayout: (wsId: string, screenIndex: number, layoutId: string): Promise<AppStateSnapshot> =>
+      ipcRenderer.invoke('state:setIntentLayout', wsId, screenIndex, layoutId),
+    setScreenCollapsed: (wsId: string, screenIndex: number, ids: string[]): Promise<AppStateSnapshot> =>
+      ipcRenderer.invoke('state:setScreenCollapsed', wsId, screenIndex, ids),
     cloneWorkspace: (wsId: string): Promise<AppStateSnapshot> =>
       ipcRenderer.invoke('state:cloneWorkspace', wsId),
     renameWorkspace: (wsId: string, name: string): Promise<AppStateSnapshot> =>
