@@ -386,6 +386,14 @@ function registerIpcHandlers(): void {
   ipcMain.handle('config:writeToml', () => {
     stateStore!.flushToml()
   })
+
+  ipcMain.handle('config:pauseWatch', () => { stateStore!.pauseWatch() })
+  ipcMain.handle('config:resumeWatch', () => { stateStore!.resumeWatch() })
+  ipcMain.handle('config:readToml', () => stateStore!.getTomlRaw())
+  ipcMain.handle('config:applyToml', (_e, raw: string): { error: string | null; snapshot: AppStateSnapshot | null } => {
+    const error = stateStore!.validateAndApplyToml(raw)
+    return { error, snapshot: error ? null : stateStore!.getSnapshot() }
+  })
 }
 
 async function createWindow(): Promise<void> {

@@ -227,6 +227,9 @@ export class TomlConfigService {
 
   getPath(): string { return this.filePath }
 
+  pause(): void { this.stopWatching() }
+  resume(): void { this.startWatching() }
+
   readRaw(): string | null {
     try { return readFileSync(this.filePath, 'utf8') } catch { return null }
   }
