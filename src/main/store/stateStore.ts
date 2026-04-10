@@ -6,6 +6,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AppSettings, AppStateSnapshot, PaneState, PaneType, RecentlyClosedEntry, WorkspaceState } from '../../shared/contracts.js'
 import { DEFAULT_SETTINGS } from '../../shared/contracts.js'
+import { TomlConfigService, tomlToSnapshot } from '../tomlConfig.js'
 
 const FALLBACK_VP_W = 1440
 const FALLBACK_VP_H = 900
@@ -89,6 +90,8 @@ export class StateStore {
   private store: Store<StoreSchema>
   private pendingPatch: Partial<AppStateSnapshot> = {}
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
+  private tomlService: TomlConfigService
+  private mainWindow: import('electron').BrowserWindow | null = null
 
   constructor() {
     migrateLegacyStateIfNeeded()
@@ -98,7 +101,52 @@ export class StateStore {
       this.store.set('workspaces', [ws])
       this.store.set('activeWorkspaceId', ws.id)
     }
+
+    this.tomlService = new TomlConfigService(this.handleExternalTomlChange.bind(this))
+
+    // On first launch (no TOML yet), write current state; otherwise merge from TOML
+    const existing = this.tomlService.readRaw()
+    if (existing === null) {
+      this.tomlService.write(this.getSnapshot())
+    } else {
+      try {
+        const parsed = tomlToSnapshot(existing)
+        this.store.set('workspaces', migrateWorkspaces(sanitizePaths(parsed.workspaces)))
+        this.store.set('activeWorkspaceId', parsed.activeWorkspaceId)
+      } catch { /* malformed TOML on startup — keep electron-store state */ }
+    }
+    this.tomlService.startWatching()
   }
+
+  setMainWindow(win: import('electron').BrowserWindow | null): void {
+    this.mainWindow = win
+  }
+
+  private handleExternalTomlChange(raw: string): void {
+    let parsed: ReturnType<typeof tomlToSnapshot>
+    try {
+      parsed = tomlToSnapshot(raw)
+    } catch (e) {
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send('config:toml-error', String(e))
+      }
+      return
+    }
+    this.store.set('workspaces', migrateWorkspaces(sanitizePaths(parsed.workspaces)))
+    this.store.set('activeWorkspaceId', parsed.activeWorkspaceId)
+    this.pendingPatch = {}
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('config:state-changed', this.getSnapshot())
+    }
+  }
+
+  flushToml(): void {
+    this.tomlService.write(this.getSnapshot())
+  }
+
+  getTomlPath(): string { return this.tomlService.getPath() }
+
+  dispose(): void { this.tomlService.stopWatching() }
 
   getSnapshot(): AppStateSnapshot {
     const disk: AppStateSnapshot = {
@@ -139,8 +187,19 @@ export class StateStore {
     ))
   }
 
+  private tomlDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+  private scheduleTomlFlush(): void {
+    if (this.tomlDebounceTimer) clearTimeout(this.tomlDebounceTimer)
+    this.tomlDebounceTimer = setTimeout(() => {
+      this.tomlDebounceTimer = null
+      this.flushToml()
+    }, 500)
+  }
+
   replaceWorkspacePanes(workspaceId: string, panes: PaneState[], activePaneId: string | null): void {
     this.store.set('workspaces', this.store.get('workspaces').map((ws) => ws.id === workspaceId ? { ...ws, panes, activePaneId } : ws))
+    this.scheduleTomlFlush()
   }
 
   setActiveWorkspacePane(workspaceId: string, activePaneId: string | null): void {
@@ -151,11 +210,13 @@ export class StateStore {
     this.store.set('workspaces', this.store.get('workspaces').map((ws) =>
       ws.id !== workspaceId ? ws : { ...ws, screenLayouts: { ...ws.screenLayouts, [screenIndex]: layoutId } }
     ))
+    this.scheduleTomlFlush()
   }
 
   addWorkspace(name: string): WorkspaceState {
     const ws = createDefaultWorkspace(); ws.name = name
     this.store.set('workspaces', [...this.store.get('workspaces'), ws])
+    this.scheduleTomlFlush()
     return ws
   }
 
@@ -168,6 +229,7 @@ export class StateStore {
 
   renameWorkspace(workspaceId: string, name: string): void {
     this.store.set('workspaces', this.store.get('workspaces').map((ws) => ws.id === workspaceId ? { ...ws, name } : ws))
+    this.scheduleTomlFlush()
   }
 
   deleteWorkspace(workspaceId: string): void {
@@ -175,6 +237,7 @@ export class StateStore {
     if (all.length === 0) return
     this.store.set('workspaces', all)
     if (this.store.get('activeWorkspaceId') === workspaceId) this.store.set('activeWorkspaceId', all[0].id)
+    this.scheduleTomlFlush()
   }
 
   cloneWorkspace(workspaceId: string): WorkspaceState | undefined {
@@ -183,6 +246,7 @@ export class StateStore {
     const cloned: WorkspaceState = { ...structuredClone(src), id: randomUUID(), name: `${src.name} copy`, canvasOffset: { x: 0, y: 0 }, screenLayouts: {}, panes: src.panes.map((p) => ({ ...structuredClone(p), id: randomUUID() })), activePaneId: null }
     if (cloned.panes.length > 0) cloned.activePaneId = cloned.panes[0].id
     this.store.set('workspaces', [...this.store.get('workspaces'), cloned])
+    this.scheduleTomlFlush()
     return cloned
   }
 }

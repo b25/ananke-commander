@@ -5,13 +5,12 @@ import { PaneHeader } from '../../layout/PaneHeader'
 type Props = {
   pane: BrowserPaneState
   isActive: boolean
-  isDragging: boolean
   canvasOffset: { x: number; y: number }
   onClose: () => void
   onUpdate: (next: BrowserPaneState) => void
 }
 
-export function BrowserPlaceholderPane({ pane, isActive, isDragging, canvasOffset, onClose, onUpdate }: Props) {
+export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, onUpdate }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [navHistory, setNavHistory] = useState<string[]>([])
   const [urlInput, setUrlInput] = useState(pane.url || '')
@@ -58,18 +57,9 @@ export function BrowserPlaceholderPane({ pane, isActive, isDragging, canvasOffse
     void window.ananke.browser.layout(pane.id, bounds)
   }
 
-  // Park native view off-screen during drag so it doesn't overlap the moving CSS box
-  useEffect(() => {
-    if (isDragging) {
-      void window.ananke.browser.layout(pane.id, { x: -9999, y: -9999, width: 1, height: 1 })
-    } else {
-      syncBounds()
-    }
-  }, [isDragging])
-
   // Re-sync on mount, active change, pane move/resize, and canvas pan
   useLayoutEffect(() => {
-    if (!isDragging) syncBounds()
+    syncBounds()
   }, [pane.id, isActive, pane.x, pane.y, pane.width, pane.height, canvasOffset.x, canvasOffset.y])
 
   useEffect(() => {
