@@ -31,7 +31,7 @@ function screenIndex(canvasOffset: { x: number; y: number }, vpW: number, vpH: n
 export function App() {
   const [snap, setSnap] = useState<AppStateSnapshot | null>(null)
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
-  const [viewportSize, setViewportSize] = useState({ w: window.innerWidth - 56, h: window.innerHeight - 32 })
+  const [viewportSize, setViewportSize] = useState({ w: window.innerWidth - 56, h: window.innerHeight - 56 })
   const [tomlError, setTomlError] = useState<string | null>(null)
   const tomlErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dismissTomlError = useCallback(() => {
