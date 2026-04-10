@@ -107,6 +107,9 @@ select {
   border-bottom: 1px solid var(--border);
   background: var(--header);
   font-size: var(--text-sm);
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
 }
 
 
@@ -469,6 +472,8 @@ select {
   flex: 1;
   overflow: hidden;
   position: relative;
+  isolation: isolate;
+  min-height: 0;
 }
 
 /* ── Floating Pane ────────────────────────────────────── */
