@@ -335,13 +335,13 @@ function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.handle('state:updatePaneGeometry', (_e, wsId: string, paneId: string, x: number, y: number, w: number, h: number) => {
-    stateStore!.updatePaneGeometry(wsId, paneId, x, y, w, h)
+  ipcMain.handle('state:setCanvasOffset', (_e, wsId: string, x: number, y: number) => {
+    stateStore!.setCanvasOffset(wsId, x, y)
     return stateStore!.getSnapshot()
   })
 
-  ipcMain.handle('state:setCanvasOffset', (_e, wsId: string, x: number, y: number) => {
-    stateStore!.setCanvasOffset(wsId, x, y)
+  ipcMain.handle('state:setScreenLayout', (_e, wsId: string, screenIndex: number, layoutId: string) => {
+    stateStore!.setScreenLayout(wsId, screenIndex, layoutId)
     return stateStore!.getSnapshot()
   })
 

@@ -630,3 +630,34 @@ select {
 .screen-selector__cell.active {
   background: var(--accent);
 }
+
+/* ── Arrange Strip ────────────────────────────────────── */
+
+.arrange-strip {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.arrange-strip__btn {
+  padding: 2px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  opacity: 0.55;
+  transition: opacity 0.1s;
+}
+
+.arrange-strip__btn:hover {
+  opacity: 1;
+  border-color: var(--border);
+}
+
+.arrange-strip__btn.active {
+  opacity: 1;
+  border-color: var(--accent);
+}
