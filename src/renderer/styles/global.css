@@ -603,3 +603,30 @@ select {
   min-width: 0;
   overflow: hidden;
 }
+
+/* ── Screen Selector ──────────────────────────────────── */
+
+.screen-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;
+  width: 28px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.screen-selector__cell {
+  background: var(--border);
+  border-radius: 1px;
+  transition: background 0.1s;
+}
+
+.screen-selector__cell:hover {
+  background: var(--muted);
+}
+
+.screen-selector__cell.active {
+  background: var(--accent);
+}

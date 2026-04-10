@@ -23,10 +23,18 @@ export interface PaneStateBase {
   type: PaneType
   title: string
   needsAttention?: boolean
+  // Absolute pixel values — computed from fractions at render time, cached for storage
   x: number
   y: number
   width: number
   height: number
+  // Proportional position as fractions of one viewport dimension.
+  // x/yPct range 0–2 (4 screens: col + row offset); w/hPct range 0–1.
+  // These are the source of truth; absolute values are derived on load.
+  xPct: number
+  yPct: number
+  wPct: number
+  hPct: number
 }
 
 export interface FileBrowserPaneState extends PaneStateBase {

@@ -14,20 +14,40 @@ import type {
 } from '../../shared/contracts.js'
 import { DEFAULT_SETTINGS } from '../../shared/contracts.js'
 
+// Fallback viewport used only when migrating panes that lack fraction fields.
+// Actual fractions are recomputed in the renderer from the live viewport.
+const FALLBACK_VP_W = 1440
+const FALLBACK_VP_H = 900
+
 const DEFAULT_PANE_SIZES: Record<PaneType, { w: number; h: number }> = {
-  'file-browser': { w: 900, h: 600 },
-  'terminal': { w: 700, h: 420 },
-  'browser': { w: 1024, h: 700 },
-  'notes': { w: 600, h: 500 },
-  'radar': { w: 700, h: 500 }
+  'file-browser': { w: 720, h: 450 },
+  'terminal':     { w: 720, h: 450 },
+  'browser':      { w: 720, h: 450 },
+  'notes':        { w: 720, h: 450 },
+  'radar':        { w: 720, h: 450 }
 }
 
 function injectPaneGeometry(panes: PaneState[]): PaneState[] {
   return panes.map((pane, idx) => {
-    if (typeof pane.x === 'number') return pane
-    const { w, h } = DEFAULT_PANE_SIZES[pane.type]
-    const stagger = idx * 30
-    return { ...pane, x: 40 + stagger, y: 40 + stagger, width: w, height: h }
+    const hasAbs = typeof pane.x === 'number'
+    const hasPct = typeof pane.xPct === 'number'
+
+    // Inject absolute geometry if missing
+    const base = hasAbs ? pane : (() => {
+      const { w, h } = DEFAULT_PANE_SIZES[pane.type]
+      const stagger = idx * 30
+      return { ...pane, x: 40 + stagger, y: 40 + stagger, width: w, height: h }
+    })()
+
+    // Inject fractions if missing (best-effort using fallback viewport)
+    if (hasPct) return base
+    return {
+      ...base,
+      xPct: base.x / FALLBACK_VP_W,
+      yPct: base.y / FALLBACK_VP_H,
+      wPct: base.width  / FALLBACK_VP_W,
+      hPct: base.height / FALLBACK_VP_H
+    }
   })
 }
 
@@ -65,7 +85,9 @@ function sanitizePaths(workspaces: WorkspaceState[]): WorkspaceState[] {
 function createDefaultWorkspace(): WorkspaceState {
   const paneId = randomUUID()
   const home = homedir()
-  const { w, h } = DEFAULT_PANE_SIZES['file-browser']
+  // Default pane: 1/4 screen (half viewport in each dimension), top-left of screen 0
+  const wPct = 0.5
+  const hPct = 0.5
   return {
     id: randomUUID(),
     name: 'Workspace 1',
@@ -76,7 +98,14 @@ function createDefaultWorkspace(): WorkspaceState {
         id: paneId,
         type: 'file-browser',
         title: 'Files',
-        x: 40, y: 40, width: w, height: h,
+        x: 40,
+        y: 40,
+        width:  Math.round(wPct * FALLBACK_VP_W),
+        height: Math.round(hPct * FALLBACK_VP_H),
+        xPct: 40 / FALLBACK_VP_W,
+        yPct: 40 / FALLBACK_VP_H,
+        wPct,
+        hPct,
         leftPath: home,
         rightPath: home,
         focusedSide: 'left',
@@ -100,7 +129,6 @@ type StoreSchema = AppStateSnapshot
 const STORE_NAME = 'ananke-commander-state'
 const LEGACY_STORE_NAME = 'totalcmd-state'
 
-/** If legacy totalcmd state exists in the same userData dir, copy it once before opening the new store. */
 function migrateLegacyStateIfNeeded(): void {
   try {
     const dir = app.getPath('userData')
@@ -194,7 +222,6 @@ export class StateStore {
     this.store.set('recentlyClosed', [])
   }
 
-  /** Trim list to current settings.privacy.recentlyClosedMax */
   applyRecentlyClosedRetention(): void {
     const max = this.store.get('settings').privacy.recentlyClosedMax
     this.trimRecentlyClosed(max)
@@ -270,7 +297,7 @@ export class StateStore {
 
   deleteWorkspace(workspaceId: string): void {
     const all = this.store.get('workspaces').filter((w) => w.id !== workspaceId)
-    if (all.length === 0) return // never delete last workspace
+    if (all.length === 0) return
     this.store.set('workspaces', all)
     if (this.store.get('activeWorkspaceId') === workspaceId) {
       this.store.set('activeWorkspaceId', all[0].id)

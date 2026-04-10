@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type {
   AppStateSnapshot,
   BrowserPaneState,
@@ -11,6 +11,7 @@ import type {
 } from '../../shared/contracts'
 import { WorkspaceRail } from '../layout/WorkspaceRail'
 import { CanvasWorkspace } from '../layout/CanvasWorkspace'
+import { ScreenSelector } from '../layout/ScreenSelector'
 import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { FileBrowserPane } from '../panes/file-browser/FileBrowserPane'
 import { TerminalPane } from '../panes/terminal/TerminalPane'
@@ -21,6 +22,31 @@ import { NotesSettings } from '../settings/NotesSettings'
 import { PrivacySettings } from '../settings/PrivacySettings'
 import { findFreeSlot, resolveOverlaps } from '../lib/tileUtils'
 
+const MIN_W = 300
+const MIN_H = 200
+
+/** Compute absolute pixel positions from stored viewport fractions. */
+function applyFractions(panes: PaneState[], vpW: number, vpH: number): PaneState[] {
+  return panes.map((p) => ({
+    ...p,
+    x: p.xPct * vpW,
+    y: p.yPct * vpH,
+    width:  Math.max(MIN_W, p.wPct * vpW),
+    height: Math.max(MIN_H, p.hPct * vpH)
+  }))
+}
+
+/** Store fractions back into panes after a geometry change. */
+function withFractions(panes: PaneState[], vpW: number, vpH: number): PaneState[] {
+  return panes.map((p) => ({
+    ...p,
+    xPct: p.x / vpW,
+    yPct: p.y / vpH,
+    wPct: p.width  / vpW,
+    hPct: p.height / vpH
+  }))
+}
+
 export function App() {
   const [snap, setSnap] = useState<AppStateSnapshot | null>(null)
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
@@ -29,15 +55,19 @@ export function App() {
     setSnap(await window.ananke.state.get())
   }, [])
 
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
+  useEffect(() => { void refresh() }, [refresh])
 
   let ws = snap?.workspaces.find((w) => w.id === snap.activeWorkspaceId)
   if (snap && !ws && snap.workspaces.length > 0) {
     ws = snap.workspaces[0]
     void window.ananke.state.setActiveWorkspace(ws.id)
   }
+
+  // Compute display panes: absolute positions derived from fractions × current viewport.
+  // This is the single place where viewport scaling happens — no IPC needed on resize.
+  const vpW = viewportSize.w
+  const vpH = viewportSize.h
+  const displayWs = ws ? { ...ws, panes: applyFractions(ws.panes, vpW, vpH) } : ws
 
   const setActivePane = useCallback(
     async (id: string) => {
@@ -66,21 +96,28 @@ export function App() {
   const handleGeometryChange = useCallback(
     async (paneId: string, x: number, y: number, w: number, h: number) => {
       if (!ws) return
+      // Update absolute, resolve overlaps, then recompute fractions from final positions
       const updated = ws.panes.map((p) =>
         p.id === paneId ? { ...p, x, y, width: w, height: h } : p
       )
       const resolved = resolveOverlaps(updated, paneId)
-      setSnap(await window.ananke.state.replacePanes(ws.id, resolved, ws.activePaneId))
+      const withPct = withFractions(resolved, vpW, vpH)
+      setSnap(await window.ananke.state.replacePanes(ws.id, withPct, ws.activePaneId))
     },
-    [ws]
+    [ws, vpW, vpH]
   )
 
   const handleCanvasOffsetChange = useCallback(
     async (x: number, y: number) => {
       if (!ws) return
-      setSnap(await window.ananke.state.setCanvasOffset(ws.id, x, y))
+      // Snap to the nearest valid screen boundary
+      const snappedX = Math.round(x / (vpW || 1)) * vpW
+      const snappedY = Math.round(y / (vpH || 1)) * vpH
+      const clampedX = Math.max(0, Math.min(vpW, snappedX))
+      const clampedY = Math.max(0, Math.min(vpH, snappedY))
+      setSnap(await window.ananke.state.setCanvasOffset(ws.id, clampedX, clampedY))
     },
-    [ws]
+    [ws, vpW, vpH]
   )
 
   const addPane = useCallback(
@@ -88,49 +125,46 @@ export function App() {
       if (!ws) return
       const id = crypto.randomUUID()
       const home = await window.ananke.getPath('home')
-      const w = Math.round(viewportSize.w / 2)
-      const h = Math.round(viewportSize.h / 2)
-      const viewportPanes = ws.panes.map((p) => ({
+      // 1/4 screen = half viewport in each dimension
+      const wPct = 0.5
+      const hPct = 0.5
+      const w = Math.round(wPct * vpW)
+      const h = Math.round(hPct * vpH)
+      // Find a free slot within the current screen (viewport-space), then offset to canvas
+      const screenPanes = ws.panes.map((p) => ({
         ...p,
         x: p.x - ws.canvasOffset.x,
         y: p.y - ws.canvasOffset.y
       }))
-      const rawSlot = findFreeSlot(viewportPanes, w, h)
-      const { x: px, y: py } = {
-        x: Math.max(0, rawSlot.x + ws.canvasOffset.x),
-        y: Math.max(0, rawSlot.y + ws.canvasOffset.y)
-      }
+      const slot = findFreeSlot(screenPanes, w, h)
+      const px = Math.max(0, slot.x + ws.canvasOffset.x)
+      const py = Math.max(0, slot.y + ws.canvasOffset.y)
       let p: PaneState
+      const base = { id, x: px, y: py, width: w, height: h, xPct: px / vpW, yPct: py / vpH, wPct, hPct }
       if (type === 'file-browser') {
-        p = {
-          id, type: 'file-browser', title: 'Files',
-          x: px, y: py, width: w, height: h,
-          leftPath: home, rightPath: home,
-          focusedSide: 'left', leftSelection: [], rightSelection: []
-        } satisfies FileBrowserPaneState
+        p = { ...base, type: 'file-browser', title: 'Files', leftPath: home, rightPath: home, focusedSide: 'left', leftSelection: [], rightSelection: [] } satisfies FileBrowserPaneState
       } else if (type === 'terminal') {
-        p = { id, type: 'terminal', title: 'Terminal', x: px, y: py, width: w, height: h, cwd: home } satisfies TerminalPaneState
+        p = { ...base, type: 'terminal', title: 'Terminal', cwd: home } satisfies TerminalPaneState
       } else if (type === 'browser') {
-        p = { id, type: 'browser', title: 'Browser', x: px, y: py, width: w, height: h, url: 'about:blank' } satisfies BrowserPaneState
+        p = { ...base, type: 'browser', title: 'Browser', url: 'about:blank' } satisfies BrowserPaneState
       } else if (type === 'radar') {
-        p = { id, type: 'radar', title: 'Radar', x: px, y: py, width: w, height: h, rootPath: home, pathHistory: [] } satisfies RadarPaneState
+        p = { ...base, type: 'radar', title: 'Radar', rootPath: home, pathHistory: [] } satisfies RadarPaneState
       } else {
-        p = { id, type: 'notes', title: 'Notes', x: px, y: py, width: w, height: h, body: '' } satisfies NotesPaneState
+        p = { ...base, type: 'notes', title: 'Notes', body: '' } satisfies NotesPaneState
       }
-      const panes = [...ws.panes, p]
-      setSnap(await window.ananke.state.replacePanes(ws.id, panes, id))
+      setSnap(await window.ananke.state.replacePanes(ws.id, [...ws.panes, p], id))
     },
-    [ws, viewportSize]
+    [ws, vpW, vpH]
   )
 
   const renderPane = (pane: PaneState) => {
-    const isActive = ws!.activePaneId === pane.id
+    const isActive = displayWs!.activePaneId === pane.id
     if (pane.type === 'file-browser') {
       return (
         <FileBrowserPane
           pane={pane}
           isActive={isActive}
-          allPanes={ws!.panes}
+          allPanes={displayWs!.panes}
           onUpdate={(next) => void updatePane(pane.id, next)}
           onClose={() => void closePane(pane.id)}
         />
@@ -152,7 +186,7 @@ export function App() {
           pane={pane}
           isActive={isActive}
           isDragging={false}
-          canvasOffset={ws!.canvasOffset}
+          canvasOffset={displayWs!.canvasOffset}
           onClose={() => void closePane(pane.id)}
           onUpdate={(next) => void updatePane(pane.id, next)}
         />
@@ -179,7 +213,7 @@ export function App() {
     )
   }
 
-  // WS-UI-03: Ctrl+1–9 workspace switching
+  // Ctrl+1–9 workspace switching
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!snap || !(e.ctrlKey || e.metaKey)) return
@@ -209,7 +243,7 @@ export function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [ws, closePane])
 
-  // WS-UI-05: Ctrl+Tab pane focus cycling
+  // Ctrl+Tab pane focus cycling
   useEffect(() => {
     if (!ws) return
     const handler = (e: KeyboardEvent) => {
@@ -227,7 +261,7 @@ export function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [ws, snap])
 
-  if (!snap || !ws) {
+  if (!snap || !ws || !displayWs) {
     return <div className="app-shell" style={{ padding: 16 }}>Loading…</div>
   }
 
@@ -252,7 +286,14 @@ export function App() {
       />
       <div className="main-stage">
         <div className="toolbar toolbar-thin">
-          <span className="muted" style={{ marginRight: 8, fontSize: '11px', whiteSpace: 'nowrap' }}>{ws.name}</span>
+          <span className="muted" style={{ marginRight: 6, fontSize: '11px', whiteSpace: 'nowrap' }}>{ws.name}</span>
+          <ScreenSelector
+            canvasOffset={ws.canvasOffset}
+            viewportW={vpW}
+            viewportH={vpH}
+            onSelect={(x, y) => void handleCanvasOffsetChange(x, y)}
+          />
+          <div style={{ width: 8 }} />
           <div style={{ display: 'flex', gap: '4px', borderRight: '1px solid var(--border)', paddingRight: '8px', marginRight: '4px' }}>
             <button type="button" className="btn-thin" onClick={() => void addPane('file-browser')}>🗂 Files</button>
             <button type="button" className="btn-thin" onClick={() => void addPane('terminal')}>🖥 Terminal</button>
@@ -269,17 +310,13 @@ export function App() {
             <button type="button" className="btn-thin" title="Archive" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'Arc' }))}>Archive</button>
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
-            <button type="button" className="btn-thin" onClick={() => setDrawer(drawer === 'recent' ? 'none' : 'recent')}>
-              Recent
-            </button>
-            <button type="button" className="btn-thin" onClick={() => setDrawer(drawer === 'settings' ? 'none' : 'settings')}>
-              Settings
-            </button>
+            <button type="button" className="btn-thin" onClick={() => setDrawer(drawer === 'recent' ? 'none' : 'recent')}>Recent</button>
+            <button type="button" className="btn-thin" onClick={() => setDrawer(drawer === 'settings' ? 'none' : 'settings')}>Settings</button>
           </div>
         </div>
 
         <CanvasWorkspace
-          workspace={ws}
+          workspace={displayWs}
           renderPane={renderPane}
           onActivate={setActivePane}
           onGeometryChange={handleGeometryChange}
