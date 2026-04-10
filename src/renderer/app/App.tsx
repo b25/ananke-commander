@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppStateSnapshot, BrowserPaneState, FileBrowserPaneState, NotesPaneState, PaneState, PaneType, RadarPaneState, TerminalPaneState } from '../../shared/contracts'
 import { WorkspaceRail } from '../layout/WorkspaceRail'
 import { CanvasWorkspace } from '../layout/CanvasWorkspace'
@@ -32,14 +32,20 @@ export function App() {
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth - 56, h: window.innerHeight - 32 })
   const [tomlError, setTomlError] = useState<string | null>(null)
+  const tomlErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dismissTomlError = useCallback(() => {
+    if (tomlErrorTimer.current) { clearTimeout(tomlErrorTimer.current); tomlErrorTimer.current = null }
+    setTomlError(null)
+  }, [])
   const refresh = useCallback(async () => { setSnap(await window.ananke.state.get()) }, [])
   useEffect(() => { void refresh() }, [refresh])
 
   useEffect(() => {
     const unsubState = window.ananke.config.onStateChanged((newSnap) => { setSnap(newSnap) })
     const unsubErr = window.ananke.config.onTomlError((msg) => {
+      if (tomlErrorTimer.current) clearTimeout(tomlErrorTimer.current)
       setTomlError(msg)
-      setTimeout(() => setTomlError(null), 7000)
+      tomlErrorTimer.current = setTimeout(() => setTomlError(null), 7000)
     })
     return () => { unsubState(); unsubErr() }
   }, [])
@@ -188,7 +194,7 @@ export function App() {
         {tomlError && (
           <div className="toml-error-banner">
             ⚠ workspace.toml error: {tomlError}
-            <button type="button" onClick={() => setTomlError(null)}>✕</button>
+            <button type="button" onClick={dismissTomlError}>✕</button>
           </div>
         )}
         <div className="toolbar toolbar-thin">

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { LayoutSlot } from './layouts'
 
 interface Props {
@@ -6,7 +7,7 @@ interface Props {
   height: number
 }
 
-export function LayoutThumb({ slots, width, height }: Props) {
+export const LayoutThumb = memo(function LayoutThumb({ slots, width, height }: Props) {
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden>
       <rect width={width} height={height} fill="var(--bg)" rx={2} />
@@ -24,4 +25,4 @@ export function LayoutThumb({ slots, width, height }: Props) {
       ))}
     </svg>
   )
-}
+})
