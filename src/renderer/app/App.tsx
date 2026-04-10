@@ -12,7 +12,7 @@ import { NotesPane } from '../panes/notes/NotesPane'
 import { RadarPane } from '../panes/radar/RadarPane'
 import { NotesSettings } from '../settings/NotesSettings'
 import { PrivacySettings } from '../settings/PrivacySettings'
-import { LAYOUTS, LAYOUT_SLOTS, applyLayout, bestLayout, nextProgressionLayout } from '../lib/layouts'
+import { LAYOUTS, LAYOUT_SLOTS, applyLayout, bestLayout, nextProgressionLayout, fittingLayout } from '../lib/layouts'
 
 const MIN_W = 300
 const MIN_H = 200
@@ -33,6 +33,7 @@ export function App() {
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth - 56, h: window.innerHeight - 56 })
   const [tomlError, setTomlError] = useState<string | null>(null)
+  const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tomlErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dismissTomlError = useCallback(() => {
     if (tomlErrorTimer.current) { clearTimeout(tomlErrorTimer.current); tomlErrorTimer.current = null }
@@ -117,9 +118,35 @@ export function App() {
     if (!ws) return
     const layout = LAYOUTS.find(l => l.id === layoutId)
     if (!layout) return
-    const arranged = applyLayout(ws.panes, layout, screenCol, screenRow, vpW, vpH)
+
+    const currentCollapsedIds = ws.screenCollapsed?.[activeScreen] ?? []
+    const currentCollapsedSet = new Set(currentCollapsedIds)
+    const visibleOnScreen = ws.panes.filter(
+      p => Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow && !currentCollapsedSet.has(p.id)
+    )
+    const newSlots = layout.slots.length
+    let newCollapsedIds: string[]
+
+    if (newSlots >= visibleOnScreen.length + currentCollapsedIds.length) {
+      newCollapsedIds = []
+    } else if (newSlots >= visibleOnScreen.length) {
+      const canRestore = newSlots - visibleOnScreen.length
+      newCollapsedIds = currentCollapsedIds.slice(canRestore)
+    } else {
+      const excess = visibleOnScreen.slice(newSlots).map(p => p.id)
+      newCollapsedIds = [...currentCollapsedIds, ...excess]
+    }
+
+    const newCollapsedSet = new Set(newCollapsedIds)
+    const panesForLayout = ws.panes.filter(p => !newCollapsedSet.has(p.id))
+    const arranged = applyLayout(panesForLayout, layout, screenCol, screenRow, vpW, vpH)
+    const collapsedPanes = ws.panes.filter(p => newCollapsedSet.has(p.id))
+    const finalPanes = [...arranged, ...collapsedPanes]
+
+    await window.ananke.state.setIntentLayout(ws.id, activeScreen, layoutId)
     await window.ananke.state.setScreenLayout(ws.id, activeScreen, layoutId)
-    setSnap(await window.ananke.state.replacePanes(ws.id, arranged, ws.activePaneId))
+    await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, newCollapsedIds)
+    setSnap(await window.ananke.state.replacePanes(ws.id, finalPanes, ws.activePaneId))
   }, [ws, screenCol, screenRow, vpW, vpH, activeScreen])
 
   const addPane = useCallback(async (type: PaneType) => {
@@ -187,6 +214,69 @@ export function App() {
     setSnap(await window.ananke.state.replacePanes(ws.id, arranged, id))
   }, [ws, vpW, vpH, screenCol, screenRow, activeScreen])
 
+  const applySmartLayouts = useCallback(async (newVpW: number, newVpH: number) => {
+    if (!ws) return
+    let newPanes = ws.panes
+    const layoutChanges: Record<number, string> = {}
+
+    for (const screenIdx of [0, 1, 2, 3] as const) {
+      const col = screenIdx % 2
+      const row = Math.floor(screenIdx / 2)
+      const hasPanes = newPanes.some(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row)
+      if (!hasPanes) continue
+      const intent  = ws.intentLayouts?.[screenIdx] ?? ws.screenLayouts?.[screenIdx] ?? 'full'
+      const current = ws.screenLayouts?.[screenIdx] ?? 'full'
+      const target  = fittingLayout(intent, newVpW, newVpH)
+      if (target !== current) {
+        const layout = LAYOUTS.find(l => l.id === target)!
+        newPanes = applyLayout(newPanes, layout, col, row, newVpW, newVpH)
+        layoutChanges[screenIdx] = target
+      }
+    }
+
+    if (Object.keys(layoutChanges).length === 0) return
+    for (const [idx, layoutId] of Object.entries(layoutChanges)) {
+      await window.ananke.state.setScreenLayout(ws.id, Number(idx), layoutId)
+    }
+    setSnap(await window.ananke.state.replacePanes(ws.id, newPanes, ws.activePaneId))
+  }, [ws])
+
+  const handleViewportResize = useCallback((w: number, h: number) => {
+    setViewportSize({ w, h })
+    if (resizeTimer.current) clearTimeout(resizeTimer.current)
+    resizeTimer.current = setTimeout(() => { void applySmartLayouts(w, h) }, 150)
+  }, [applySmartLayouts])
+
+  const handleRestorePane = useCallback(async (collapsedPaneId: string) => {
+    if (!ws) return
+    const currentCollapsedIds = ws.screenCollapsed?.[activeScreen] ?? []
+    const visibleOnScreen = ws.panes.filter(
+      p => Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow && !currentCollapsedIds.includes(p.id)
+    )
+    const target = visibleOnScreen.find(p => p.id === ws.activePaneId) ?? visibleOnScreen[0]
+    const newCollapsed = currentCollapsedIds.filter(id => id !== collapsedPaneId)
+
+    if (!target) {
+      await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, newCollapsed)
+      setSnap(await window.ananke.state.replacePanes(ws.id, ws.panes, ws.activePaneId))
+      return
+    }
+
+    const newPanes = ws.panes.map(p => {
+      if (p.id !== collapsedPaneId) return p
+      return { ...p, xPct: target.xPct, yPct: target.yPct, wPct: target.wPct, hPct: target.hPct, x: target.x, y: target.y, width: target.width, height: target.height }
+    })
+    await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, [...newCollapsed.filter(id => id !== target.id), target.id])
+    setSnap(await window.ananke.state.replacePanes(ws.id, newPanes, collapsedPaneId))
+  }, [ws, screenCol, screenRow, activeScreen])
+
+  const handleCloseCollapsed = useCallback(async (collapsedPaneId: string) => {
+    if (!ws) return
+    const newCollapsed = (ws.screenCollapsed?.[activeScreen] ?? []).filter(id => id !== collapsedPaneId)
+    await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, newCollapsed)
+    setSnap(await window.ananke.state.closePane(ws.id, collapsedPaneId))
+  }, [ws, activeScreen])
+
   const renderPane = (pane: PaneState) => {
     const isActive = displayWs!.activePaneId === pane.id
     if (pane.type === 'file-browser') return <FileBrowserPane pane={pane} isActive={isActive} allPanes={displayWs!.panes} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
@@ -234,7 +324,11 @@ export function App() {
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
   }, [ws, snap])
 
-  if (!snap || !ws || !displayWs) return <div className="app-shell" style={{ padding: 16 }}>Loading…</div>
+  const activeCollapsedIds = new Set(ws?.screenCollapsed?.[activeScreen] ?? [])
+  const collapsedPanes = displayWs ? displayWs.panes.filter(p => activeCollapsedIds.has(p.id)) : []
+  const displayWsForCanvas = displayWs ? { ...displayWs, panes: displayWs.panes.filter(p => !activeCollapsedIds.has(p.id)) } : displayWs
+
+  if (!snap || !ws || !displayWs || !displayWsForCanvas) return <div className="app-shell" style={{ padding: 16 }}>Loading…</div>
 
   return (
     <div className="app-shell">
@@ -287,9 +381,12 @@ export function App() {
             <button type="button" className="btn-thin" onClick={() => setDrawer(drawer === 'settings' ? 'none' : 'settings')}>Settings</button>
           </div>
         </div>
-        <CanvasWorkspace workspace={displayWs} renderPane={renderPane} onActivate={setActivePane}
+        <CanvasWorkspace workspace={displayWsForCanvas} renderPane={renderPane} onActivate={setActivePane}
           onCanvasOffsetChange={handleCanvasOffsetChange}
-          onViewportResize={(w, h) => setViewportSize({ w, h })} />
+          onViewportResize={handleViewportResize}
+          collapsedPanes={collapsedPanes}
+          onRestorePane={(id) => void handleRestorePane(id)}
+          onCloseCollapsed={(id) => void handleCloseCollapsed(id)} />
       </div>
       {drawer === 'settings' && (
         <aside className="drawer"><h3>Settings</h3><div className="body">

@@ -36,6 +36,8 @@ function migrateWorkspaces(workspaces: WorkspaceState[]): WorkspaceState[] {
     ...ws,
     canvasOffset: ws.canvasOffset ?? { x: 0, y: 0 },
     screenLayouts: ws.screenLayouts ?? {},
+    intentLayouts: ws.intentLayouts ?? {},
+    screenCollapsed: ws.screenCollapsed ?? {},
     panes: injectPaneGeometry(ws.panes)
   }))
 }
@@ -60,7 +62,7 @@ function createDefaultWorkspace(): WorkspaceState {
   const home = homedir()
   return {
     id: randomUUID(), name: 'Workspace 1', activePaneId: paneId,
-    canvasOffset: { x: 0, y: 0 }, screenLayouts: {},
+    canvasOffset: { x: 0, y: 0 }, screenLayouts: {}, intentLayouts: {}, screenCollapsed: {},
     panes: [{
       id: paneId, type: 'file-browser', title: 'Files',
       x: 0, y: 0, width: 720, height: 450,
@@ -240,10 +242,24 @@ export class StateStore {
     this.scheduleTomlFlush()
   }
 
+  setIntentLayout(workspaceId: string, screenIndex: number, layoutId: string): void {
+    this.store.set('workspaces', this.store.get('workspaces').map((ws) =>
+      ws.id !== workspaceId ? ws : { ...ws, intentLayouts: { ...ws.intentLayouts, [screenIndex]: layoutId } }
+    ))
+    this.scheduleTomlFlush()
+  }
+
+  setScreenCollapsed(workspaceId: string, screenIndex: number, ids: string[]): void {
+    this.store.set('workspaces', this.store.get('workspaces').map((ws) =>
+      ws.id !== workspaceId ? ws : { ...ws, screenCollapsed: { ...ws.screenCollapsed, [screenIndex]: ids } }
+    ))
+    this.scheduleTomlFlush()
+  }
+
   cloneWorkspace(workspaceId: string): WorkspaceState | undefined {
     const src = this.store.get('workspaces').find((w) => w.id === workspaceId)
     if (!src) return undefined
-    const cloned: WorkspaceState = { ...structuredClone(src), id: randomUUID(), name: `${src.name} copy`, canvasOffset: { x: 0, y: 0 }, screenLayouts: {}, panes: src.panes.map((p) => ({ ...structuredClone(p), id: randomUUID() })), activePaneId: null }
+    const cloned: WorkspaceState = { ...structuredClone(src), id: randomUUID(), name: `${src.name} copy`, canvasOffset: { x: 0, y: 0 }, screenLayouts: {}, intentLayouts: {}, screenCollapsed: {}, panes: src.panes.map((p) => ({ ...structuredClone(p), id: randomUUID() })), activePaneId: null }
     if (cloned.panes.length > 0) cloned.activePaneId = cloned.panes[0].id
     this.store.set('workspaces', [...this.store.get('workspaces'), cloned])
     this.scheduleTomlFlush()

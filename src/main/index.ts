@@ -345,6 +345,16 @@ function registerIpcHandlers(): void {
     return stateStore!.getSnapshot()
   })
 
+  ipcMain.handle('state:setIntentLayout', (_e, wsId: string, screenIndex: number, layoutId: string) => {
+    stateStore!.setIntentLayout(wsId, screenIndex, layoutId)
+    return stateStore!.getSnapshot()
+  })
+
+  ipcMain.handle('state:setScreenCollapsed', (_e, wsId: string, screenIndex: number, ids: string[]) => {
+    stateStore!.setScreenCollapsed(wsId, screenIndex, ids)
+    return stateStore!.getSnapshot()
+  })
+
   ipcMain.handle('state:cloneWorkspace', (_e, wsId: string) => {
     const ws = stateStore!.cloneWorkspace(wsId)
     if (ws) stateStore!.setActiveWorkspace(ws.id)

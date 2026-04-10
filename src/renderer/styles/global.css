@@ -474,6 +474,76 @@ select {
   position: relative;
   isolation: isolate;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-panning-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Collapsed Pane Strip ─────────────────────────────────── */
+
+.collapsed-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--header);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 5;
+}
+
+.collapsed-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  background: var(--pane);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  user-select: none;
+  max-width: 180px;
+}
+
+.collapsed-pill:hover {
+  border-color: var(--accent);
+}
+
+.collapsed-pill__icon {
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.collapsed-pill__title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collapsed-pill__close {
+  flex-shrink: 0;
+  padding: 0 2px;
+  font-size: 9px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.collapsed-pill__close:hover {
+  color: var(--danger);
+  border-color: transparent;
+  background: transparent;
 }
 
 /* ── Floating Pane ────────────────────────────────────── */

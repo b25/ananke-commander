@@ -87,6 +87,10 @@ export interface WorkspaceState {
   canvasOffset: { x: number; y: number }
   /** Active layout ID per screen index (0=TL,1=TR,2=BL,3=BR). Empty = auto. */
   screenLayouts: Record<number, string>
+  /** User's explicitly chosen layout per screen — never auto-changed by resize. */
+  intentLayouts: Record<number, string>
+  /** Pane IDs collapsed to the strip per screen index. */
+  screenCollapsed: Record<number, string[]>
 }
 
 export interface AppStateSnapshot {

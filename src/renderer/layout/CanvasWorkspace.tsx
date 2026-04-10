@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PaneState, WorkspaceState } from '../../shared/contracts'
 import { FloatingPane } from './FloatingPane'
+import { CollapsedStrip } from './CollapsedStrip'
 
 interface Props {
   workspace: WorkspaceState
@@ -8,9 +9,12 @@ interface Props {
   onActivate: (paneId: string) => void
   onCanvasOffsetChange: (x: number, y: number) => void
   onViewportResize?: (width: number, height: number) => void
+  collapsedPanes?: PaneState[]
+  onRestorePane?: (paneId: string) => void
+  onCloseCollapsed?: (paneId: string) => void
 }
 
-export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOffsetChange, onViewportResize }: Props) {
+export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOffsetChange, onViewportResize, collapsedPanes = [], onRestorePane, onCloseCollapsed }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [viewportSize, setViewportSize] = useState({ width: 800, height: 600 })
   const offsetRef = useRef(workspace.canvasOffset)
@@ -64,18 +68,25 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
   const canvasH = viewportSize.height * 2
 
   return (
-    <div ref={containerRef} className="canvas-workspace">
-      <div style={{ position: 'absolute', width: canvasW, height: canvasH, transform: `translate(${-ox}px, ${-oy}px)`, willChange: 'transform' }}>
-        {workspace.panes.map((pane) => (
-          <FloatingPane
-            key={pane.id}
-            x={pane.x} y={pane.y} width={pane.width} height={pane.height}
-            isActive={workspace.activePaneId === pane.id}
-            onActivate={() => onActivate(pane.id)}
-          >
-            {renderPane(pane)}
-          </FloatingPane>
-        ))}
+    <div className="canvas-workspace">
+      <CollapsedStrip
+        panes={collapsedPanes}
+        onRestore={(id) => onRestorePane?.(id)}
+        onClose={(id) => onCloseCollapsed?.(id)}
+      />
+      <div ref={containerRef} className="canvas-panning-area">
+        <div style={{ position: 'absolute', width: canvasW, height: canvasH, transform: `translate(${-ox}px, ${-oy}px)`, willChange: 'transform' }}>
+          {workspace.panes.map((pane) => (
+            <FloatingPane
+              key={pane.id}
+              x={pane.x} y={pane.y} width={pane.width} height={pane.height}
+              isActive={workspace.activePaneId === pane.id}
+              onActivate={() => onActivate(pane.id)}
+            >
+              {renderPane(pane)}
+            </FloatingPane>
+          ))}
+        </div>
       </div>
     </div>
   )

@@ -42,12 +42,22 @@ function workspaceToToml(ws: WorkspaceState): Record<string, unknown> {
   for (const [k, v] of Object.entries(ws.screenLayouts ?? {})) {
     screenLayouts[String(k)] = v
   }
+  const intentLayouts: Record<string, string> = {}
+  for (const [k, v] of Object.entries(ws.intentLayouts ?? {})) {
+    intentLayouts[String(k)] = v
+  }
+  const screenCollapsed: Record<string, string[]> = {}
+  for (const [k, v] of Object.entries(ws.screenCollapsed ?? {})) {
+    if (v.length > 0) screenCollapsed[String(k)] = v
+  }
   return {
     id: ws.id,
     name: ws.name,
     active_pane: ws.activePaneId ?? '',
     canvas_offset: [ws.canvasOffset.x, ws.canvasOffset.y],
     screen_layouts: screenLayouts,
+    intent_layouts: intentLayouts,
+    screen_collapsed: screenCollapsed,
     panes: ws.panes.map(paneToToml),
   }
 }
@@ -144,6 +154,24 @@ function parseWorkspaceFromToml(raw: unknown, idx: number): WorkspaceState {
     }
   }
 
+  const intentLayouts: Record<number, string> = {}
+  const rawIntent = raw.intent_layouts
+  if (isRecord(rawIntent)) {
+    for (const [k, v] of Object.entries(rawIntent)) {
+      const n = parseInt(k)
+      if (!isNaN(n) && typeof v === 'string') intentLayouts[n] = v
+    }
+  }
+
+  const screenCollapsed: Record<number, string[]> = {}
+  const rawCollapsed = raw.screen_collapsed
+  if (isRecord(rawCollapsed)) {
+    for (const [k, v] of Object.entries(rawCollapsed)) {
+      const n = parseInt(k)
+      if (!isNaN(n) && Array.isArray(v)) screenCollapsed[n] = v.map(s => str(s))
+    }
+  }
+
   const offset = Array.isArray(raw.canvas_offset) ? raw.canvas_offset : [0, 0]
   const activePane = str(raw.active_pane, '')
   const validActivePane = dedupedPanes.find(p => p.id === activePane)?.id ?? dedupedPanes[0]?.id ?? null
@@ -155,6 +183,8 @@ function parseWorkspaceFromToml(raw: unknown, idx: number): WorkspaceState {
     activePaneId: validActivePane,
     canvasOffset: { x: Math.max(0, num(offset[0])), y: Math.max(0, num(offset[1])) },
     screenLayouts,
+    intentLayouts,
+    screenCollapsed,
   }
 }
 
