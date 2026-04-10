@@ -365,6 +365,17 @@ function registerIpcHandlers(): void {
     const { rename } = await import('node:fs/promises')
     await rename(oldPath, newPath)
   })
+
+  ipcMain.handle('config:getTomlPath', () => stateStore!.getTomlPath())
+
+  ipcMain.handle('config:openToml', async () => {
+    const p = stateStore!.getTomlPath()
+    return shell.openPath(p)
+  })
+
+  ipcMain.handle('config:writeToml', () => {
+    stateStore!.flushToml()
+  })
 }
 
 async function createWindow(): Promise<void> {
@@ -389,6 +400,7 @@ async function createWindow(): Promise<void> {
   mainWindow = win
 
   stateStore = new StateStore()
+  stateStore.setMainWindow(win)
 
   registerIpcHandlers()
 
@@ -400,6 +412,8 @@ async function createWindow(): Promise<void> {
 
   win.on('closed', () => {
     stateStore?.flushSnapshot()
+    stateStore?.flushToml()
+    stateStore?.dispose()
     fileJobs?.dispose()
     fileJobs = null
     folderSizeMgr?.dispose()

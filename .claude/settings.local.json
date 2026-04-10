@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /Users/ciprian/Projects/ionut/ananke-commander/.planning/codebase/*.md)",
+      "Bash(grep -E '\\(sk-[a-zA-Z0-9]{20,}|sk_live_[a-zA-Z0-9]+|ghp_[a-zA-Z0-9]{36}|AKIA[A-Z0-9]{16}|xox[baprs]-[a-zA-Z0-9-]+|-----BEGIN.*PRIVATE KEY|eyJ[a-zA-Z0-9_-]+\\\\.eyJ[a-zA-Z0-9_-]+\\\\.\\)' /Users/ciprian/Projects/ionut/ananke-commander/.planning/codebase/*.md)",
+      "Bash(node:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m 'chore: add project config and ignore planning dir:*)",
+      "Bash(xcode-select -p)",
+      "Bash(clang --version)",
+      "Read(//Users/ciprian/Projects/ionut/ananke-commander/$\\(xcode-select -p\\)/**)",
+      "Bash(xcrun clang++:*)",
+      "Bash(xcrun --show-sdk-path)",
+      "Bash(SDKROOT=$\\(xcrun --show-sdk-path\\) npx electron-rebuild -f -w node-pty)",
+      "Bash(npm_config_cxxflags=\"-isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1\" npx electron-rebuild -f -w node-pty)",
+      "Bash(CXXFLAGS=\"-isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1\" npx electron-rebuild -f -w node-pty)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

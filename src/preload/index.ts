@@ -30,8 +30,6 @@ const api = {
       ipcRenderer.invoke('state:restoreClosed', workspaceId, entryId),
     purgeRecentlyClosed: (): Promise<AppStateSnapshot> =>
       ipcRenderer.invoke('state:purgeRecentlyClosed'),
-    updatePaneGeometry: (wsId: string, paneId: string, x: number, y: number, w: number, h: number): Promise<AppStateSnapshot> =>
-      ipcRenderer.invoke('state:updatePaneGeometry', wsId, paneId, x, y, w, h),
     setCanvasOffset: (wsId: string, x: number, y: number): Promise<AppStateSnapshot> =>
       ipcRenderer.invoke('state:setCanvasOffset', wsId, x, y),
     setScreenLayout: (wsId: string, screenIndex: number, layoutId: string): Promise<AppStateSnapshot> =>
@@ -168,6 +166,22 @@ const api = {
 
   clipboard: {
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text)
+  },
+
+  config: {
+    getTomlPath: (): Promise<string> => ipcRenderer.invoke('config:getTomlPath'),
+    openToml: (): Promise<string> => ipcRenderer.invoke('config:openToml'),
+    writeToml: (): Promise<void> => ipcRenderer.invoke('config:writeToml'),
+    onStateChanged: (cb: (snap: AppStateSnapshot) => void): (() => void) => {
+      const fn = (_: unknown, snap: AppStateSnapshot) => cb(snap)
+      ipcRenderer.on('config:state-changed', fn)
+      return () => ipcRenderer.removeListener('config:state-changed', fn)
+    },
+    onTomlError: (cb: (msg: string) => void): (() => void) => {
+      const fn = (_: unknown, msg: string) => cb(msg)
+      ipcRenderer.on('config:toml-error', fn)
+      return () => ipcRenderer.removeListener('config:toml-error', fn)
+    }
   }
 }
 

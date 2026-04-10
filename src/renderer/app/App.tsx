@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AppStateSnapshot, BrowserPaneState, FileBrowserPaneState, NotesPaneState, PaneState, PaneType, RadarPaneState, TerminalPaneState } from '../../shared/contracts'
 import { WorkspaceRail } from '../layout/WorkspaceRail'
 import { CanvasWorkspace } from '../layout/CanvasWorkspace'
 import { ScreenSelector } from '../layout/ScreenSelector'
-import { ArrangeMenu } from '../layout/ArrangeMenu'
+import { LayoutPicker } from '../layout/LayoutPicker'
 import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { FileBrowserPane } from '../panes/file-browser/FileBrowserPane'
 import { TerminalPane } from '../panes/terminal/TerminalPane'
@@ -31,21 +31,46 @@ export function App() {
   const [snap, setSnap] = useState<AppStateSnapshot | null>(null)
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth - 56, h: window.innerHeight - 32 })
+  const [tomlError, setTomlError] = useState<string | null>(null)
   const refresh = useCallback(async () => { setSnap(await window.ananke.state.get()) }, [])
   useEffect(() => { void refresh() }, [refresh])
+
+  useEffect(() => {
+    const unsubState = window.ananke.config.onStateChanged((newSnap) => { setSnap(newSnap) })
+    const unsubErr = window.ananke.config.onTomlError((msg) => {
+      setTomlError(msg)
+      setTimeout(() => setTomlError(null), 7000)
+    })
+    return () => { unsubState(); unsubErr() }
+  }, [])
 
   let ws = snap?.workspaces.find((w) => w.id === snap.activeWorkspaceId)
   if (snap && !ws && snap.workspaces.length > 0) { ws = snap.workspaces[0]; void window.ananke.state.setActiveWorkspace(ws.id) }
 
   const vpW = viewportSize.w
   const vpH = viewportSize.h
-  const displayWs = ws ? { ...ws, panes: applyFractions(ws.panes, vpW, vpH) } : ws
+  const displayWs = useMemo(
+    () => ws ? { ...ws, panes: applyFractions(ws.panes, vpW, vpH) } : ws,
+    [ws, vpW, vpH]
+  )
 
   const activeScreen = ws ? screenIndex(ws.canvasOffset, vpW, vpH) : 0
   const screenCol = activeScreen % 2
   const screenRow = Math.floor(activeScreen / 2)
   const screenPanesCount = ws ? ws.panes.filter(p => Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow).length : 0
   const activeLayoutId = ws?.screenLayouts?.[activeScreen] ?? bestLayout(screenPanesCount).id
+
+  const panesPerScreen = useMemo((): Record<number, number> => {
+    if (!ws) return {}
+    const counts: Record<number, number> = {}
+    for (const p of ws.panes) {
+      const col = Math.floor(p.xPct)
+      const row = Math.floor(p.yPct)
+      const idx = row * 2 + col
+      counts[idx] = (counts[idx] ?? 0) + 1
+    }
+    return counts
+  }, [ws])
 
   const setActivePane = useCallback(async (id: string) => {
     if (!ws) return; setSnap(await window.ananke.state.setActivePane(ws.id, id))
@@ -102,7 +127,7 @@ export function App() {
     const isActive = displayWs!.activePaneId === pane.id
     if (pane.type === 'file-browser') return <FileBrowserPane pane={pane} isActive={isActive} allPanes={displayWs!.panes} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'terminal') return <TerminalPane pane={pane} isActive={isActive} scrollback={snap!.settings.privacy.terminalHistoryMax} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'browser') return <BrowserPlaceholderPane pane={pane} isActive={isActive} isDragging={false} canvasOffset={displayWs!.canvasOffset} onClose={() => void closePane(pane.id)} onUpdate={(next) => void updatePane(pane.id, next)} />
+    if (pane.type === 'browser') return <BrowserPlaceholderPane pane={pane} isActive={isActive} canvasOffset={displayWs!.canvasOffset} onClose={() => void closePane(pane.id)} onUpdate={(next) => void updatePane(pane.id, next)} />
     if (pane.type === 'radar') return <RadarPane pane={pane} isActive={isActive} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
     return <NotesPane pane={pane} isActive={isActive} notesUndoMax={snap!.settings.privacy.notesUndoMax} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
   }
@@ -121,6 +146,17 @@ export function App() {
     const h = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === 'w' && ws.activePaneId) { e.preventDefault(); void closePane(ws.activePaneId) } }
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
   }, [ws, closePane])
+
+  useEffect(() => {
+    if (!ws) return
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
+        e.preventDefault()
+        void handleLayoutSelect(bestLayout(screenPanesCount).id)
+      }
+    }
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
+  }, [ws, handleLayoutSelect, screenPanesCount])
 
   useEffect(() => {
     if (!ws) return
@@ -149,11 +185,17 @@ export function App() {
           void window.ananke.state.deleteWorkspace(id).then(setSnap)
         }} />
       <div className="main-stage">
+        {tomlError && (
+          <div className="toml-error-banner">
+            ⚠ workspace.toml error: {tomlError}
+            <button type="button" onClick={() => setTomlError(null)}>✕</button>
+          </div>
+        )}
         <div className="toolbar toolbar-thin">
           <span className="muted" style={{ marginRight: 6, fontSize: '11px', whiteSpace: 'nowrap' }}>{ws.name}</span>
-          <ScreenSelector canvasOffset={ws.canvasOffset} viewportW={vpW} viewportH={vpH} onSelect={(x, y) => void handleCanvasOffsetChange(x, y)} />
+          <ScreenSelector canvasOffset={ws.canvasOffset} viewportW={vpW} viewportH={vpH} screenLayouts={ws.screenLayouts ?? {}} panesPerScreen={panesPerScreen} onSelect={(x, y) => void handleCanvasOffsetChange(x, y)} />
           <div style={{ width: 6 }} />
-          <ArrangeMenu activeLayoutId={activeLayoutId} onSelect={(l) => void handleLayoutSelect(l.id)} />
+          <LayoutPicker activeLayoutId={activeLayoutId} screenPanesCount={screenPanesCount} onSelect={(l) => void handleLayoutSelect(l.id)} />
           <div style={{ width: 6, borderRight: '1px solid var(--border)', marginRight: 6 }} />
           <div style={{ display: 'flex', gap: '4px', borderRight: '1px solid var(--border)', paddingRight: '8px', marginRight: '4px' }}>
             <button type="button" className="btn-thin" onClick={() => void addPane('file-browser')}>🗂 Files</button>
@@ -185,6 +227,12 @@ export function App() {
           <PrivacySettings value={snap.settings.privacy} onChange={(privacy) => setSnap({ ...snap, settings: { ...snap.settings, privacy } })} onPurgeRecentlyClosed={() => void window.ananke.state.purgeRecentlyClosed().then(setSnap)} />
           <button type="button" className="primary" onClick={() => void window.ananke.state.set({ settings: snap.settings }).then(setSnap)}>Save settings</button>
           <button type="button" style={{ marginLeft: 8 }} onClick={() => setDrawer('none')}>Close</button>
+          <hr style={{ margin: '12px 0', borderColor: 'var(--border)' }} />
+          <div style={{ fontSize: 12, marginBottom: 6, color: 'var(--muted)' }}>Workspace File (TOML)</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" onClick={() => void window.ananke.config.openToml()}>Open in Editor</button>
+            <button type="button" onClick={() => void window.ananke.config.writeToml()}>Force Save</button>
+          </div>
         </div></aside>
       )}
       {drawer === 'recent' && (

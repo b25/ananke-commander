@@ -505,17 +505,6 @@ select {
   box-shadow: none;
 }
 
-/* Resize handles */
-.fp-resize {
-  position: absolute;
-  z-index: 20;
-}
-
-.fp-resize--n  { top: -4px;    left: 8px;    right: 8px;   height: 8px;  cursor: n-resize; }
-.fp-resize--s  { bottom: -4px; left: 8px;    right: 8px;   height: 8px;  cursor: s-resize; }
-.fp-resize--e  { right: -4px;  top: 8px;     bottom: 8px;  width: 8px;   cursor: e-resize; }
-.fp-resize--w  { left: -4px;   top: 8px;     bottom: 8px;  width: 8px;   cursor: w-resize; }
-
 .browser-loading-bar {
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -611,24 +600,33 @@ select {
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
   gap: 2px;
-  width: 28px;
-  height: 20px;
+  width: 68px;
+  height: 52px;
   flex-shrink: 0;
   cursor: pointer;
 }
 
 .screen-selector__cell {
   background: var(--border);
-  border-radius: 1px;
-  transition: background 0.1s;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  transition: border-color 0.1s, background 0.1s;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
 }
 
 .screen-selector__cell:hover {
-  background: var(--muted);
+  opacity: 0.85;
+  border-color: var(--muted);
 }
 
 .screen-selector__cell.active {
-  background: var(--accent);
+  border-color: var(--accent);
+  opacity: 1;
+  background: color-mix(in srgb, var(--accent) 12%, var(--border));
 }
 
 /* ── Arrange Strip ────────────────────────────────────── */
@@ -660,4 +658,135 @@ select {
 .arrange-strip__btn.active {
   opacity: 1;
   border-color: var(--accent);
+}
+
+/* ── Layout Picker ─────────────────────────────────────── */
+
+.layout-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+.layout-picker__trigger {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.1s, border-color 0.1s;
+}
+
+.layout-picker__trigger:hover,
+.layout-picker__trigger.open {
+  opacity: 1;
+  border-color: var(--border);
+}
+
+.layout-picker__chevron {
+  font-size: 9px;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.layout-picker__popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+  z-index: 200;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.layout-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.layout-picker__option:hover {
+  background: var(--hover);
+}
+
+.layout-picker__option.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.layout-picker__autofit {
+  color: var(--fg);
+}
+
+.layout-picker__autofit-icon {
+  font-size: 18px;
+  width: 60px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.layout-picker__label {
+  flex: 1;
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.layout-picker__check {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.layout-picker__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+}
+
+/* ── TOML Error Banner ─────────────────────────────────── */
+
+.toml-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: color-mix(in srgb, #e55 20%, var(--surface));
+  border-bottom: 1px solid #e55;
+  font-size: 11px;
+  color: var(--fg);
+  flex-shrink: 0;
+}
+
+.toml-error-banner button {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.toml-error-banner button:hover {
+  color: var(--fg);
 }
