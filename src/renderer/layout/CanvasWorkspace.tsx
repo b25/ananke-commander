@@ -8,7 +8,7 @@ const PAN_STEP = 80
 
 interface Props {
   workspace: WorkspaceState
-  renderPane: (pane: PaneState, isDragging: boolean) => React.ReactNode
+  renderPane: (pane: PaneState) => React.ReactNode
   onActivate: (paneId: string) => void
   onGeometryChange: (paneId: string, x: number, y: number, w: number, h: number) => void
   onCanvasOffsetChange: (x: number, y: number) => void
@@ -16,7 +16,6 @@ interface Props {
 }
 
 export function CanvasWorkspace({ workspace, renderPane, onActivate, onGeometryChange, onCanvasOffsetChange, onViewportResize }: Props) {
-  const [draggingPaneId, setDraggingPaneId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [viewportSize, setViewportSize] = useState({ width: 800, height: 600 })
   const offsetRef = useRef(workspace.canvasOffset)
@@ -113,10 +112,8 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onGeometryC
               snapTargets={snapTargets}
               onActivate={() => onActivate(pane.id)}
               onGeometryChange={(x, y, w, h) => onGeometryChange(pane.id, x, y, w, h)}
-              onDragStart={() => setDraggingPaneId(pane.id)}
-              onDragEnd={() => setDraggingPaneId(null)}
             >
-              {renderPane(pane, draggingPaneId === pane.id)}
+              {renderPane(pane)}
             </FloatingPane>
           )
         })}

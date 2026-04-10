@@ -11,7 +11,6 @@ import type {
 } from '../../shared/contracts'
 import { WorkspaceRail } from '../layout/WorkspaceRail'
 import { CanvasWorkspace } from '../layout/CanvasWorkspace'
-import { RadarMinimap } from '../layout/RadarMinimap'
 import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { FileBrowserPane } from '../panes/file-browser/FileBrowserPane'
 import { TerminalPane } from '../panes/terminal/TerminalPane'
@@ -21,14 +20,6 @@ import { RadarPane } from '../panes/radar/RadarPane'
 import { NotesSettings } from '../settings/NotesSettings'
 import { PrivacySettings } from '../settings/PrivacySettings'
 import { findFreeSlot, resolveOverlaps } from '../lib/tileUtils'
-
-const DEFAULT_PANE_SIZES: Record<PaneType, { w: number; h: number }> = {
-  'file-browser': { w: 900, h: 600 },
-  'terminal': { w: 700, h: 420 },
-  'browser': { w: 1024, h: 700 },
-  'notes': { w: 600, h: 500 },
-  'radar': { w: 700, h: 500 }
-}
 
 export function App() {
   const [snap, setSnap] = useState<AppStateSnapshot | null>(null)
@@ -75,7 +66,6 @@ export function App() {
   const handleGeometryChange = useCallback(
     async (paneId: string, x: number, y: number, w: number, h: number) => {
       if (!ws) return
-      // Apply the geometry update then resolve any overlaps caused by the move/resize
       const updated = ws.panes.map((p) =>
         p.id === paneId ? { ...p, x, y, width: w, height: h } : p
       )
@@ -98,8 +88,8 @@ export function App() {
       if (!ws) return
       const id = crypto.randomUUID()
       const home = await window.ananke.getPath('home')
-      const { w, h } = DEFAULT_PANE_SIZES[type]
-      // Bias slot search to the current viewport so the new pane appears on-screen
+      const w = Math.round(viewportSize.w / 2)
+      const h = Math.round(viewportSize.h / 2)
       const viewportPanes = ws.panes.map((p) => ({
         ...p,
         x: p.x - ws.canvasOffset.x,
@@ -130,10 +120,10 @@ export function App() {
       const panes = [...ws.panes, p]
       setSnap(await window.ananke.state.replacePanes(ws.id, panes, id))
     },
-    [ws]
+    [ws, viewportSize]
   )
 
-  const renderPane = (pane: PaneState, isDragging = false) => {
+  const renderPane = (pane: PaneState) => {
     const isActive = ws!.activePaneId === pane.id
     if (pane.type === 'file-browser') {
       return (
@@ -161,7 +151,7 @@ export function App() {
         <BrowserPlaceholderPane
           pane={pane}
           isActive={isActive}
-          isDragging={isDragging}
+          isDragging={false}
           canvasOffset={ws!.canvasOffset}
           onClose={() => void closePane(pane.id)}
           onUpdate={(next) => void updatePane(pane.id, next)}
@@ -268,7 +258,6 @@ export function App() {
             <button type="button" className="btn-thin" onClick={() => void addPane('terminal')}>🖥 Terminal</button>
             <button type="button" className="btn-thin" onClick={() => void addPane('browser')}>🌐 Browser</button>
             <button type="button" className="btn-thin" onClick={() => void addPane('notes')}>📝 Notes</button>
-            <button type="button" className="btn-thin" onClick={() => void addPane('radar')}>📡 Radar</button>
           </div>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'flex', gap: '4px', borderRight: '1px solid var(--border)', paddingRight: '8px', marginRight: '4px' }}>
@@ -296,13 +285,6 @@ export function App() {
           onGeometryChange={handleGeometryChange}
           onCanvasOffsetChange={handleCanvasOffsetChange}
           onViewportResize={(w, h) => setViewportSize({ w, h })}
-        />
-
-        <RadarMinimap
-          workspace={ws}
-          viewportWidth={viewportSize.w}
-          viewportHeight={viewportSize.h}
-          onPan={handleCanvasOffsetChange}
         />
       </div>
 
