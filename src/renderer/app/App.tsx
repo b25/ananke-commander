@@ -50,6 +50,15 @@ export function App() {
     return () => { unsubState(); unsubErr() }
   }, [])
 
+  // Auto-save settings when closing the settings drawer
+  const prevDrawer = useRef(drawer)
+  useEffect(() => {
+    if (prevDrawer.current === 'settings' && drawer !== 'settings' && snap) {
+      void window.ananke.state.set({ settings: snap.settings })
+    }
+    prevDrawer.current = drawer
+  }, [drawer, snap])
+
   let ws = snap?.workspaces.find((w) => w.id === snap.activeWorkspaceId)
   if (snap && !ws && snap.workspaces.length > 0) { ws = snap.workspaces[0]; void window.ananke.state.setActiveWorkspace(ws.id) }
 

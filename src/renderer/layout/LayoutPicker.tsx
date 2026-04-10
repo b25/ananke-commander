@@ -8,39 +8,61 @@ interface Props {
   onSelect: (layout: Layout) => void
 }
 
+// Items: [autofit, ...LAYOUTS]  — index 0 = autofit
+const ITEM_COUNT = LAYOUTS.length + 1
+
 export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Props) {
   const [open, setOpen] = useState(false)
+  const [focusIdx, setFocusIdx] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
 
+  // Combined outside-click + Escape + Arrow key handler
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => {
+    // Focus first item when popover opens
+    setFocusIdx(0)
+    const btns = popoverRef.current?.querySelectorAll<HTMLButtonElement>('button')
+    btns?.[0]?.focus()
+
+    const onPointer = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setOpen(false); return }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        setFocusIdx(prev => {
+          const next = e.key === 'ArrowDown'
+            ? (prev + 1) % ITEM_COUNT
+            : (prev - 1 + ITEM_COUNT) % ITEM_COUNT
+          const btns = popoverRef.current?.querySelectorAll<HTMLButtonElement>('button')
+          btns?.[next]?.focus()
+          return next
+        })
+      }
+    }
+    document.addEventListener('pointerdown', onPointer)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      window.removeEventListener('keydown', onKey)
+    }
   }, [open])
 
   const activeLayout = LAYOUTS.find(l => l.id === activeLayoutId) ?? LAYOUTS[0]
 
-  const handleAutoFit = () => {
-    onSelect(bestLayout(screenPanesCount))
-    setOpen(false)
-  }
+  const pick = (layout: Layout) => { onSelect(layout); setOpen(false) }
+  const autoFit = () => pick(bestLayout(screenPanesCount))
 
   return (
     <div className="layout-picker" ref={ref}>
       <button
         type="button"
         className={`layout-picker__trigger${open ? ' open' : ''}`}
-        title={`Layout: ${activeLayout.label}`}
+        title={`Layout: ${activeLayout.label} (click to change)`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => setOpen(o => !o)}
       >
         <LayoutThumb slots={activeLayout.slots} width={36} height={26} />
@@ -48,11 +70,11 @@ export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Pro
       </button>
 
       {open && (
-        <div className="layout-picker__popover">
+        <div className="layout-picker__popover" ref={popoverRef} role="listbox" aria-label="Layout options">
           <button
             type="button"
             className="layout-picker__option layout-picker__autofit"
-            onClick={handleAutoFit}
+            onClick={autoFit}
           >
             <span className="layout-picker__autofit-icon">⊞</span>
             <span className="layout-picker__label">Auto-fit</span>
@@ -62,8 +84,10 @@ export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Pro
             <button
               key={layout.id}
               type="button"
+              role="option"
+              aria-selected={layout.id === activeLayoutId}
               className={`layout-picker__option${layout.id === activeLayoutId ? ' active' : ''}`}
-              onClick={() => { onSelect(layout); setOpen(false) }}
+              onClick={() => pick(layout)}
             >
               <LayoutThumb slots={layout.slots} width={60} height={44} />
               <span className="layout-picker__label">{layout.label}</span>

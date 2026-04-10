@@ -23,14 +23,18 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
+    let timer: ReturnType<typeof setTimeout> | null = null
     const ro = new ResizeObserver((entries) => {
       const r = entries[0]?.contentRect
       if (!r) return
-      setViewportSize({ width: r.width, height: r.height })
-      onViewportResizeRef.current?.(r.width, r.height)
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        setViewportSize({ width: r.width, height: r.height })
+        onViewportResizeRef.current?.(r.width, r.height)
+      }, 16)
     })
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => { ro.disconnect(); if (timer) clearTimeout(timer) }
   }, [])
 
   // Alt+Arrow: jump one screen at a time

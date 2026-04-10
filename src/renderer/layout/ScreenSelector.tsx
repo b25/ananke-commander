@@ -24,21 +24,46 @@ const CELL_W = 32
 const CELL_H = 24
 
 export function ScreenSelector({ canvasOffset, viewportW, viewportH, screenLayouts, panesPerScreen, onSelect }: Props) {
-  const activeCol = Math.round(canvasOffset.x / (viewportW || 1))
-  const activeRow = Math.round(canvasOffset.y / (viewportH || 1))
+  const vpW = viewportW || 1
+  const vpH = viewportH || 1
+  const activeCol = Math.round(canvasOffset.x / vpW)
+  const activeRow = Math.round(canvasOffset.y / vpH)
+  const activeIdx = activeRow * 2 + activeCol
+
+  const goTo = (idx: number) => {
+    const { col, row } = SCREENS[idx]
+    onSelect(col * vpW, row * vpH)
+  }
 
   return (
-    <div className="screen-selector" title="Screen (Alt+Arrow to switch)">
+    <div
+      className="screen-selector"
+      role="group"
+      aria-label="Screen selector (Alt+Arrow to switch)"
+      onKeyDown={(e) => {
+        const map: Record<string, number> = {
+          ArrowRight: activeIdx === 0 ? 1 : activeIdx === 2 ? 3 : activeIdx,
+          ArrowLeft:  activeIdx === 1 ? 0 : activeIdx === 3 ? 2 : activeIdx,
+          ArrowDown:  activeIdx <= 1 ? activeIdx + 2 : activeIdx,
+          ArrowUp:    activeIdx >= 2 ? activeIdx - 2 : activeIdx,
+        }
+        const next = map[e.key]
+        if (next !== undefined && next !== activeIdx) { e.preventDefault(); goTo(next) }
+      }}
+    >
       {SCREENS.map(({ col, row }, idx) => {
-        const isActive = col === activeCol && row === activeRow
+        const isActive = idx === activeIdx
         const layoutId = screenLayouts[idx] ?? bestLayout(panesPerScreen[idx] ?? 0).id
         const layout = LAYOUTS.find(l => l.id === layoutId) ?? LAYOUTS[0]
         return (
           <div
             key={idx}
+            role="button"
+            tabIndex={isActive ? 0 : -1}
             className={`screen-selector__cell${isActive ? ' active' : ''}`}
             title={`Screen ${idx + 1}: ${layout.label}`}
-            onClick={() => onSelect(col * viewportW, row * viewportH)}
+            onClick={() => goTo(idx)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goTo(idx) } }}
           >
             <LayoutThumb slots={layout.slots} width={CELL_W - 4} height={CELL_H - 4} />
           </div>
