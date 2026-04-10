@@ -5,14 +5,17 @@ import { PaneHeader } from '../../layout/PaneHeader'
 type Props = {
   pane: BrowserPaneState
   isActive: boolean
+  isDragging: boolean
+  canvasOffset: { x: number; y: number }
   onClose: () => void
   onUpdate: (next: BrowserPaneState) => void
 }
 
-export function BrowserPlaceholderPane({ pane, isActive, onClose, onUpdate }: Props) {
+export function BrowserPlaceholderPane({ pane, isActive, isDragging, canvasOffset, onClose, onUpdate }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [navHistory, setNavHistory] = useState<string[]>([])
   const [urlInput, setUrlInput] = useState(pane.url || '')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     setUrlInput(pane.url || '')
@@ -23,8 +26,16 @@ export function BrowserPlaceholderPane({ pane, isActive, onClose, onUpdate }: Pr
     const unsub = window.ananke.browser.onHistory(({ paneId, urls }) => {
       if (paneId === pane.id) setNavHistory(urls)
     })
+    const unsubTitle = window.ananke.browser.onTitleUpdate(({ paneId, title }) => {
+      if (paneId === pane.id) onUpdate({ ...pane, title })
+    })
+    const unsubLoading = window.ananke.browser.onLoadingState(({ paneId, loading: l }) => {
+      if (paneId === pane.id) setLoading(l)
+    })
     return () => {
       unsub()
+      unsubTitle()
+      unsubLoading()
     }
   }, [pane.id])
 
@@ -47,9 +58,19 @@ export function BrowserPlaceholderPane({ pane, isActive, onClose, onUpdate }: Pr
     void window.ananke.browser.layout(pane.id, bounds)
   }
 
+  // Park native view off-screen during drag so it doesn't overlap the moving CSS box
+  useEffect(() => {
+    if (isDragging) {
+      void window.ananke.browser.layout(pane.id, { x: -9999, y: -9999, width: 1, height: 1 })
+    } else {
+      syncBounds()
+    }
+  }, [isDragging])
+
+  // Re-sync on mount, active change, pane move/resize, and canvas pan
   useLayoutEffect(() => {
-    syncBounds()
-  }, [pane.id, isActive])
+    if (!isDragging) syncBounds()
+  }, [pane.id, isActive, pane.x, pane.y, pane.width, pane.height, canvasOffset.x, canvasOffset.y])
 
   useEffect(() => {
     const ro = new ResizeObserver(() => syncBounds())
@@ -78,12 +99,15 @@ export function BrowserPlaceholderPane({ pane, isActive, onClose, onUpdate }: Pr
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
       <PaneHeader title={pane.title} paneType="browser" onClose={onClose} />
-      <div className="pane-body">
-        <div style={{ padding: 8, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6 }} className="muted">
+      <div className="pane-body" style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: 8, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }} className="muted">
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <button type="button" onClick={() => window.ananke.browser.goBack(pane.id)} style={{ padding: '2px 8px' }}>←</button>
             <button type="button" onClick={() => window.ananke.browser.goForward(pane.id)} style={{ padding: '2px 8px' }}>→</button>
-            <button type="button" onClick={() => window.ananke.browser.stop(pane.id)} style={{ padding: '2px 8px' }}>✕</button>
+            {loading
+              ? <button type="button" onClick={() => window.ananke.browser.stop(pane.id)} style={{ padding: '2px 8px' }} title="Stop">✕</button>
+              : <button type="button" onClick={() => void window.ananke.browser.reload(pane.id)} style={{ padding: '2px 8px' }} title="Reload">↺</button>
+            }
             <form style={{ flex: 1, display: 'flex', gap: 4 }} onSubmit={(e) => { e.preventDefault(); doNav(urlInput) }}>
               <input
                 value={urlInput}
@@ -93,7 +117,10 @@ export function BrowserPlaceholderPane({ pane, isActive, onClose, onUpdate }: Pr
               />
               <button type="submit" style={{ padding: '2px 8px' }} title="Refresh/Go">🔄</button>
             </form>
+            <button type="button" className="btn-thin" title="Open in system browser"
+              onClick={() => void window.ananke.shell.openExternal(pane.url)}>↗</button>
           </div>
+          {loading && <div className="browser-loading-bar" />}
           {navHistory.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <div style={{ marginBottom: 4 }}>Recent (capped in Settings)</div>

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { WebLinksAddon } from '@xterm/addon-web-links'
 
 function clampScrollback(n: number): number {
   return Math.min(50_000, Math.max(100, Math.floor(n) || 1000))
@@ -25,6 +26,12 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(host)
+
+    const webLinks = new WebLinksAddon((_, uri) => {
+      void window.ananke.shell.openExternal(uri)
+    })
+    term.loadAddon(webLinks)
+
     let webgl: WebglAddon | null = null
     try {
       webgl = new WebglAddon()
@@ -39,17 +46,17 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     termRef.current = term
     fitRef.current = fit
 
+    term.onSelectionChange(() => {
+      const sel = term.getSelection()
+      if (sel) void window.ananke.clipboard.writeText(sel)
+    })
+
     const d = window.ananke.pty.onData(({ paneId: id, data }) => {
       if (id === paneId) term.write(data)
     })
     const x = window.ananke.pty.onExit(({ paneId: id }) => {
       if (id === paneId) term.writeln('\r\n[Process exited]')
     })
-
-    if (host.clientWidth > 0 && host.clientHeight > 0) {
-      try { fit.fit() } catch { /* ignore */ }
-    }
-    void window.ananke.pty.spawn(paneId, term.cols, term.rows, cwd || undefined)
 
     const sub = term.onData((data) => {
       void window.ananke.pty.write(paneId, data)
@@ -59,25 +66,36 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
       if (onTitleChange) onTitleChange(title)
     })
 
+    // Spawn PTY once we have real layout dimensions. ResizeObserver fires on the
+    // first observe() call after layout settles, so this works even when the host
+    // starts with 0 dimensions (e.g. inside the canvas transform container).
+    let spawned = false
     let resizeFrame: number
+
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(resizeFrame)
       resizeFrame = requestAnimationFrame(() => {
-        try {
-          if (!termRef.current) return // component already unmounted
-          if (!host.clientWidth || !host.clientHeight) return
-          fit.fit()
-          if (term.cols && term.rows) {
-            void window.ananke.pty.resize(paneId, term.cols, term.rows)
-          }
-        } catch {
-          /* DOM dimensions invalid, ignore resize */
+        if (!termRef.current) return
+        if (!host.clientWidth || !host.clientHeight) return
+        try { fit.fit() } catch { /* ignore */ }
+        if (!spawned) {
+          spawned = true
+          void window.ananke.pty.spawn(paneId, term.cols || 80, term.rows || 24, cwd || undefined)
+        } else if (term.cols && term.rows) {
+          void window.ananke.pty.resize(paneId, term.cols, term.rows)
         }
       })
     })
     ro.observe(host)
 
-    /* scrollback prop updates use the following effect so we do not respawn the PTY */
+    // If the host already has dimensions at mount time, spawn immediately so we
+    // don't wait for a resize event that may not come.
+    if (host.clientWidth > 0 && host.clientHeight > 0) {
+      try { fit.fit() } catch { /* ignore */ }
+      spawned = true
+      void window.ananke.pty.spawn(paneId, term.cols || 80, term.rows || 24, cwd || undefined)
+    }
+
     return () => {
       cancelAnimationFrame(resizeFrame)
       ro.disconnect()
@@ -86,13 +104,13 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
       d()
       x()
       void window.ananke.pty.dispose(paneId)
-      
+
       host.style.display = 'none'
       setTimeout(() => {
         try { webgl?.dispose() } catch {}
         try { term.dispose() } catch {}
       }, 50)
-      
+
       termRef.current = null
       fitRef.current = null
     }

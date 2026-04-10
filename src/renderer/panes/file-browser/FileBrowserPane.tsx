@@ -29,6 +29,9 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     readOnly: boolean
   } | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string } | null>(null)
+  const [showHidden, setShowHidden] = useState(false)
+  const [renaming, setRenaming] = useState<{ path: string; side: 'left' | 'right'; name: string } | null>(null)
+  const [editingPath, setEditingPath] = useState<{ side: 'left' | 'right'; value: string } | null>(null)
   const activeJobId = useRef<string | null>(null)
 
   const leftSel = new Set(pane.leftSelection)
@@ -63,6 +66,18 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const refreshBothRef = useRef(refreshBoth)
   refreshBothRef.current = refreshBoth
 
+  const refreshActive = useCallback(() => {
+    if (pane.focusedSide === 'left') {
+      void refreshDir(pane.leftPath).then(setLeftEntries)
+    } else {
+      void refreshDir(pane.rightPath).then(setRightEntries)
+    }
+  }, [pane.focusedSide, pane.leftPath, pane.rightPath, refreshDir])
+
+  // Hidden file filter
+  const visibleLeftEntries = showHidden ? leftEntries : leftEntries.filter(e => !e.name.startsWith('.'))
+  const visibleRightEntries = showHidden ? rightEntries : rightEntries.filter(e => !e.name.startsWith('.'))
+
   const activateEntry = useCallback(
     async (side: 'left' | 'right', entry: ListDirEntry) => {
       if (entry.isDirectory) {
@@ -83,7 +98,6 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     async (readOnly: boolean) => {
       if (selectedPaths.length !== 1) return
       const filePath = selectedPaths[0]
-      // Only open files, not directories
       const side = pane.focusedSide === 'left' ? leftEntries : rightEntries
       const entry = side.find((e) => e.path === filePath)
       if (!entry || entry.isDirectory) return
@@ -168,16 +182,33 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         e.preventDefault()
         setMoveOpen(true)
       }
+      if (e.key === 'F7') {
+        e.preventDefault()
+        const folderName = prompt('New folder name:')
+        if (folderName?.trim()) {
+          void window.ananke.fs.quickOp('mkdir', joinPath(activePath, folderName.trim())).then(() => refreshActive())
+        }
+      }
       if (e.key === 'F8') {
         e.preventDefault()
         if (!selectedPaths.length) return
         if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
         void doDelete()
       }
+      if (e.key === 'F2' && selectedPaths.length === 1) {
+        e.preventDefault()
+        const entries = pane.focusedSide === 'left' ? leftEntries : rightEntries
+        const entry = entries.find(en => en.path === selectedPaths[0])
+        if (entry) setRenaming({ path: entry.path, side: pane.focusedSide, name: entry.name })
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        onUpdate({ ...pane, focusedSide: pane.focusedSide === 'left' ? 'right' : 'left' })
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isActive, selectedPaths, doDelete, openEditor])
+  }, [isActive, selectedPaths, doDelete, openEditor, activePath, refreshActive, pane, leftEntries, rightEntries, onUpdate])
 
   useEffect(() => {
     if (!isActive) return
@@ -260,6 +291,21 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     }
   }
 
+  const commitRename = async () => {
+    if (!renaming) return
+    const newName = renaming.name.trim()
+    if (!newName) { setRenaming(null); return }
+    const dir = renaming.side === 'left' ? pane.leftPath : pane.rightPath
+    const newPath = joinPath(dir, newName)
+    try {
+      await window.ananke.fs.rename(renaming.path, newPath)
+      setRenaming(null)
+      refreshBoth()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   const suggestedArchive = joinPath(activePath, 'archive.zip')
 
   const ctxItems: ContextMenuItem[] = ctxMenu
@@ -287,6 +333,33 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       ]
     : []
 
+  const renderPathBar = (side: 'left' | 'right') => {
+    const currentPath = side === 'left' ? pane.leftPath : pane.rightPath
+    if (editingPath?.side === side) {
+      return (
+        <input
+          className="path-bar path-bar--editing"
+          value={editingPath.value}
+          onChange={(e) => setEditingPath({ side, value: e.target.value })}
+          onBlur={() => setEditingPath(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              onUpdate({ ...pane, [side === 'left' ? 'leftPath' : 'rightPath']: editingPath.value })
+              setEditingPath(null)
+            }
+            if (e.key === 'Escape') setEditingPath(null)
+          }}
+          autoFocus
+        />
+      )
+    }
+    return (
+      <div className="path-bar" title={currentPath} onClick={() => setEditingPath({ side, value: currentPath })}>
+        {currentPath}
+      </div>
+    )
+  }
+
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
       <PaneHeader title={pane.title} paneType="file-browser" onClose={onClose} />
@@ -306,47 +379,72 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
           )}
           <div className="file-browser-main">
           <div className="lists">
-            <FileList
-              path={pane.leftPath}
-              entries={leftEntries}
-              selected={leftSel}
-              focused={pane.focusedSide === 'left'}
-              onPathChange={(p) => onUpdate({ ...pane, leftPath: p })}
-              onSelect={(paths, add) => {
-                const next = add ? new Set([...pane.leftSelection, ...paths]) : new Set(paths)
-                onUpdate({
-                  ...pane,
-                  focusedSide: 'left',
-                  leftSelection: [...next]
-                })
-              }}
-              onActivate={(entry) => void activateEntry('left', entry)}
-              onContextMenu={onFileContextMenu}
-            />
-            <FileList
-              path={pane.rightPath}
-              entries={rightEntries}
-              selected={rightSel}
-              focused={pane.focusedSide === 'right'}
-              onPathChange={(p) => onUpdate({ ...pane, rightPath: p })}
-              onSelect={(paths, add) => {
-                const next = add ? new Set([...pane.rightSelection, ...paths]) : new Set(paths)
-                onUpdate({
-                  ...pane,
-                  focusedSide: 'right',
-                  rightSelection: [...next]
-                })
-              }}
-              onActivate={(entry) => void activateEntry('right', entry)}
-              onContextMenu={onFileContextMenu}
-            />
+            <div className="file-list-panel">
+              {renderPathBar('left')}
+              <FileList
+                path={pane.leftPath}
+                entries={visibleLeftEntries}
+                selected={leftSel}
+                focused={pane.focusedSide === 'left'}
+                renaming={renaming?.side === 'left' ? renaming : null}
+                onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
+                onRenameCommit={commitRename}
+                onRenameCancel={() => setRenaming(null)}
+                onPathChange={(p) => onUpdate({ ...pane, leftPath: p })}
+                onSelect={(paths, add) => {
+                  const next = add ? new Set([...pane.leftSelection, ...paths]) : new Set(paths)
+                  onUpdate({
+                    ...pane,
+                    focusedSide: 'left',
+                    leftSelection: [...next]
+                  })
+                }}
+                onActivate={(entry) => void activateEntry('left', entry)}
+                onContextMenu={onFileContextMenu}
+              />
+            </div>
+            <div className="file-list-panel">
+              {renderPathBar('right')}
+              <FileList
+                path={pane.rightPath}
+                entries={visibleRightEntries}
+                selected={rightSel}
+                focused={pane.focusedSide === 'right'}
+                renaming={renaming?.side === 'right' ? renaming : null}
+                onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
+                onRenameCommit={commitRename}
+                onRenameCancel={() => setRenaming(null)}
+                onPathChange={(p) => onUpdate({ ...pane, rightPath: p })}
+                onSelect={(paths, add) => {
+                  const next = add ? new Set([...pane.rightSelection, ...paths]) : new Set(paths)
+                  onUpdate({
+                    ...pane,
+                    focusedSide: 'right',
+                    rightSelection: [...next]
+                  })
+                }}
+                onActivate={(entry) => void activateEntry('right', entry)}
+                onContextMenu={onFileContextMenu}
+              />
+            </div>
           </div>
           <div className="file-ops">
+            <button type="button" title="Toggle hidden files" onClick={() => setShowHidden(h => !h)}>
+              H
+            </button>
             <button type="button" title="Copy F5" onClick={() => setCopyOpen(true)}>
               F5
             </button>
             <button type="button" title="Move F6" onClick={() => setMoveOpen(true)}>
               F6
+            </button>
+            <button type="button" title="New folder F7" onClick={() => {
+              const folderName = prompt('New folder name:')
+              if (folderName?.trim()) {
+                void window.ananke.fs.quickOp('mkdir', joinPath(activePath, folderName.trim())).then(() => refreshActive())
+              }
+            }}>
+              F7
             </button>
             <button
               type="button"
@@ -371,6 +469,13 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
               onClose={() => setCtxMenu(null)}
             />
           )}
+          </div>
+          <div className="fb-status-bar">
+            {pane.focusedSide === 'left' ? (
+              `${pane.leftSelection.length} selected · ${visibleLeftEntries.length} items`
+            ) : (
+              `${pane.rightSelection.length} selected · ${visibleRightEntries.length} items`
+            )}
           </div>
         </div>
       </div>

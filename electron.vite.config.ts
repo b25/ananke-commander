@@ -9,7 +9,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
-          fileOpsWorker: resolve(__dirname, 'src/main/workers/fileOpsWorker.ts')
+          fileOpsWorker: resolve(__dirname, 'src/main/workers/fileOpsWorker.ts'),
+          folderSizeWorker: resolve(__dirname, 'src/main/workers/folderSizeWorker.ts')
         }
       }
     }
@@ -36,11 +37,13 @@ export default defineConfig({
       }
     },
     server: {
+      host: 'localhost',
       allowedHosts: true,
       hmr: {
         protocol: 'ws',
         host: 'localhost',
-        port: 5173
+        port: 5173,
+        clientPort: 5173
       }
     },
     plugins: [react()]
