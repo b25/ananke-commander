@@ -492,7 +492,7 @@ select {
 }
 
 .floating-pane .pane-header {
-  cursor: move;
+  cursor: default;
   user-select: none;
   flex-shrink: 0;
 }
@@ -515,40 +515,6 @@ select {
 .fp-resize--s  { bottom: -4px; left: 8px;    right: 8px;   height: 8px;  cursor: s-resize; }
 .fp-resize--e  { right: -4px;  top: 8px;     bottom: 8px;  width: 8px;   cursor: e-resize; }
 .fp-resize--w  { left: -4px;   top: 8px;     bottom: 8px;  width: 8px;   cursor: w-resize; }
-.fp-resize--ne { top: -4px;    right: -4px;  width: 14px;  height: 14px; cursor: ne-resize; }
-.fp-resize--nw { top: -4px;    left: -4px;   width: 14px;  height: 14px; cursor: nw-resize; }
-.fp-resize--se { bottom: -4px; right: -4px;  width: 14px;  height: 14px; cursor: se-resize; }
-.fp-resize--sw { bottom: -4px; left: -4px;   width: 14px;  height: 14px; cursor: sw-resize; }
-
-/* ── Radar Minimap ────────────────────────────────────── */
-
-.radar-minimap {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  z-index: 50;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--header);
-  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-  opacity: 0.85;
-  transition: opacity 0.15s;
-}
-
-.radar-minimap:hover {
-  opacity: 1;
-}
-
-.radar-minimap__label {
-  font-size: 9px;
-  color: var(--muted);
-  text-align: center;
-  padding: 2px 0;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--border);
-}
 
 .browser-loading-bar {
   position: absolute;
