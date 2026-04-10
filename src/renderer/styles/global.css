@@ -596,37 +596,44 @@ select {
 /* ── Screen Selector ──────────────────────────────────── */
 
 .screen-selector {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--pane);
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.screen-selector__inner {
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
   gap: 2px;
-  width: 68px;
-  height: 52px;
-  flex-shrink: 0;
-  cursor: pointer;
+  width: 52px;
+  height: 40px;
 }
 
 .screen-selector__cell {
   background: var(--border);
-  border-radius: 2px;
+  border-radius: 1px;
   border: 1px solid transparent;
-  transition: border-color 0.1s, background 0.1s;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.6;
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.12s;
 }
 
 .screen-selector__cell:hover {
-  opacity: 0.85;
-  border-color: var(--muted);
+  opacity: 0.8;
 }
 
 .screen-selector__cell.active {
-  border-color: var(--accent);
+  background: #f5c200;
   opacity: 1;
-  background: color-mix(in srgb, var(--accent) 12%, var(--border));
 }
 
 /* ── Arrange Strip ────────────────────────────────────── */
@@ -765,7 +772,7 @@ select {
 
 /* ── TOML Error Banner ─────────────────────────────────── */
 
-.toml-error-banner {
+.app-error-banner {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -777,7 +784,7 @@ select {
   flex-shrink: 0;
 }
 
-.toml-error-banner button {
+.app-error-banner button {
   margin-left: auto;
   background: none;
   border: none;
@@ -787,8 +794,12 @@ select {
   padding: 0 4px;
 }
 
-.toml-error-banner button:hover {
+.app-error-banner button:hover {
   color: var(--text);
+}
+
+.app-error-banner--warn {
+  background: color-mix(in srgb, #f5c200 20%, var(--pane));
 }
 
 /* ── Toolbar thin buttons ──────────────────────────────── */
@@ -813,12 +824,6 @@ select {
 
 .btn-thin:active {
   background: var(--border);
-}
-
-/* ── Screen selector cell clickability fix ─────────────── */
-
-.screen-selector__cell {
-  cursor: pointer;
 }
 
 /* ── Layout picker popover overflow fix ────────────────── */
