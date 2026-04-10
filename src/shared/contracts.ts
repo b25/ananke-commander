@@ -23,6 +23,10 @@ export interface PaneStateBase {
   type: PaneType
   title: string
   needsAttention?: boolean
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export interface FileBrowserPaneState extends PaneStateBase {
@@ -73,6 +77,7 @@ export interface WorkspaceState {
   name: string
   panes: PaneState[]
   activePaneId: string | null
+  canvasOffset: { x: number; y: number }
 }
 
 export interface AppStateSnapshot {

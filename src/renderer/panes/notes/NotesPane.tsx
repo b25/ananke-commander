@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { NotesPaneState } from '../../../shared/contracts'
 import { PaneHeader } from '../../layout/PaneHeader'
 
@@ -12,18 +12,28 @@ type Props = {
 
 export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: Props) {
   const undoStack = useRef<string[]>([])
+  const [localBody, setLocalBody] = useState(pane.body)
+  const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const setBody = (nextBody: string, recordUndo: boolean) => {
-    if (recordUndo) {
-      const max = Math.max(1, notesUndoMax)
-      undoStack.current = [...undoStack.current, pane.body].slice(-max)
+  useEffect(() => { setLocalBody(pane.body) }, [pane.id])
+
+  useEffect(() => {
+    return () => {
+      if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
     }
-    onUpdate({ ...pane, body: nextBody })
-  }
+  }, [])
 
-  const undo = () => {
-    const prev = undoStack.current.pop()
-    if (prev !== undefined) onUpdate({ ...pane, body: prev })
+  const wordCount = localBody.trim() === '' ? 0 : localBody.trim().split(/\s+/).length
+
+  const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value
+    setLocalBody(val)
+    undoStack.current.push(pane.body)
+    if (undoStack.current.length > Math.max(1, notesUndoMax)) undoStack.current.shift()
+    if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
+    updateTimerRef.current = setTimeout(() => {
+      void onUpdate({ ...pane, body: val })
+    }, 400)
   }
 
   return (
@@ -37,17 +47,26 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
             placeholder="Title"
           />
           <textarea
-            value={pane.body}
-            onChange={(e) => setBody(e.target.value, true)}
+            value={localBody}
+            onChange={handleBodyChange}
             placeholder="Markdown notes…"
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault()
+                if (undoStack.current.length > 0) {
+                  const prev = undoStack.current.pop()!
+                  void onUpdate({ ...pane, body: prev })
+                }
+              }
+            }}
           />
+          <div className="notes-status-bar">
+            {wordCount} words · {localBody.length} chars
+          </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" onClick={undo}>
-              Undo
-            </button>
             <button
               type="button"
-              onClick={() => void window.ananke.clipboard.writeText(pane.body)}
+              onClick={() => void window.ananke.clipboard.writeText(localBody)}
             >
               Copy
             </button>
@@ -56,7 +75,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
               onClick={async () => {
                 const p = await window.ananke.dialog.saveFile(`${pane.title || 'note'}.md`)
                 if (!p) return
-                await window.ananke.fs.writeUtf8(p, pane.body)
+                await window.ananke.fs.writeUtf8(p, localBody)
               }}
             >
               Export…

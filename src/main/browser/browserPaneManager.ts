@@ -55,8 +55,21 @@ export class BrowserPaneManager {
       attachGuestWebContentsGuards(view.webContents)
       view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
       const id = paneId
+      const win = this.mainWindow
       view.webContents.on('did-navigate', (_e, navigatedUrl) => {
         this.appendHistory(id, navigatedUrl)
+      })
+      view.webContents.on('page-title-updated', (_e, title) => {
+        if (!win.isDestroyed())
+          win.webContents.send('browser:titleUpdate', { paneId: id, title })
+      })
+      view.webContents.on('did-start-loading', () => {
+        if (!win.isDestroyed())
+          win.webContents.send('browser:loadingState', { paneId: id, loading: true })
+      })
+      view.webContents.on('did-stop-loading', () => {
+        if (!win.isDestroyed())
+          win.webContents.send('browser:loadingState', { paneId: id, loading: false })
       })
       this.mainWindow.contentView.addChildView(view)
       this.views.set(paneId, view)
@@ -81,6 +94,10 @@ export class BrowserPaneManager {
 
   stop(paneId: string): void {
     this.views.get(paneId)?.webContents.stop()
+  }
+
+  reload(paneId: string): void {
+    this.views.get(paneId)?.webContents.reload()
   }
 
   destroy(paneId: string): void {

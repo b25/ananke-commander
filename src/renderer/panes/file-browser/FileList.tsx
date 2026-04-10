@@ -26,6 +26,10 @@ type Props = {
   entries: ListDirEntry[]
   selected: Set<string>
   focused: boolean
+  renaming: { path: string; name: string } | null
+  onRenameChange: (name: string) => void
+  onRenameCommit: () => void
+  onRenameCancel: () => void
   onPathChange: (p: string) => void
   onSelect: (paths: string[], additive: boolean) => void
   onActivate: (entry: ListDirEntry) => void
@@ -37,6 +41,10 @@ export function FileList({
   entries,
   selected,
   focused,
+  renaming,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
   onPathChange,
   onSelect,
   onActivate,
@@ -200,9 +208,6 @@ export function FileList({
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
-      <div className="path-bar" title={path}>
-        {path}
-      </div>
       <div
         ref={scrollRef}
         style={{ overflow: 'auto', flex: 1, minHeight: 0 }}
@@ -247,10 +252,25 @@ export function FileList({
                   }
                 }}
               >
-                <span className="name" title={entry.name}>
-                  {entry.isDirectory ? '\uD83D\uDCC1 ' : ''}
-                  {entry.name}
-                </span>
+                {renaming && renaming.path === entry.path ? (
+                  <input
+                    className="rename-input"
+                    value={renaming.name}
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => onRenameChange(e.target.value)}
+                    onBlur={onRenameCommit}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); onRenameCommit() }
+                      if (e.key === 'Escape') { e.preventDefault(); onRenameCancel() }
+                    }}
+                  />
+                ) : (
+                  <span className="name" title={entry.name}>
+                    {entry.isDirectory ? '\uD83D\uDCC1 ' : ''}
+                    {entry.name}
+                  </span>
+                )}
                 {!isParent && (
                   <span className="muted">
                     {entry.isDirectory ? renderFolderSize(folderSizes[entry.path]) : formatSize(entry.size)}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RadarPaneState } from '../../../shared/contracts'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { SunburstChart } from './SunburstChart'
-import { useRadarData } from './useRadarData'
+import { useRadarData, type RadarNode } from './useRadarData'
 
 type Props = {
   pane: RadarPaneState
@@ -11,11 +11,29 @@ type Props = {
   onClose: () => void
 }
 
+function formatBytes(b: number): string {
+  if (b >= 1e9) return `${(b / 1e9).toFixed(1)} GB`
+  if (b >= 1e6) return `${(b / 1e6).toFixed(1)} MB`
+  if (b >= 1e3) return `${(b / 1e3).toFixed(1)} KB`
+  return `${b} B`
+}
+
 export function RadarPane({ pane, isActive, onUpdate, onClose }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 400, height: 400 })
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
-  const { data, loading, error } = useRadarData(pane.rootPath)
+  const [data, setData] = useState<RadarNode | null>(null)
+
+  const handleUpdate = useCallback((partial: RadarNode) => {
+    setData(partial)
+  }, [])
+
+  const { loading, error, progress } = useRadarData(pane.rootPath, handleUpdate)
+
+  // Reset data when rootPath changes
+  useEffect(() => {
+    setData(null)
+  }, [pane.rootPath])
 
   useEffect(() => {
     const el = containerRef.current
@@ -92,6 +110,7 @@ export function RadarPane({ pane, isActive, onUpdate, onClose }: Props) {
             </span>
           </span>
         ))}
+        {data && <span className="radar-total-size"> — {formatBytes(data.size)}</span>}
       </div>
       <div
         ref={containerRef}
@@ -109,7 +128,7 @@ export function RadarPane({ pane, isActive, onUpdate, onClose }: Props) {
               fontSize: '13px'
             }}
           >
-            Scanning…
+            <div className="radar-progress">Scanning: {progress.done}/{progress.total}</div>
           </div>
         )}
         {error && (
@@ -117,7 +136,7 @@ export function RadarPane({ pane, isActive, onUpdate, onClose }: Props) {
             Error: {error}
           </div>
         )}
-        {data && !loading && dimensions.width > 0 && (
+        {data && dimensions.width > 0 && (
           <SunburstChart
             data={data}
             width={dimensions.width}

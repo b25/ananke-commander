@@ -12,15 +12,13 @@ type Props = {
 }
 
 export function TerminalPane({ pane, isActive, scrollback, onClose }: Props) {
-  const [termTitle, setTermTitle] = useState(`🖥 ${pane.cwd}`)
+  const [termTitle, setTermTitle] = useState(pane.cwd)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, scrollback, (title) => {
-    // Shells usually set the title to 'user@host: dir' or similar. We enforce the icon.
-    // Replace 'user@host:' to only show the working directory.
+    // Strip leading emoji and 'user@host:' prefix – keep only the directory/custom part.
     let cleanTitle = title.replace(/^🖥\s*/, '')
     cleanTitle = cleanTitle.replace(/^[^@\s]+@[^:\s]+:\s*/, '')
-    
-    // Fallback locally if the shell sent an empty title for some reason
-    setTermTitle(`🖥 ${cleanTitle || pane.cwd}`)
+    setTermTitle(cleanTitle || pane.cwd)
   })
 
   useEffect(() => {
@@ -43,14 +41,40 @@ export function TerminalPane({ pane, isActive, scrollback, onClose }: Props) {
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
       <PaneHeader title={termTitle} paneType="terminal" onClose={onClose} />
-      <div className="pane-body">
-        <div 
-          ref={hostRef} 
-          className="terminal-host" 
+      <div className="pane-body" onClick={() => setCtxMenu(null)}>
+        <div
+          ref={hostRef}
+          className="terminal-host"
           onContextMenu={(e) => {
             e.preventDefault()
+            setCtxMenu({ x: e.clientX, y: e.clientY })
           }}
         />
+        {ctxMenu && (
+          <div
+            style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 200 }}
+            className="ctx-menu"
+            onMouseLeave={() => setCtxMenu(null)}
+          >
+            <button type="button" className="ctx-menu__item" onClick={() => {
+              const sel = termRef.current?.getSelection()
+              if (sel) void window.ananke.clipboard.writeText(sel)
+              setCtxMenu(null)
+            }}>Copy</button>
+            <button type="button" className="ctx-menu__item" onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText()
+                if (text) void window.ananke.pty.write(pane.id, text)
+              } catch { /* ignore */ }
+              setCtxMenu(null)
+            }}>Paste</button>
+            <div className="ctx-menu__sep" />
+            <button type="button" className="ctx-menu__item" onClick={() => {
+              termRef.current?.clear()
+              setCtxMenu(null)
+            }}>Clear</button>
+          </div>
+        )}
       </div>
     </div>
   )

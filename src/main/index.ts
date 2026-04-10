@@ -283,6 +283,10 @@ function registerIpcHandlers(): void {
     getBrowserPanes().destroy(paneId)
   })
 
+  ipcMain.handle('browser:reload', (_e, paneId: string) => {
+    getBrowserPanes().reload(paneId)
+  })
+
   ipcMain.handle('shell:openExternal', async (_e, url: string) => {
     if (isNavigationAllowed(url)) await shell.openExternal(url)
   })
@@ -330,6 +334,37 @@ function registerIpcHandlers(): void {
       return saveMarkdownToVault(vaultPath, subfolder, filename, body)
     }
   )
+
+  ipcMain.handle('state:updatePaneGeometry', (_e, wsId: string, paneId: string, x: number, y: number, w: number, h: number) => {
+    stateStore!.updatePaneGeometry(wsId, paneId, x, y, w, h)
+    return stateStore!.getSnapshot()
+  })
+
+  ipcMain.handle('state:setCanvasOffset', (_e, wsId: string, x: number, y: number) => {
+    stateStore!.setCanvasOffset(wsId, x, y)
+    return stateStore!.getSnapshot()
+  })
+
+  ipcMain.handle('state:cloneWorkspace', (_e, wsId: string) => {
+    const ws = stateStore!.cloneWorkspace(wsId)
+    if (ws) stateStore!.setActiveWorkspace(ws.id)
+    return stateStore!.getSnapshot()
+  })
+
+  ipcMain.handle('state:renameWorkspace', (_e, wsId: string, name: string) => {
+    stateStore!.renameWorkspace(wsId, name)
+    return stateStore!.getSnapshot()
+  })
+
+  ipcMain.handle('state:deleteWorkspace', (_e, wsId: string) => {
+    stateStore!.deleteWorkspace(wsId)
+    return stateStore!.getSnapshot()
+  })
+
+  ipcMain.handle('fs:rename', async (_e, oldPath: string, newPath: string) => {
+    const { rename } = await import('node:fs/promises')
+    await rename(oldPath, newPath)
+  })
 }
 
 async function createWindow(): Promise<void> {

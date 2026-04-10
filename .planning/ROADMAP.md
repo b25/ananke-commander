@@ -123,8 +123,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [x] 05-01: TBD
-- [ ] 05-02: TBD
+- [x] 05-01-PLAN.md — Workspace rail + pane header improvements
+- [x] 05-02-PLAN.md — File browser context menu
 
 ## Progress
 
@@ -139,4 +139,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 4.1 -> 5
 | 3.1. Critical Bug Fixes [INSERTED] | 2/2 | Complete | ✓ |
 | 4. UX Audit & Component CSS Migration | 2/2 | Complete | ✓ |
 | 4.1. 2D Radar Navigation [INSERTED] | 2/2 | Complete | ✓ |
-| 5. UX Implementation | 1/2 | In Progress|  |
+| 5. UX Implementation | 2/2 | Complete | ✓ |

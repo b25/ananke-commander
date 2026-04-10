@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AppStateSnapshot,
   BrowserPaneState,
@@ -10,7 +10,8 @@ import type {
   TerminalPaneState
 } from '../../shared/contracts'
 import { WorkspaceRail } from '../layout/WorkspaceRail'
-import { PaneGrid } from '../layout/PaneGrid'
+import { CanvasWorkspace } from '../layout/CanvasWorkspace'
+import { RadarMinimap } from '../layout/RadarMinimap'
 import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { FileBrowserPane } from '../panes/file-browser/FileBrowserPane'
 import { TerminalPane } from '../panes/terminal/TerminalPane'
@@ -19,11 +20,20 @@ import { NotesPane } from '../panes/notes/NotesPane'
 import { RadarPane } from '../panes/radar/RadarPane'
 import { NotesSettings } from '../settings/NotesSettings'
 import { PrivacySettings } from '../settings/PrivacySettings'
+import { findFreeSlot, resolveOverlaps } from '../lib/tileUtils'
+
+const DEFAULT_PANE_SIZES: Record<PaneType, { w: number; h: number }> = {
+  'file-browser': { w: 900, h: 600 },
+  'terminal': { w: 700, h: 420 },
+  'browser': { w: 1024, h: 700 },
+  'notes': { w: 600, h: 500 },
+  'radar': { w: 700, h: 500 }
+}
 
 export function App() {
   const [snap, setSnap] = useState<AppStateSnapshot | null>(null)
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
-
+  const [viewportSize, setViewportSize] = useState({ w: window.innerWidth - 56, h: window.innerHeight - 32 })
   const refresh = useCallback(async () => {
     setSnap(await window.ananke.state.get())
   }, [])
@@ -35,7 +45,6 @@ export function App() {
   let ws = snap?.workspaces.find((w) => w.id === snap.activeWorkspaceId)
   if (snap && !ws && snap.workspaces.length > 0) {
     ws = snap.workspaces[0]
-    // Silently auto-correct state next tick
     void window.ananke.state.setActiveWorkspace(ws.id)
   }
 
@@ -63,42 +72,60 @@ export function App() {
     [ws]
   )
 
+  const handleGeometryChange = useCallback(
+    async (paneId: string, x: number, y: number, w: number, h: number) => {
+      if (!ws) return
+      // Apply the geometry update then resolve any overlaps caused by the move/resize
+      const updated = ws.panes.map((p) =>
+        p.id === paneId ? { ...p, x, y, width: w, height: h } : p
+      )
+      const resolved = resolveOverlaps(updated, paneId)
+      setSnap(await window.ananke.state.replacePanes(ws.id, resolved, ws.activePaneId))
+    },
+    [ws]
+  )
+
+  const handleCanvasOffsetChange = useCallback(
+    async (x: number, y: number) => {
+      if (!ws) return
+      setSnap(await window.ananke.state.setCanvasOffset(ws.id, x, y))
+    },
+    [ws]
+  )
+
   const addPane = useCallback(
     async (type: PaneType) => {
       if (!ws) return
       const id = crypto.randomUUID()
       const home = await window.ananke.getPath('home')
+      const { w, h } = DEFAULT_PANE_SIZES[type]
+      // Bias slot search to the current viewport so the new pane appears on-screen
+      const viewportPanes = ws.panes.map((p) => ({
+        ...p,
+        x: p.x - ws.canvasOffset.x,
+        y: p.y - ws.canvasOffset.y
+      }))
+      const rawSlot = findFreeSlot(viewportPanes, w, h)
+      const { x: px, y: py } = {
+        x: Math.max(0, rawSlot.x + ws.canvasOffset.x),
+        y: Math.max(0, rawSlot.y + ws.canvasOffset.y)
+      }
       let p: PaneState
       if (type === 'file-browser') {
         p = {
-          id,
-          type: 'file-browser',
-          title: 'Files',
-          leftPath: home,
-          rightPath: home,
-          focusedSide: 'left',
-          leftSelection: [],
-          rightSelection: []
+          id, type: 'file-browser', title: 'Files',
+          x: px, y: py, width: w, height: h,
+          leftPath: home, rightPath: home,
+          focusedSide: 'left', leftSelection: [], rightSelection: []
         } satisfies FileBrowserPaneState
       } else if (type === 'terminal') {
-        p = { id, type: 'terminal', title: 'Terminal', cwd: home } satisfies TerminalPaneState
+        p = { id, type: 'terminal', title: 'Terminal', x: px, y: py, width: w, height: h, cwd: home } satisfies TerminalPaneState
       } else if (type === 'browser') {
-        p = {
-          id,
-          type: 'browser',
-          title: 'Browser',
-          url: 'about:blank'
-        } satisfies BrowserPaneState
+        p = { id, type: 'browser', title: 'Browser', x: px, y: py, width: w, height: h, url: 'about:blank' } satisfies BrowserPaneState
       } else if (type === 'radar') {
-        p = {
-          id,
-          type: 'radar',
-          title: 'Radar',
-          rootPath: home,
-          pathHistory: []
-        } satisfies RadarPaneState
+        p = { id, type: 'radar', title: 'Radar', x: px, y: py, width: w, height: h, rootPath: home, pathHistory: [] } satisfies RadarPaneState
       } else {
-        p = { id, type: 'notes', title: 'Notes', body: '' } satisfies NotesPaneState
+        p = { id, type: 'notes', title: 'Notes', x: px, y: py, width: w, height: h, body: '' } satisfies NotesPaneState
       }
       const panes = [...ws.panes, p]
       setSnap(await window.ananke.state.replacePanes(ws.id, panes, id))
@@ -106,72 +133,109 @@ export function App() {
     [ws]
   )
 
-  const renderPane = (pane: PaneState) => {
+  const renderPane = (pane: PaneState, isDragging = false) => {
     const isActive = ws!.activePaneId === pane.id
-    const onTileClick = () => {
-      if (!isActive) void setActivePane(pane.id)
-    }
     if (pane.type === 'file-browser') {
       return (
-        <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
-          <FileBrowserPane
-            pane={pane}
-            isActive={isActive}
-            allPanes={ws!.panes}
-            onUpdate={(next) => void updatePane(pane.id, next)}
-            onClose={() => void closePane(pane.id)}
-          />
-        </div>
+        <FileBrowserPane
+          pane={pane}
+          isActive={isActive}
+          allPanes={ws!.panes}
+          onUpdate={(next) => void updatePane(pane.id, next)}
+          onClose={() => void closePane(pane.id)}
+        />
       )
     }
     if (pane.type === 'terminal') {
       return (
-        <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
-          <TerminalPane
-            pane={pane}
-            isActive={isActive}
-            scrollback={snap!.settings.privacy.terminalHistoryMax}
-            onClose={() => void closePane(pane.id)}
-          />
-        </div>
+        <TerminalPane
+          pane={pane}
+          isActive={isActive}
+          scrollback={snap!.settings.privacy.terminalHistoryMax}
+          onClose={() => void closePane(pane.id)}
+        />
       )
     }
     if (pane.type === 'browser') {
       return (
-        <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
-          <BrowserPlaceholderPane
-            pane={pane}
-            isActive={isActive}
-            onClose={() => void closePane(pane.id)}
-            onUpdate={(next) => void updatePane(pane.id, next)}
-          />
-        </div>
+        <BrowserPlaceholderPane
+          pane={pane}
+          isActive={isActive}
+          isDragging={isDragging}
+          canvasOffset={ws!.canvasOffset}
+          onClose={() => void closePane(pane.id)}
+          onUpdate={(next) => void updatePane(pane.id, next)}
+        />
       )
     }
     if (pane.type === 'radar') {
       return (
-        <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
-          <RadarPane
-            pane={pane}
-            isActive={isActive}
-            onUpdate={(next) => void updatePane(pane.id, next)}
-            onClose={() => void closePane(pane.id)}
-          />
-        </div>
-      )
-    }
-    return (
-      <div key={pane.id} onClick={onTileClick} role="presentation" className="pane-wrapper">
-        <NotesPane
+        <RadarPane
           pane={pane}
           isActive={isActive}
-          notesUndoMax={snap!.settings.privacy.notesUndoMax}
           onUpdate={(next) => void updatePane(pane.id, next)}
           onClose={() => void closePane(pane.id)}
         />
-      </div>
+      )
+    }
+    return (
+      <NotesPane
+        pane={pane}
+        isActive={isActive}
+        notesUndoMax={snap!.settings.privacy.notesUndoMax}
+        onUpdate={(next) => void updatePane(pane.id, next)}
+        onClose={() => void closePane(pane.id)}
+      />
     )
   }
+
+  // WS-UI-03: Ctrl+1–9 workspace switching
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!snap || !(e.ctrlKey || e.metaKey)) return
+      const n = parseInt(e.key)
+      if (n >= 1 && n <= 9) {
+        const target = snap.workspaces[n - 1]
+        if (target && target.id !== snap.activeWorkspaceId) {
+          e.preventDefault()
+          void window.ananke.state.setActiveWorkspace(target.id).then(setSnap)
+        }
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [snap])
+
+  // Ctrl+W — close active pane
+  useEffect(() => {
+    if (!ws) return
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'w') return
+      if (!ws.activePaneId) return
+      e.preventDefault()
+      void closePane(ws.activePaneId)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [ws, closePane])
+
+  // WS-UI-05: Ctrl+Tab pane focus cycling
+  useEffect(() => {
+    if (!ws) return
+    const handler = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.key !== 'Tab') return
+      e.preventDefault()
+      const panes = ws.panes
+      if (panes.length < 2) return
+      const currentIdx = panes.findIndex(p => p.id === ws.activePaneId)
+      const nextIdx = e.shiftKey
+        ? (currentIdx - 1 + panes.length) % panes.length
+        : (currentIdx + 1) % panes.length
+      void window.ananke.state.setActivePane(ws.id, panes[nextIdx].id).then(setSnap)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [ws, snap])
 
   if (!snap || !ws) {
     return <div className="app-shell" style={{ padding: 16 }}>Loading…</div>
@@ -186,6 +250,14 @@ export function App() {
         onAdd={() => {
           const n = snap.workspaces.length + 1
           void window.ananke.state.addWorkspace(`Workspace ${n}`).then(setSnap)
+        }}
+        onClone={(id) => void window.ananke.state.cloneWorkspace(id).then(setSnap)}
+        onRename={(id, name) => void window.ananke.state.renameWorkspace(id, name).then(setSnap)}
+        onDelete={(id) => {
+          const target = snap.workspaces.find(w => w.id === id)
+          if (!target) return
+          if (!confirm(`Delete "${target.name}"? ${target.panes.length} pane(s) will be lost.`)) return
+          void window.ananke.state.deleteWorkspace(id).then(setSnap)
         }}
       />
       <div className="main-stage">
@@ -216,7 +288,22 @@ export function App() {
             </button>
           </div>
         </div>
-        <PaneGrid>{ws.panes.map((p) => renderPane(p))}</PaneGrid>
+
+        <CanvasWorkspace
+          workspace={ws}
+          renderPane={renderPane}
+          onActivate={setActivePane}
+          onGeometryChange={handleGeometryChange}
+          onCanvasOffsetChange={handleCanvasOffsetChange}
+          onViewportResize={(w, h) => setViewportSize({ w, h })}
+        />
+
+        <RadarMinimap
+          workspace={ws}
+          viewportWidth={viewportSize.w}
+          viewportHeight={viewportSize.h}
+          onPan={handleCanvasOffsetChange}
+        />
       </div>
 
       {drawer === 'settings' && (

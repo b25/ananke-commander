@@ -29,7 +29,17 @@ const api = {
     restoreClosed: (workspaceId: string, entryId: string): Promise<AppStateSnapshot> =>
       ipcRenderer.invoke('state:restoreClosed', workspaceId, entryId),
     purgeRecentlyClosed: (): Promise<AppStateSnapshot> =>
-      ipcRenderer.invoke('state:purgeRecentlyClosed')
+      ipcRenderer.invoke('state:purgeRecentlyClosed'),
+    updatePaneGeometry: (wsId: string, paneId: string, x: number, y: number, w: number, h: number): Promise<AppStateSnapshot> =>
+      ipcRenderer.invoke('state:updatePaneGeometry', wsId, paneId, x, y, w, h),
+    setCanvasOffset: (wsId: string, x: number, y: number): Promise<AppStateSnapshot> =>
+      ipcRenderer.invoke('state:setCanvasOffset', wsId, x, y),
+    cloneWorkspace: (wsId: string): Promise<AppStateSnapshot> =>
+      ipcRenderer.invoke('state:cloneWorkspace', wsId),
+    renameWorkspace: (wsId: string, name: string): Promise<AppStateSnapshot> =>
+      ipcRenderer.invoke('state:renameWorkspace', wsId, name),
+    deleteWorkspace: (wsId: string): Promise<AppStateSnapshot> =>
+      ipcRenderer.invoke('state:deleteWorkspace', wsId)
   },
 
   fs: {
@@ -56,7 +66,9 @@ const api = {
       const fn = (_: unknown, msg: { requestId: string; dirPath: string; message: string }) => cb(msg)
       ipcRenderer.on('fs:folderSize:error', fn)
       return () => ipcRenderer.removeListener('fs:folderSize:error', fn)
-    }
+    },
+    rename: (oldPath: string, newPath: string): Promise<void> =>
+      ipcRenderer.invoke('fs:rename', oldPath, newPath)
   },
 
   fileJob: {
@@ -114,7 +126,18 @@ const api = {
       ipcRenderer.on('browser:history', fn)
       return () => ipcRenderer.removeListener('browser:history', fn)
     },
-    destroy: (paneId: string) => ipcRenderer.invoke('browser:destroy', paneId)
+    reload: (paneId: string) => ipcRenderer.invoke('browser:reload', paneId),
+    destroy: (paneId: string) => ipcRenderer.invoke('browser:destroy', paneId),
+    onTitleUpdate: (cb: (msg: { paneId: string; title: string }) => void) => {
+      const fn = (_: unknown, msg: { paneId: string; title: string }) => cb(msg)
+      ipcRenderer.on('browser:titleUpdate', fn)
+      return () => ipcRenderer.removeListener('browser:titleUpdate', fn)
+    },
+    onLoadingState: (cb: (msg: { paneId: string; loading: boolean }) => void) => {
+      const fn = (_: unknown, msg: { paneId: string; loading: boolean }) => cb(msg)
+      ipcRenderer.on('browser:loadingState', fn)
+      return () => ipcRenderer.removeListener('browser:loadingState', fn)
+    }
   },
 
   shell: {

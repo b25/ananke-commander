@@ -8,10 +8,36 @@ import type {
   AppSettings,
   AppStateSnapshot,
   PaneState,
+  PaneType,
   RecentlyClosedEntry,
   WorkspaceState
 } from '../../shared/contracts.js'
 import { DEFAULT_SETTINGS } from '../../shared/contracts.js'
+
+const DEFAULT_PANE_SIZES: Record<PaneType, { w: number; h: number }> = {
+  'file-browser': { w: 900, h: 600 },
+  'terminal': { w: 700, h: 420 },
+  'browser': { w: 1024, h: 700 },
+  'notes': { w: 600, h: 500 },
+  'radar': { w: 700, h: 500 }
+}
+
+function injectPaneGeometry(panes: PaneState[]): PaneState[] {
+  return panes.map((pane, idx) => {
+    if (typeof pane.x === 'number') return pane
+    const { w, h } = DEFAULT_PANE_SIZES[pane.type]
+    const stagger = idx * 30
+    return { ...pane, x: 40 + stagger, y: 40 + stagger, width: w, height: h }
+  })
+}
+
+function migrateWorkspaces(workspaces: WorkspaceState[]): WorkspaceState[] {
+  return workspaces.map((ws) => ({
+    ...ws,
+    canvasOffset: ws.canvasOffset ?? { x: 0, y: 0 },
+    panes: injectPaneGeometry(ws.panes)
+  }))
+}
 
 function isValidDir(p: string): boolean {
   try {
@@ -39,15 +65,18 @@ function sanitizePaths(workspaces: WorkspaceState[]): WorkspaceState[] {
 function createDefaultWorkspace(): WorkspaceState {
   const paneId = randomUUID()
   const home = homedir()
+  const { w, h } = DEFAULT_PANE_SIZES['file-browser']
   return {
     id: randomUUID(),
     name: 'Workspace 1',
     activePaneId: paneId,
+    canvasOffset: { x: 0, y: 0 },
     panes: [
       {
         id: paneId,
         type: 'file-browser',
         title: 'Files',
+        x: 40, y: 40, width: w, height: h,
         leftPath: home,
         rightPath: home,
         focusedSide: 'left',
@@ -105,7 +134,7 @@ export class StateStore {
 
   getSnapshot(): AppStateSnapshot {
     const disk: AppStateSnapshot = {
-      workspaces: sanitizePaths(this.store.get('workspaces')),
+      workspaces: migrateWorkspaces(sanitizePaths(this.store.get('workspaces'))),
       activeWorkspaceId: this.store.get('activeWorkspaceId'),
       settings: this.store.get('settings'),
       recentlyClosed: this.store.get('recentlyClosed')
@@ -210,5 +239,58 @@ export class StateStore {
 
   getWorkspace(id: string): WorkspaceState | undefined {
     return this.store.get('workspaces').find((w) => w.id === id)
+  }
+
+  updatePaneGeometry(workspaceId: string, paneId: string, x: number, y: number, w: number, h: number): void {
+    const workspaces = this.store.get('workspaces').map((ws) => {
+      if (ws.id !== workspaceId) return ws
+      return {
+        ...ws,
+        panes: ws.panes.map((p) =>
+          p.id === paneId ? { ...p, x, y, width: w, height: h } : p
+        )
+      }
+    })
+    this.store.set('workspaces', workspaces)
+  }
+
+  setCanvasOffset(workspaceId: string, x: number, y: number): void {
+    const workspaces = this.store.get('workspaces').map((ws) =>
+      ws.id === workspaceId ? { ...ws, canvasOffset: { x, y } } : ws
+    )
+    this.store.set('workspaces', workspaces)
+  }
+
+  renameWorkspace(workspaceId: string, name: string): void {
+    const workspaces = this.store.get('workspaces').map((ws) =>
+      ws.id === workspaceId ? { ...ws, name } : ws
+    )
+    this.store.set('workspaces', workspaces)
+  }
+
+  deleteWorkspace(workspaceId: string): void {
+    const all = this.store.get('workspaces').filter((w) => w.id !== workspaceId)
+    if (all.length === 0) return // never delete last workspace
+    this.store.set('workspaces', all)
+    if (this.store.get('activeWorkspaceId') === workspaceId) {
+      this.store.set('activeWorkspaceId', all[0].id)
+    }
+  }
+
+  cloneWorkspace(workspaceId: string): WorkspaceState | undefined {
+    const src = this.store.get('workspaces').find((w) => w.id === workspaceId)
+    if (!src) return undefined
+    const cloned: WorkspaceState = {
+      ...structuredClone(src),
+      id: randomUUID(),
+      name: `${src.name} copy`,
+      canvasOffset: { x: 0, y: 0 },
+      panes: src.panes.map((p) => ({ ...structuredClone(p), id: randomUUID() })),
+      activePaneId: null
+    }
+    if (cloned.panes.length > 0) cloned.activePaneId = cloned.panes[0].id
+    const all = [...this.store.get('workspaces'), cloned]
+    this.store.set('workspaces', all)
+    return cloned
   }
 }
