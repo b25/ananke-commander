@@ -208,6 +208,23 @@ export class StateStore {
     this.store.set('workspaces', this.store.get('workspaces').map((ws) => ws.id === workspaceId ? { ...ws, activePaneId } : ws))
   }
 
+  pauseWatch(): void { this.tomlService.pause() }
+  resumeWatch(): void { this.tomlService.resume() }
+  getTomlRaw(): string | null { return this.tomlService.readRaw() }
+
+  validateAndApplyToml(raw: string): string | null {
+    try {
+      const parsed = tomlToSnapshot(raw)
+      this.store.set('workspaces', migrateWorkspaces(sanitizePaths(parsed.workspaces)))
+      this.store.set('activeWorkspaceId', parsed.activeWorkspaceId)
+      this.pendingPatch = {}
+      this.flushToml()
+      return null
+    } catch (e) {
+      return String(e)
+    }
+  }
+
   setScreenLayout(workspaceId: string, screenIndex: number, layoutId: string): void {
     this.store.set('workspaces', this.store.get('workspaces').map((ws) =>
       ws.id !== workspaceId ? ws : { ...ws, screenLayouts: { ...ws.screenLayouts, [screenIndex]: layoutId } }

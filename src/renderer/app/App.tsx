@@ -5,6 +5,7 @@ import { CanvasWorkspace } from '../layout/CanvasWorkspace'
 import { ScreenSelector } from '../layout/ScreenSelector'
 import { LayoutPicker } from '../layout/LayoutPicker'
 import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
+import { TomlEditorModal } from '../layout/TomlEditorModal'
 import { FileBrowserPane } from '../panes/file-browser/FileBrowserPane'
 import { TerminalPane } from '../panes/terminal/TerminalPane'
 import { BrowserPlaceholderPane } from '../panes/browser/BrowserPlaceholderPane'
@@ -31,6 +32,18 @@ function screenIndex(canvasOffset: { x: number; y: number }, vpW: number, vpH: n
 export function App() {
   const [snap, setSnap] = useState<AppStateSnapshot | null>(null)
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
+  const [tomlEditorOpen, setTomlEditorOpen] = useState(false)
+
+  const openTomlEditor = useCallback(async () => {
+    await window.ananke.config.pauseWatch()
+    setTomlEditorOpen(true)
+  }, [])
+
+  const closeTomlEditor = useCallback(async (newSnap?: import('../../shared/contracts').AppStateSnapshot) => {
+    setTomlEditorOpen(false)
+    await window.ananke.config.resumeWatch()
+    if (newSnap) setSnap(newSnap)
+  }, [])
   const [viewportSize, setViewportSize] = useState({ w: window.innerWidth - 56, h: window.innerHeight - 56 })
   const [tomlError, setTomlError] = useState<string | null>(null)
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -397,7 +410,8 @@ export function App() {
           <hr style={{ margin: '12px 0', borderColor: 'var(--border)' }} />
           <div style={{ fontSize: 12, marginBottom: 6, color: 'var(--muted)' }}>Workspace File (TOML)</div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button type="button" onClick={() => void window.ananke.config.openToml()}>Open in Editor</button>
+            <button type="button" className="primary" onClick={() => void openTomlEditor()}>Edit TOML</button>
+            <button type="button" onClick={() => void window.ananke.config.openToml()}>Open in System Editor</button>
             <button type="button" onClick={() => void window.ananke.config.writeToml()}>Force Save</button>
           </div>
         </div></aside>
@@ -405,6 +419,7 @@ export function App() {
       {drawer === 'recent' && (
         <aside className="drawer"><RecentlyClosedPanel snap={snap} ws={ws} onClose={() => setDrawer('none')} onSnapshot={setSnap} /></aside>
       )}
+      {tomlEditorOpen && <TomlEditorModal onClose={(s) => void closeTomlEditor(s)} />}
     </div>
   )
 }

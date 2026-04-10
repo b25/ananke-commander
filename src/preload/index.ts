@@ -176,6 +176,11 @@ const api = {
     getTomlPath: (): Promise<string> => ipcRenderer.invoke('config:getTomlPath'),
     openToml: (): Promise<string> => ipcRenderer.invoke('config:openToml'),
     writeToml: (): Promise<void> => ipcRenderer.invoke('config:writeToml'),
+    pauseWatch: (): Promise<void> => ipcRenderer.invoke('config:pauseWatch'),
+    resumeWatch: (): Promise<void> => ipcRenderer.invoke('config:resumeWatch'),
+    readToml: (): Promise<string | null> => ipcRenderer.invoke('config:readToml'),
+    applyToml: (raw: string): Promise<{ error: string | null; snapshot: AppStateSnapshot | null }> =>
+      ipcRenderer.invoke('config:applyToml', raw),
     onStateChanged: (cb: (snap: AppStateSnapshot) => void): (() => void) => {
       const fn = (_: unknown, snap: AppStateSnapshot) => cb(snap)
       ipcRenderer.on('config:state-changed', fn)
