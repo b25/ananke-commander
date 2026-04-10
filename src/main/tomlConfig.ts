@@ -153,7 +153,7 @@ function parseWorkspaceFromToml(raw: unknown, idx: number): WorkspaceState {
     name: str(raw.name, `Workspace ${idx + 1}`),
     panes: dedupedPanes,
     activePaneId: validActivePane,
-    canvasOffset: { x: num(offset[0]), y: num(offset[1]) },
+    canvasOffset: { x: Math.max(0, num(offset[0])), y: Math.max(0, num(offset[1])) },
     screenLayouts,
   }
 }
