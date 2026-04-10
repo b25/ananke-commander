@@ -2,10 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import type { PaneState, WorkspaceState } from '../../shared/contracts'
 import { FloatingPane, type SnapRect } from './FloatingPane'
 
-export const CANVAS_W = 4000
-export const CANVAS_H = 4000
-const PAN_STEP = 80
-
 interface Props {
   workspace: WorkspaceState
   renderPane: (pane: PaneState) => React.ReactNode
@@ -15,83 +11,67 @@ interface Props {
   onViewportResize?: (width: number, height: number) => void
 }
 
-export function CanvasWorkspace({ workspace, renderPane, onActivate, onGeometryChange, onCanvasOffsetChange, onViewportResize }: Props) {
+export function CanvasWorkspace({
+  workspace, renderPane, onActivate, onGeometryChange, onCanvasOffsetChange, onViewportResize
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [viewportSize, setViewportSize] = useState({ width: 800, height: 600 })
   const offsetRef = useRef(workspace.canvasOffset)
   offsetRef.current = workspace.canvasOffset
   const onViewportResizeRef = useRef(onViewportResize)
   onViewportResizeRef.current = onViewportResize
+  const vpRef = useRef(viewportSize)
+  vpRef.current = viewportSize
 
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const ro = new ResizeObserver((entries) => {
       const r = entries[0]?.contentRect
-      if (r) {
-        setViewportSize({ width: r.width, height: r.height })
-        onViewportResizeRef.current?.(r.width, r.height)
-      }
+      if (!r) return
+      setViewportSize({ width: r.width, height: r.height })
+      onViewportResizeRef.current?.(r.width, r.height)
     })
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
 
-  const vpRef = useRef(viewportSize)
-  vpRef.current = viewportSize
-
-  const clampOffset = (x: number, y: number) => ({
-    x: Math.max(0, Math.min(CANVAS_W - vpRef.current.width, x)),
-    y: Math.max(0, Math.min(CANVAS_H - vpRef.current.height, y))
-  })
-
-  // Alt+Arrow panning
+  // Alt+Arrow: jump between screens (one viewport step each)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!e.altKey) return
-      const dirs: Record<string, [number, number]> = {
-        ArrowLeft: [-PAN_STEP, 0],
-        ArrowRight: [PAN_STEP, 0],
-        ArrowUp: [0, -PAN_STEP],
-        ArrowDown: [0, PAN_STEP]
+      const { width: vpW, height: vpH } = vpRef.current
+      const { x, y } = offsetRef.current
+      const steps: Record<string, [number, number]> = {
+        ArrowLeft:  [-vpW, 0],
+        ArrowRight: [ vpW, 0],
+        ArrowUp:    [0, -vpH],
+        ArrowDown:  [0,  vpH]
       }
-      const delta = dirs[e.key]
+      const delta = steps[e.key]
       if (!delta) return
       e.preventDefault()
-      const { x, y } = offsetRef.current
-      const c = clampOffset(x + delta[0], y + delta[1])
-      onCanvasOffsetChange(c.x, c.y)
+      // Snap to valid screen positions: x ∈ {0, vpW}, y ∈ {0, vpH}
+      const nx = Math.max(0, Math.min(vpW, x + delta[0]))
+      const ny = Math.max(0, Math.min(vpH, y + delta[1]))
+      onCanvasOffsetChange(nx, ny)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onCanvasOffsetChange])
 
-  // Wheel/trackpad panning (only when the wheel target is the canvas background, not a pane)
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const handler = (e: WheelEvent) => {
-      const target = e.target as HTMLElement
-      if (target.closest('.floating-pane')) return
-      e.preventDefault()
-      const { x, y } = offsetRef.current
-      const c = clampOffset(x + e.deltaX, y + e.deltaY)
-      onCanvasOffsetChange(c.x, c.y)
-    }
-    el.addEventListener('wheel', handler, { passive: false })
-    return () => el.removeEventListener('wheel', handler)
-  }, [onCanvasOffsetChange])
-
   const { x: ox, y: oy } = workspace.canvasOffset
-  const canvasBounds = { width: CANVAS_W, height: CANVAS_H }
+  const canvasW = viewportSize.width * 2
+  const canvasH = viewportSize.height * 2
+  const canvasBounds = { width: canvasW, height: canvasH }
 
   return (
-    <div ref={containerRef} className="canvas-workspace" style={{ overflow: 'hidden' }}>
+    <div ref={containerRef} className="canvas-workspace">
       <div
         style={{
           position: 'absolute',
-          width: CANVAS_W,
-          height: CANVAS_H,
+          width: canvasW,
+          height: canvasH,
           transform: `translate(${-ox}px, ${-oy}px)`,
           willChange: 'transform'
         }}
