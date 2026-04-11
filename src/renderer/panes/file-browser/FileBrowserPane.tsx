@@ -35,6 +35,14 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const [renaming, setRenaming] = useState<{ path: string; side: 'left' | 'right'; name: string } | null>(null)
   const [editingPath, setEditingPath] = useState<{ side: 'left' | 'right'; value: string } | null>(null)
   const activeJobId = useRef<string | null>(null)
+  // Inline prompt state (replaces window.prompt which doesn't work in Electron)
+  const [inlinePrompt, setInlinePrompt] = useState<{ label: string; onSubmit: (value: string) => void } | null>(null)
+  const [inlinePromptValue, setInlinePromptValue] = useState('')
+
+  const showPrompt = (label: string, onSubmit: (value: string) => void) => {
+    setInlinePromptValue('')
+    setInlinePrompt({ label, onSubmit })
+  }
   // Track folder name to auto-select after navigating up
   const [leftFocusName, setLeftFocusName] = useState<string | null>(null)
   const [rightFocusName, setRightFocusName] = useState<string | null>(null)
@@ -225,12 +233,11 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       }
       if (e.key === 'F7' && !e.altKey) {
         e.preventDefault()
-        const folderName = prompt('New folder name:')
-        if (folderName?.trim()) {
-          void window.ananke.fs.quickOp('mkdir', joinPath(activePath, folderName.trim()))
+        showPrompt('New folder name:', (name) => {
+          void window.ananke.fs.quickOp('mkdir', joinPath(activePath, name))
             .then(() => refreshActive())
             .catch((err: Error) => alert(err.message))
-        }
+        })
       }
       if (e.key === 'F8') {
         e.preventDefault()
@@ -283,12 +290,11 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       // Alt+F7: create new file
       if (e.altKey && e.key === 'F7') {
         e.preventDefault()
-        const fileName = prompt('New file name:')
-        if (fileName?.trim()) {
-          void window.ananke.fs.createFile(joinPath(activePath, fileName.trim()))
+        showPrompt('New file name:', (name) => {
+          void window.ananke.fs.createFile(joinPath(activePath, name))
             .then(() => refreshActive())
             .catch((err: Error) => alert(err.message))
-        }
+        })
       }
       // Alt+Right: navigate forward in history
       if (e.altKey && e.key === 'ArrowRight') {
@@ -435,12 +441,11 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         { label: '', separator: true, onClick: () => {} },
         {
           label: 'New File', shortcut: 'Alt+F7', onClick: () => {
-            const fileName = prompt('New file name:')
-            if (fileName?.trim()) {
-              void window.ananke.fs.createFile(joinPath(activePath, fileName.trim()))
+            showPrompt('New file name:', (name) => {
+              void window.ananke.fs.createFile(joinPath(activePath, name))
                 .then(() => refreshActive())
                 .catch((err: Error) => alert(err.message))
-            }
+            })
           }
         },
         {
@@ -517,18 +522,18 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
             onCopy={() => setCopyOpen(true)}
             onMove={() => setMoveOpen(true)}
             onNewFolder={() => {
-              const folderName = prompt('New folder name:')
-              if (folderName?.trim()) {
-                void window.ananke.fs.quickOp('mkdir', joinPath(activePath, folderName.trim())).then(() => refreshActive())
-              }
-            }}
-            onNewFile={() => {
-              const fileName = prompt('New file name:')
-              if (fileName?.trim()) {
-                void window.ananke.fs.createFile(joinPath(activePath, fileName.trim()))
+              showPrompt('New folder name:', (name) => {
+                void window.ananke.fs.quickOp('mkdir', joinPath(activePath, name))
                   .then(() => refreshActive())
                   .catch((err: Error) => alert(err.message))
-              }
+              })
+            }}
+            onNewFile={() => {
+              showPrompt('New file name:', (name) => {
+                void window.ananke.fs.createFile(joinPath(activePath, name))
+                  .then(() => refreshActive())
+                  .catch((err: Error) => alert(err.message))
+              })
             }}
             onDelete={() => {
               if (!selectedPaths.length) return
@@ -700,6 +705,35 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
             refreshBoth()
           }}
         />,
+        document.body
+      )}
+
+      {inlinePrompt && createPortal(
+        <div className="modal-backdrop" role="presentation" onClick={() => setInlinePrompt(null)}>
+          <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()} style={{ minWidth: 320 }}>
+            <h2>{inlinePrompt.label}</h2>
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              const val = inlinePromptValue.trim()
+              if (val) {
+                inlinePrompt.onSubmit(val)
+                setInlinePrompt(null)
+              }
+            }}>
+              <input
+                autoFocus
+                value={inlinePromptValue}
+                onChange={(e) => setInlinePromptValue(e.target.value)}
+                style={{ width: '100%', marginBottom: 12 }}
+                onKeyDown={(e) => { if (e.key === 'Escape') setInlinePrompt(null) }}
+              />
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setInlinePrompt(null)}>Cancel</button>
+                <button type="submit" className="primary" disabled={!inlinePromptValue.trim()}>OK</button>
+              </div>
+            </form>
+          </div>
+        </div>,
         document.body
       )}
 
