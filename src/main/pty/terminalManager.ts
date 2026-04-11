@@ -7,15 +7,16 @@ function defaultShell(): string {
   return process.env.SHELL || '/bin/bash'
 }
 
-/** Ensure Homebrew paths are available in the PTY environment. */
-function enrichedPath(): string {
+/** Ensure Homebrew paths are available — mutates process.env.PATH once at startup. */
+function ensureBrewPaths(): void {
+  if (process.platform === 'win32') return
   const current = process.env.PATH || '/usr/bin:/bin'
-  if (process.platform === 'win32') return current
   const extra = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin']
   const parts = current.split(':')
   const missing = extra.filter(p => !parts.includes(p))
-  return missing.length ? [...missing, ...parts].join(':') : current
+  if (missing.length) process.env.PATH = [...missing, ...parts].join(':')
 }
+ensureBrewPaths()
 
 export class TerminalManager {
   private win: BrowserWindow
@@ -60,7 +61,7 @@ export class TerminalManager {
         cols: Math.max(1, cols || 80),
         rows: Math.max(1, rows || 24),
         cwd: cwd || homedir(),
-        env: { ...process.env, PATH: enrichedPath() } as Record<string, string>
+        env: process.env as Record<string, string>
       })
       this.procs.set(paneId, proc)
       this.buffers.set(paneId, [])
