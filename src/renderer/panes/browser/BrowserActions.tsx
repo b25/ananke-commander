@@ -107,6 +107,7 @@ export function BrowserActions({ navHistory, pane, onUpdate }: Props) {
                 role="menuitem"
                 title={entry.url}
                 onClick={() => {
+                  void window.ananke.browser.navigate(pane.id, entry.url)
                   onUpdate({ ...pane, url: entry.url })
                   setOpen(false)
                 }}
