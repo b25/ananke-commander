@@ -386,18 +386,22 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     }
   }
 
+  const renamingInFlight = useRef(false)
   const commitRename = async () => {
-    if (!renaming) return
+    if (!renaming || renamingInFlight.current) return
     const newName = renaming.name.trim()
-    if (!newName) { setRenaming(null); return }
+    if (!newName || newName === renaming.path.split(/[/\\]/).pop()) { setRenaming(null); return }
     const dir = renaming.side === 'left' ? pane.leftPath : pane.rightPath
     const newPath = joinPath(dir, newName)
+    renamingInFlight.current = true
     try {
       await window.ananke.fs.rename(renaming.path, newPath)
       setRenaming(null)
       refreshBoth()
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      renamingInFlight.current = false
     }
   }
 
