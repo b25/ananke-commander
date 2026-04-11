@@ -16,7 +16,9 @@ const DEFAULT_PANE_SIZES: Record<PaneType, { w: number; h: number }> = {
   'terminal':     { w: 720, h: 450 },
   'browser':      { w: 720, h: 450 },
   'notes':        { w: 720, h: 450 },
-  'radar':        { w: 720, h: 450 }
+  'radar':        { w: 720, h: 450 },
+  'gitui':        { w: 720, h: 450 },
+  'api-toolkit':  { w: 720, h: 450 }
 }
 
 function injectPaneGeometry(panes: PaneState[]): PaneState[] {

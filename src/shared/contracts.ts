@@ -1,4 +1,4 @@
-export type PaneType = 'file-browser' | 'terminal' | 'browser' | 'notes' | 'radar'
+export type PaneType = 'file-browser' | 'terminal' | 'browser' | 'notes' | 'radar' | 'gitui' | 'api-toolkit'
 
 export interface PrivacySettings {
   terminalHistoryMax: number
@@ -67,12 +67,24 @@ export interface RadarPaneState extends PaneStateBase {
   pathHistory: string[]
 }
 
+export interface GitUiPaneState extends PaneStateBase {
+  type: 'gitui'
+  cwd: string
+}
+
+export interface ApiToolkitPaneState extends PaneStateBase {
+  type: 'api-toolkit'
+  cwd: string
+}
+
 export type PaneState =
   | FileBrowserPaneState
   | TerminalPaneState
   | BrowserPaneState
   | NotesPaneState
   | RadarPaneState
+  | GitUiPaneState
+  | ApiToolkitPaneState
 
 export interface RecentlyClosedEntry {
   id: string

@@ -40,10 +40,10 @@ export class TerminalManager {
     }
   }
 
-  spawn(paneId: string, cols: number, rows: number, cwd?: string): void {
+  spawn(paneId: string, cols: number, rows: number, cwd?: string, cmd?: string, argsOverride?: string[]): void {
     this.dispose(paneId)
-    const shell = defaultShell()
-    const args = process.platform !== 'win32' ? ['--login'] : []
+    const shell = cmd || defaultShell()
+    const args = argsOverride || (process.platform !== 'win32' && !cmd ? ['--login'] : [])
     try {
       const proc = pty.spawn(shell, args, {
         name: 'xterm-256color',

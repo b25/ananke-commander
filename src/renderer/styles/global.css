@@ -1240,6 +1240,165 @@ select {
   white-space: nowrap;
 }
 
+/* ── API Toolkit ───────────────────────────────────────── */
+
+.api-toolkit-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.api-toolkit-tabs {
+  display: flex;
+  background: var(--rail);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.api-toolkit-tab {
+  padding: 6px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.api-toolkit-tab:hover {
+  color: var(--text);
+}
+
+.api-toolkit-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.api-toolkit-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.api-toolkit-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  color: var(--muted);
+  text-align: center;
+}
+
+.api-toolkit-placeholder h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.api-toolkit-placeholder p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.api-toolkit-grpc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.api-toolkit-section {
+  background: var(--rail);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: var(--space-md);
+}
+
+.api-toolkit-section-label {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.api-toolkit-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.api-toolkit-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--header);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.1s;
+}
+
+.api-toolkit-file-btn:hover {
+  border-color: var(--accent);
+}
+
+.api-toolkit-file-name {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.api-toolkit-type-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.api-toolkit-type-row select {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.api-toolkit-error {
+  color: var(--danger);
+  padding: 8px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.api-toolkit-result {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.api-toolkit-json {
+  flex: 1;
+  min-height: 200px;
+  resize: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: var(--space-sm);
+}
+
 /* ── Radar enhancements ───────────────────────────────── */
 
 .radar-total-size {

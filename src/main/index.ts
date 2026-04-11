@@ -138,7 +138,7 @@ function registerIpcHandlers(): void {
         max
       )
     }
-    if (pane?.type === 'terminal') getTerminals().dispose(paneId)
+    if (pane?.type === 'terminal' || pane?.type === 'gitui') getTerminals().dispose(paneId)
     if (pane?.type === 'browser') getBrowserPanes().destroy(paneId)
     stateStore!.replaceWorkspacePanes(workspaceId, panes, active)
     return stateStore!.getSnapshot()
@@ -236,8 +236,8 @@ function registerIpcHandlers(): void {
     getFolderSizeMgr().cancel(requestId)
   })
 
-  ipcMain.handle('pty:spawn', (_e, paneId: string, cols: number, rows: number, cwd?: string) => {
-    getTerminals().spawn(paneId, cols, rows, cwd)
+  ipcMain.handle('pty:spawn', (_e, paneId: string, cols: number, rows: number, cwd?: string, cmd?: string, args?: string[]) => {
+    getTerminals().spawn(paneId, cols, rows, cwd, cmd, args)
   })
 
   ipcMain.handle('pty:write', (_e, paneId: string, data: string) => {

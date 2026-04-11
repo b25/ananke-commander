@@ -7,6 +7,8 @@ const PANE_ICONS: Record<PaneType, string> = {
   'browser': '🌐',
   'notes': '📝',
   'radar': '📡',
+  'gitui': '🧰',
+  'api-toolkit': '🛠'
 }
 
 type Props = {

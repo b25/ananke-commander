@@ -35,6 +35,10 @@ function paneToToml(p: PaneState): Record<string, unknown> {
     const r = p as RadarPaneState
     base.root_path = r.rootPath.replace(/\\/g, '/')
     base.path_history = r.pathHistory.map(s => s.replace(/\\/g, '/'))
+  } else if (p.type === 'gitui') {
+    base.cwd = (p as import('../shared/contracts.js').GitUiPaneState).cwd.replace(/\\/g, '/')
+  } else if (p.type === 'api-toolkit') {
+    base.cwd = (p as import('../shared/contracts.js').ApiToolkitPaneState).cwd.replace(/\\/g, '/')
   }
   return base
 }
@@ -129,6 +133,12 @@ function parsePaneFromToml(raw: unknown, idx: number): PaneState {
       rootPath: str(raw.root_path, home),
       pathHistory: Array.isArray(raw.path_history) ? raw.path_history.map(s => str(s)) : [],
     } satisfies RadarPaneState
+  }
+  if (type === 'gitui') {
+    return { ...base, type: 'gitui', cwd: str(raw.cwd, home) } satisfies import('../shared/contracts.js').GitUiPaneState
+  }
+  if (type === 'api-toolkit') {
+    return { ...base, type: 'api-toolkit', cwd: str(raw.cwd, home) } satisfies import('../shared/contracts.js').ApiToolkitPaneState
   }
   throw new Error(`Unknown pane type: "${type}"`)
 }

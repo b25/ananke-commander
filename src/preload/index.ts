@@ -97,8 +97,8 @@ const api = {
   },
 
   pty: {
-    spawn: (paneId: string, cols: number, rows: number, cwd?: string) =>
-      ipcRenderer.invoke('pty:spawn', paneId, cols, rows, cwd),
+    spawn: (paneId: string, cols: number, rows: number, cwd?: string, cmd?: string, args?: string[]) =>
+      ipcRenderer.invoke('pty:spawn', paneId, cols, rows, cwd, cmd, args),
     write: (paneId: string, data: string) => ipcRenderer.invoke('pty:write', paneId, data),
     resize: (paneId: string, cols: number, rows: number) =>
       ipcRenderer.invoke('pty:resize', paneId, cols, rows),

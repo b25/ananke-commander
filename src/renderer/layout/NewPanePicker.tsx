@@ -6,6 +6,8 @@ const OPTIONS: { type: PaneType; label: string; icon: string }[] = [
   { type: 'terminal', label: 'Terminal', icon: '🖥' },
   { type: 'browser', label: 'Browser', icon: '🌐' },
   { type: 'notes', label: 'Notes', icon: '📝' },
+  { type: 'gitui', label: 'GitUI', icon: '🧰' },
+  { type: 'api-toolkit', label: 'API Toolkit', icon: '🛠' }
 ]
 
 interface Props {

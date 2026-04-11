@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AppStateSnapshot, BrowserPaneState, FileBrowserPaneState, NotesPaneState, PaneState, PaneType, RadarPaneState, TerminalPaneState } from '../../shared/contracts'
+import type { ApiToolkitPaneState, AppStateSnapshot, BrowserPaneState, FileBrowserPaneState, GitUiPaneState, NotesPaneState, PaneState, PaneType, RadarPaneState, TerminalPaneState } from '../../shared/contracts'
 import { WorkspaceRail } from '../layout/WorkspaceRail'
 import { CanvasWorkspace } from '../layout/CanvasWorkspace'
 import { ScreenSelector } from '../layout/ScreenSelector'
@@ -10,6 +10,8 @@ import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { TomlEditorModal } from '../layout/TomlEditorModal'
 import { DiagOverlay } from '../layout/DiagOverlay'
 import { FileBrowserPane } from '../panes/file-browser/FileBrowserPane'
+import { GitUiPane } from '../panes/gitui/GitUiPane'
+import { ApiToolkitPane } from '../panes/api-toolkit/ApiToolkitPane'
 import { TerminalPane } from '../panes/terminal/TerminalPane'
 import { BrowserPlaceholderPane } from '../panes/browser/BrowserPlaceholderPane'
 import { NotesPane } from '../panes/notes/NotesPane'
@@ -301,6 +303,8 @@ export function App() {
     else if (type === 'terminal') p = { ...base, type: 'terminal', title: 'Terminal', cwd: home } satisfies TerminalPaneState
     else if (type === 'browser') p = { ...base, type: 'browser', title: 'Browser', url: 'about:blank' } satisfies BrowserPaneState
     else if (type === 'radar') p = { ...base, type: 'radar', title: 'Radar', rootPath: home, pathHistory: [] } satisfies RadarPaneState
+    else if (type === 'gitui') p = { ...base, type: 'gitui', title: 'GitUI', cwd: home } satisfies GitUiPaneState
+    else if (type === 'api-toolkit') p = { ...base, type: 'api-toolkit', title: 'API Toolkit', cwd: home } satisfies ApiToolkitPaneState
     else p = { ...base, type: 'notes', title: 'Notes', body: '' } satisfies NotesPaneState
 
     const newPanes = [...ws.panes, p]
@@ -419,7 +423,9 @@ export function App() {
     if (pane.type === 'terminal') return <TerminalPane pane={pane} isActive={isActive} scrollback={snap!.settings.privacy.terminalHistoryMax} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'browser') return <BrowserPlaceholderPane pane={pane} isActive={isActive} canvasOffset={displayWs!.canvasOffset} onClose={() => void closePane(pane.id)} onUpdate={(next) => void updatePane(pane.id, next)} />
     if (pane.type === 'radar') return <RadarPane pane={pane} isActive={isActive} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
-    return <NotesPane pane={pane} isActive={isActive} notesUndoMax={snap!.settings.privacy.notesUndoMax} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
+    if (pane.type === 'gitui') return <GitUiPane pane={pane} isActive={isActive} onClose={() => void closePane(pane.id)} />
+    if (pane.type === 'api-toolkit') return <ApiToolkitPane pane={pane} isActive={isActive} onClose={() => void closePane(pane.id)} />
+    if (pane.type === 'notes') return <NotesPane pane={pane} isActive={isActive} notesUndoMax={snap!.settings.privacy.notesUndoMax} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
   }
 
   useEffect(() => {

@@ -8,7 +8,7 @@ function clampScrollback(n: number): number {
   return Math.min(50_000, Math.max(100, Math.floor(n) || 1000))
 }
 
-export function useXterm(paneId: string, cwd: string | undefined, scrollback: number, onTitleChange?: (title: string) => void) {
+export function useXterm(paneId: string, cwd: string | undefined, scrollback: number, onTitleChange?: (title: string) => void, cmd?: string, args?: string[]) {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -80,7 +80,7 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
         try { fit.fit() } catch { /* ignore */ }
         if (!spawned) {
           spawned = true
-          void window.ananke.pty.spawn(paneId, term.cols || 80, term.rows || 24, cwd || undefined)
+          void window.ananke.pty.spawn(paneId, term.cols || 80, term.rows || 24, cwd || undefined, cmd, args)
         } else if (term.cols && term.rows) {
           void window.ananke.pty.resize(paneId, term.cols, term.rows)
         }
@@ -93,7 +93,7 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     if (host.clientWidth > 0 && host.clientHeight > 0) {
       try { fit.fit() } catch { /* ignore */ }
       spawned = true
-      void window.ananke.pty.spawn(paneId, term.cols || 80, term.rows || 24, cwd || undefined)
+      void window.ananke.pty.spawn(paneId, term.cols || 80, term.rows || 24, cwd || undefined, cmd, args)
     }
 
     return () => {
