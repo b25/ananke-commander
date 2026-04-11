@@ -7,16 +7,14 @@ function defaultShell(): string {
   return process.env.SHELL || '/bin/bash'
 }
 
-/** Electron strips Homebrew/nix paths from $PATH on macOS. Restore them. */
-function enrichedEnv(): Record<string, string> {
-  const env = { ...process.env } as Record<string, string>
-  if (process.platform !== 'win32') {
-    const extra = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin']
-    const current = (env.PATH || '').split(':')
-    const missing = extra.filter(p => !current.includes(p))
-    if (missing.length) env.PATH = [...missing, ...current].join(':')
-  }
-  return env
+/** Ensure Homebrew paths are available in the PTY environment. */
+function enrichedPath(): string {
+  const current = process.env.PATH || '/usr/bin:/bin'
+  if (process.platform === 'win32') return current
+  const extra = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin']
+  const parts = current.split(':')
+  const missing = extra.filter(p => !parts.includes(p))
+  return missing.length ? [...missing, ...parts].join(':') : current
 }
 
 export class TerminalManager {
@@ -62,7 +60,7 @@ export class TerminalManager {
         cols: Math.max(1, cols || 80),
         rows: Math.max(1, rows || 24),
         cwd: cwd || homedir(),
-        env: enrichedEnv()
+        env: { ...process.env, PATH: enrichedPath() } as Record<string, string>
       })
       this.procs.set(paneId, proc)
       this.buffers.set(paneId, [])
