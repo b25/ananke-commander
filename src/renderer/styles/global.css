@@ -140,6 +140,7 @@ select {
   flex-shrink: 0;
   background: var(--header);
   border-bottom: 1px solid var(--border);
+  position: relative;
   font-size: var(--text-2xs);
   font-weight: var(--weight-medium);
   letter-spacing: 0.3px;
@@ -332,6 +333,14 @@ select {
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   background: var(--rail);
+  position: relative;
+}
+
+/* Popover menus in the browser toolbar and pane header anchor to
+   the full-width container so they don't overflow the pane edge. */
+.browser-toolbar .layout-picker,
+.pane-header .layout-picker {
+  position: static;
 }
 
 .browser-toolbar__nav {
