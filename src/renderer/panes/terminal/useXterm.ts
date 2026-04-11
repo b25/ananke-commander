@@ -5,7 +5,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 
 function clampScrollback(n: number): number {
-  return Math.min(50_000, Math.max(100, Math.floor(n) || 1000))
+  return Math.min(50_000, Math.max(100, Math.floor(n) || 10_000))
 }
 
 // Track which pane IDs already have a PTY process running in the main process.
@@ -70,7 +70,7 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
 
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 13,
+      fontSize: 8,
       scrollback: clampScrollback(scrollback),
       theme: { background: '#0d1117', foreground: '#e6edf3' }
     })
