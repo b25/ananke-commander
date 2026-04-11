@@ -12,6 +12,7 @@ interface Props {
   onToggleHidden: () => void
   onCopyPath: () => void
   onNewTerminal: () => void
+  onNewGitUI: () => void
   onChmod?: () => void
 }
 
@@ -27,6 +28,7 @@ export function FileBrowserActions({
   onToggleHidden,
   onCopyPath,
   onNewTerminal,
+  onNewGitUI,
   onChmod,
 }: Props) {
   const [open, setOpen] = useState(false)
@@ -106,6 +108,9 @@ export function FileBrowserActions({
           </button>
           <button type="button" className="layout-picker__option" onClick={() => exec(onNewTerminal)} role="menuitem">
             <span className="layout-picker__label">New Terminal Here</span>
+          </button>
+          <button type="button" className="layout-picker__option" onClick={() => exec(onNewGitUI)} role="menuitem">
+            <span className="layout-picker__label">New GitUI Here</span>
           </button>
           {onChmod && (
             <button type="button" className="layout-picker__option" onClick={() => exec(onChmod)} role="menuitem">

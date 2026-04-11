@@ -303,7 +303,7 @@ export function App() {
     else if (type === 'terminal') p = { ...base, type: 'terminal', title: 'Terminal', cwd: opts?.cwd || home } satisfies TerminalPaneState
     else if (type === 'browser') p = { ...base, type: 'browser', title: 'Browser', url: 'about:blank' } satisfies BrowserPaneState
     else if (type === 'radar') p = { ...base, type: 'radar', title: 'Radar', rootPath: home, pathHistory: [] } satisfies RadarPaneState
-    else if (type === 'gitui') p = { ...base, type: 'gitui', title: 'GitUI', cwd: home } satisfies GitUiPaneState
+    else if (type === 'gitui') p = { ...base, type: 'gitui', title: 'GitUI', cwd: opts?.cwd || home } satisfies GitUiPaneState
     else if (type === 'api-toolkit') p = { ...base, type: 'api-toolkit', title: 'API Toolkit', cwd: home } satisfies ApiToolkitPaneState
     else p = { ...base, type: 'notes', title: 'Notes', body: '' } satisfies NotesPaneState
 

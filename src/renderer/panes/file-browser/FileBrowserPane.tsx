@@ -443,7 +443,18 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         },
         {
           label: 'New Terminal Here', onClick: () => {
-            window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'terminal', cwd: activePath } }))
+            const entries = pane.focusedSide === 'left' ? leftEntries : rightEntries
+            const sel = entries.find(e => e.path === ctxMenu.path)
+            const dir = sel?.isDirectory ? sel.path : activePath
+            window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'terminal', cwd: dir } }))
+          }
+        },
+        {
+          label: 'New GitUI Here', onClick: () => {
+            const entries = pane.focusedSide === 'left' ? leftEntries : rightEntries
+            const sel = entries.find(e => e.path === ctxMenu.path)
+            const dir = sel?.isDirectory ? sel.path : activePath
+            window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'gitui', cwd: dir } }))
           }
         },
         ...(window.ananke.platform !== 'win32' ? [{
@@ -529,7 +540,16 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
               else void window.ananke.clipboard.writeText(activePath)
             }}
             onNewTerminal={() => {
-              window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'terminal', cwd: activePath } }))
+              const selDir = selectedPaths.length === 1
+                ? (pane.focusedSide === 'left' ? leftEntries : rightEntries).find(e => e.path === selectedPaths[0] && e.isDirectory)?.path
+                : undefined
+              window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'terminal', cwd: selDir || activePath } }))
+            }}
+            onNewGitUI={() => {
+              const selDir = selectedPaths.length === 1
+                ? (pane.focusedSide === 'left' ? leftEntries : rightEntries).find(e => e.path === selectedPaths[0] && e.isDirectory)?.path
+                : undefined
+              window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'gitui', cwd: selDir || activePath } }))
             }}
             onChmod={window.ananke.platform !== 'win32' ? () => {
               if (selectedPaths.length !== 1) return
