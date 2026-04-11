@@ -335,6 +335,10 @@ function registerIpcHandlers(): void {
     getBrowserPanes().stopFindInPage(paneId)
   })
 
+  ipcMain.handle('browser:getPageInfo', async (_e, paneId: string) => {
+    return getBrowserPanes().getPageInfo(paneId)
+  })
+
   ipcMain.handle('shell:openExternal', async (_e, url: string) => {
     if (isNavigationAllowed(url)) await shell.openExternal(url)
   })

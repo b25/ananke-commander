@@ -1,4 +1,4 @@
-import { BrowserWindow, WebContentsView } from 'electron'
+import { BrowserWindow, Menu, MenuItem, WebContentsView, clipboard, shell } from 'electron'
 import Store from 'electron-store'
 import { attachGuestWebContentsGuards, hardenGuestSession, isNavigationAllowed } from '../security/browserSecurity.js'
 import { HarCapture } from './harCapture.js'
@@ -118,6 +118,9 @@ export class BrowserPaneManager {
         if (!win.isDestroyed())
           win.webContents.send('browser:loadingState', { paneId: id, loading: false })
       })
+      view.webContents.on('context-menu', (_e, params) => {
+        this.showContextMenu(id, view!, params)
+      })
       this.mainWindow.contentView.addChildView(view)
       this.views.set(paneId, view)
     }
@@ -205,6 +208,89 @@ export class BrowserPaneManager {
     const view = this.views.get(paneId)
     if (!view) return
     view.webContents.stopFindInPage('clearSelection')
+  }
+
+  private showContextMenu(paneId: string, view: WebContentsView, params: Electron.ContextMenuParams): void {
+    const wc = view.webContents
+    const menu = new Menu()
+
+    // Text editing actions
+    if (params.isEditable) {
+      menu.append(new MenuItem({ label: 'Cut', role: 'cut', enabled: params.editFlags.canCut }))
+      menu.append(new MenuItem({ label: 'Copy', role: 'copy', enabled: params.editFlags.canCopy }))
+      menu.append(new MenuItem({ label: 'Paste', role: 'paste', enabled: params.editFlags.canPaste }))
+      menu.append(new MenuItem({ label: 'Select All', role: 'selectAll' }))
+      menu.append(new MenuItem({ type: 'separator' }))
+    } else if (params.selectionText) {
+      menu.append(new MenuItem({ label: 'Copy', role: 'copy' }))
+      menu.append(new MenuItem({
+        label: `Search Google for "${params.selectionText.slice(0, 30)}${params.selectionText.length > 30 ? '...' : ''}"`,
+        click: () => {
+          const url = 'https://www.google.com/search?q=' + encodeURIComponent(params.selectionText)
+          void wc.loadURL(url)
+        }
+      }))
+      menu.append(new MenuItem({ type: 'separator' }))
+    }
+
+    // Link actions
+    if (params.linkURL) {
+      menu.append(new MenuItem({
+        label: 'Open Link in System Browser',
+        click: () => { if (isNavigationAllowed(params.linkURL)) void shell.openExternal(params.linkURL) }
+      }))
+      menu.append(new MenuItem({
+        label: 'Copy Link Address',
+        click: () => clipboard.writeText(params.linkURL)
+      }))
+      menu.append(new MenuItem({ type: 'separator' }))
+    }
+
+    // Image actions
+    if (params.mediaType === 'image' && params.srcURL) {
+      menu.append(new MenuItem({
+        label: 'Copy Image Address',
+        click: () => clipboard.writeText(params.srcURL)
+      }))
+      menu.append(new MenuItem({ type: 'separator' }))
+    }
+
+    // Navigation
+    menu.append(new MenuItem({ label: 'Back', click: () => wc.goBack(), enabled: wc.canGoBack() }))
+    menu.append(new MenuItem({ label: 'Forward', click: () => wc.goForward(), enabled: wc.canGoForward() }))
+    menu.append(new MenuItem({ label: 'Reload', click: () => wc.reload() }))
+    menu.append(new MenuItem({ type: 'separator' }))
+
+    // Save to vault
+    menu.append(new MenuItem({
+      label: 'Save Page to Obsidian Vault',
+      click: () => {
+        if (!this.mainWindow.isDestroyed())
+          this.mainWindow.webContents.send('browser:clipToVault', { paneId })
+      }
+    }))
+    menu.append(new MenuItem({ type: 'separator' }))
+
+    // DevTools
+    menu.append(new MenuItem({
+      label: 'Inspect Element',
+      click: () => { wc.inspectElement(params.x, params.y) }
+    }))
+
+    menu.popup()
+  }
+
+  async getPageInfo(paneId: string): Promise<{ title: string; url: string; selectedText: string; bodyText: string } | null> {
+    const view = this.views.get(paneId)
+    if (!view || view.webContents.isDestroyed()) return null
+    const wc = view.webContents
+    const [title, url, selectedText, bodyText] = await Promise.all([
+      wc.executeJavaScript('document.title').catch(() => ''),
+      wc.executeJavaScript('window.location.href').catch(() => ''),
+      wc.executeJavaScript('window.getSelection().toString()').catch(() => ''),
+      wc.executeJavaScript('document.body.innerText.slice(0, 50000)').catch(() => '')
+    ])
+    return { title, url, selectedText, bodyText }
   }
 
   suspend(paneId: string): void {

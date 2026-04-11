@@ -169,7 +169,14 @@ const api = {
     setZoom: (paneId: string, delta: number): Promise<number> => ipcRenderer.invoke('browser:setZoom', paneId, delta),
     resetZoom: (paneId: string) => ipcRenderer.invoke('browser:resetZoom', paneId),
     findInPage: (paneId: string, text: string, forward: boolean) => ipcRenderer.invoke('browser:findInPage', paneId, text, forward),
-    stopFindInPage: (paneId: string) => ipcRenderer.invoke('browser:stopFindInPage', paneId)
+    stopFindInPage: (paneId: string) => ipcRenderer.invoke('browser:stopFindInPage', paneId),
+    getPageInfo: (paneId: string): Promise<{ title: string; url: string; selectedText: string; bodyText: string } | null> =>
+      ipcRenderer.invoke('browser:getPageInfo', paneId),
+    onClipToVault: (cb: (msg: { paneId: string }) => void) => {
+      const fn = (_: unknown, msg: { paneId: string }) => cb(msg)
+      ipcRenderer.on('browser:clipToVault', fn)
+      return () => ipcRenderer.removeListener('browser:clipToVault', fn)
+    }
   },
 
   shell: {

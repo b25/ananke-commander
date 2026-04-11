@@ -50,11 +50,15 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
         onUpdateRef.current({ ...paneRef.current, url })
       }
     })
+    const unsubClip = window.ananke.browser.onClipToVault(({ paneId }) => {
+      if (paneId === pane.id) void clipPageToVault(pane.id)
+    })
     return () => {
       unsub()
       unsubTitle()
       unsubLoading()
       unsubUrl()
+      unsubClip()
     }
   }, [pane.id])
 
@@ -162,6 +166,34 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     return () => window.removeEventListener('keydown', onKey)
   }, [isActive, pane.id])
 
+  const clipPageToVault = async (id: string) => {
+    const snap = await window.ananke.state.get()
+    const { vaultPath, subfolder } = snap.settings.obsidian
+    if (!vaultPath) {
+      alert('Set Obsidian vault path in Settings first.')
+      return
+    }
+    const info = await window.ananke.browser.getPageInfo(id)
+    if (!info) return
+    const content = info.selectedText || info.bodyText.slice(0, 20000)
+    const date = new Date().toISOString()
+    const safeTitle = (info.title || 'Untitled').replace(/[/\\:*?"<>|]/g, '-')
+    const body = [
+      '---',
+      `title: "${info.title}"`,
+      `url: ${info.url}`,
+      `date: ${date}`,
+      `tags: [web-clipper]`,
+      '---',
+      '',
+      `# ${info.title}`,
+      '',
+      content
+    ].join('\n')
+    await window.ananke.notes.saveVault(vaultPath, subfolder, safeTitle, body)
+    alert(`Saved to vault: ${subfolder}/${safeTitle}.md`)
+  }
+
   const looksLikeUrl = (input: string): boolean => {
     if (input.includes(' ')) return false
     // IP address (v4)
@@ -242,7 +274,7 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
             onClick={() => void window.ananke.shell.openExternal(pane.url)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
-          <BrowserMenu paneId={pane.id} onFindToggle={() => { setFindOpen(v => !v); setTimeout(() => findRef.current?.focus(), 50) }} />
+          <BrowserMenu paneId={pane.id} onFindToggle={() => { setFindOpen(v => !v); setTimeout(() => findRef.current?.focus(), 50) }} onClipToVault={() => void clipPageToVault(pane.id)} />
         </div>
         {findOpen && (
           <div className="browser-find-bar">
