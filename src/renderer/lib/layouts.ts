@@ -71,6 +71,21 @@ export const LAYOUTS: Layout[] = [
       { xFrac: 0,   yFrac: T * 2, wFrac: 0.5, hFrac: T },
       { xFrac: 0.5, yFrac: T * 2, wFrac: 0.5, hFrac: T },
     ]
+  },
+  {
+    id: '9-grid',
+    label: '3×3',
+    slots: [
+      { xFrac: 0,     yFrac: 0,     wFrac: T, hFrac: T },
+      { xFrac: T,     yFrac: 0,     wFrac: T, hFrac: T },
+      { xFrac: T * 2, yFrac: 0,     wFrac: T, hFrac: T },
+      { xFrac: 0,     yFrac: T,     wFrac: T, hFrac: T },
+      { xFrac: T,     yFrac: T,     wFrac: T, hFrac: T },
+      { xFrac: T * 2, yFrac: T,     wFrac: T, hFrac: T },
+      { xFrac: 0,     yFrac: T * 2, wFrac: T, hFrac: T },
+      { xFrac: T,     yFrac: T * 2, wFrac: T, hFrac: T },
+      { xFrac: T * 2, yFrac: T * 2, wFrac: T, hFrac: T },
+    ]
   }
 ]
 
@@ -82,13 +97,14 @@ export const LAYOUT_SLOTS: Record<string, number> = {
   '4-quad':  4,
   '1h-3v':   4,
   '6-grid':  6,
+  '9-grid':  9,
 }
 
 /**
  * Auto-progression path: adding panes advances through these tiers only.
  * Manual layouts (1h-2v, 1h-3v) are available in LayoutPicker but not in auto-progression.
  */
-export const LAYOUT_PROGRESSION = ['full', 'halves', '4-quad', '6-grid'] as const
+export const LAYOUT_PROGRESSION = ['full', 'halves', '4-quad', '6-grid', '9-grid'] as const
 export type ProgressionLayoutId = typeof LAYOUT_PROGRESSION[number]
 
 /**
@@ -115,7 +131,8 @@ export function bestLayout(n: number): Layout {
   if (n === 3) return LAYOUTS[2]  // 1h-2v
   if (n === 4) return LAYOUTS[3]  // 4-quad
   if (n <= 6)  return LAYOUTS[5]  // 6-grid
-  return LAYOUTS[5]               // max — extras stay put
+  if (n <= 9)  return LAYOUTS[6]  // 9-grid
+  return LAYOUTS[6]               // max — extras stay put
 }
 
 const MIN_W = 300
@@ -158,7 +175,15 @@ export function applyLayout(
   const onScreen  = allPanes.filter(p => Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow)
   const offScreen = allPanes.filter(p => Math.floor(p.xPct) !== screenCol || Math.floor(p.yPct) !== screenRow)
 
-  const arranged = onScreen.map((pane, i) => {
+  // Sort spatially (top-to-bottom, left-to-right) so slot assignment is
+  // visually predictable regardless of workspace insertion order.
+  const sorted = [...onScreen].sort((a, b) => {
+    const aY = a.yPct - screenRow, bY = b.yPct - screenRow
+    if (Math.abs(aY - bY) > 0.001) return aY - bY
+    return (a.xPct - screenCol) - (b.xPct - screenCol)
+  })
+
+  const arranged = sorted.map((pane, i) => {
     const slot = layout.slots[i]
     if (!slot) return pane  // more panes than slots — leave in place
     const xPct = screenCol + slot.xFrac

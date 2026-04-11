@@ -90,7 +90,6 @@ export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Pro
               onClick={() => pick(layout)}
             >
               <LayoutThumb slots={layout.slots} width={60} height={44} />
-              <span className="layout-picker__label">{layout.label}</span>
               {layout.id === activeLayoutId && <span className="layout-picker__check">✓</span>}
             </button>
           ))}

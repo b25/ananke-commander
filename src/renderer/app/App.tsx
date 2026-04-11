@@ -17,7 +17,7 @@ import { LAYOUTS, LAYOUT_SLOTS, applyLayout, bestLayout, nextProgressionLayout, 
 
 const MIN_W = 300
 const MIN_H = 200
-const MAX_WINDOWS_PER_WORKSPACE = 24
+const MAX_WINDOWS_PER_WORKSPACE = 36
 
 function applyFractions(panes: PaneState[], vpW: number, vpH: number): PaneState[] {
   return panes.map((p) => ({ ...p, x: p.xPct * vpW, y: p.yPct * vpH, width: Math.max(MIN_W, p.wPct * vpW), height: Math.max(MIN_H, p.hPct * vpH) }))
@@ -168,7 +168,7 @@ export function App() {
     // Hard cap across all screens
     if (ws.panes.length >= MAX_WINDOWS_PER_WORKSPACE) {
       if (addErrorTimer.current) clearTimeout(addErrorTimer.current)
-      setAddError('Maximum 24 windows per workspace reached')
+      setAddError('Maximum 36 windows per workspace reached')
       addErrorTimer.current = setTimeout(() => setAddError(null), 4000)
       return
     }
@@ -201,7 +201,7 @@ export function App() {
           await window.ananke.state.setCanvasOffset(ws.id, tCol * vpW, tRow * vpH)
         } else {
           if (addErrorTimer.current) clearTimeout(addErrorTimer.current)
-          setAddError('Maximum 24 windows per workspace reached')
+          setAddError('Maximum 36 windows per workspace reached')
           addErrorTimer.current = setTimeout(() => setAddError(null), 4000)
           return
         }
@@ -231,6 +231,7 @@ export function App() {
     if (!ws) return
     let newPanes = ws.panes
     const layoutChanges: Record<number, string> = {}
+    const collapsedChanges: Record<number, string[]> = {}
 
     for (const screenIdx of [0, 1, 2, 3] as const) {
       const col = screenIdx % 2
@@ -242,14 +243,34 @@ export function App() {
       const target  = fittingLayout(intent, newVpW, newVpH)
       if (target !== current) {
         const layout = LAYOUTS.find(l => l.id === target)!
-        newPanes = applyLayout(newPanes, layout, col, row, newVpW, newVpH)
         layoutChanges[screenIdx] = target
+
+        // Collapse excess panes when downgrading to a layout with fewer slots
+        const existingCollapsed = ws.screenCollapsed?.[screenIdx] ?? []
+        const existingCollapsedSet = new Set(existingCollapsed)
+        const visibleOnScreen = newPanes.filter(
+          p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && !existingCollapsedSet.has(p.id)
+        )
+        let newCollapsed = existingCollapsed
+        if (layout.slots.length < visibleOnScreen.length) {
+          const excess = visibleOnScreen.slice(layout.slots.length).map(p => p.id)
+          newCollapsed = [...existingCollapsed, ...excess]
+          collapsedChanges[screenIdx] = newCollapsed
+        }
+
+        const newCollapsedSet = new Set(newCollapsed)
+        const toArrange  = newPanes.filter(p => !(Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && newCollapsedSet.has(p.id)))
+        const toCollapse = newPanes.filter(p =>   Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && newCollapsedSet.has(p.id))
+        newPanes = [...applyLayout(toArrange, layout, col, row, newVpW, newVpH), ...toCollapse]
       }
     }
 
     if (Object.keys(layoutChanges).length === 0) return
     for (const [idx, layoutId] of Object.entries(layoutChanges)) {
       await window.ananke.state.setScreenLayout(ws.id, Number(idx), layoutId)
+    }
+    for (const [idx, ids] of Object.entries(collapsedChanges)) {
+      await window.ananke.state.setScreenCollapsed(ws.id, Number(idx), ids)
     }
     setSnap(await window.ananke.state.replacePanes(ws.id, newPanes, ws.activePaneId))
   }, [ws])
