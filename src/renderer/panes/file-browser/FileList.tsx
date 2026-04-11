@@ -26,6 +26,7 @@ type Props = {
   entries: ListDirEntry[]
   selected: Set<string>
   focused: boolean
+  focusName?: string | null
   renaming: { path: string; name: string } | null
   onRenameChange: (name: string) => void
   onRenameCommit: () => void
@@ -41,6 +42,7 @@ export function FileList({
   entries,
   selected,
   focused,
+  focusName,
   renaming,
   onRenameChange,
   onRenameCommit,
@@ -64,6 +66,21 @@ export function FileList({
     : { name: '..', path: parentDir(path), isDirectory: true, size: 0, mtimeMs: 0 }
 
   const displayEntries = parentEntry ? [parentEntry, ...entries] : [...entries]
+
+  // Auto-select a named entry after navigating up (so cursor lands on the folder we came from)
+  const prevFocusName = useRef<string | null>(null)
+  useEffect(() => {
+    if (focusName && focusName !== prevFocusName.current && displayEntries.length > 0) {
+      const idx = displayEntries.findIndex(e => e.name === focusName)
+      if (idx >= 0) {
+        onSelect([displayEntries[idx].path], false)
+        anchorIdxRef.current = idx
+        // Defer scroll until virtualizer is ready
+        setTimeout(() => virtualizer.scrollToIndex(idx, { align: 'auto' }), 0)
+      }
+    }
+    prevFocusName.current = focusName ?? null
+  }, [focusName, path])
 
   const virtualizer = useVirtualizer({
     count: displayEntries.length,

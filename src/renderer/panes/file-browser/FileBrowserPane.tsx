@@ -34,6 +34,15 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const [renaming, setRenaming] = useState<{ path: string; side: 'left' | 'right'; name: string } | null>(null)
   const [editingPath, setEditingPath] = useState<{ side: 'left' | 'right'; value: string } | null>(null)
   const activeJobId = useRef<string | null>(null)
+  // Track folder name to auto-select after navigating up
+  const [leftFocusName, setLeftFocusName] = useState<string | null>(null)
+  const [rightFocusName, setRightFocusName] = useState<string | null>(null)
+  // Path history for Alt+Left/Right back/forward
+  const leftHistoryBack = useRef<string[]>([])
+  const leftHistoryFwd = useRef<string[]>([])
+  const rightHistoryBack = useRef<string[]>([])
+  const rightHistoryFwd = useRef<string[]>([])
+  const skipHistoryPush = useRef(false)
 
   const leftSel = new Set(pane.leftSelection)
   const rightSel = new Set(pane.rightSelection)
@@ -79,20 +88,47 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const visibleLeftEntries = showHidden ? leftEntries : leftEntries.filter(e => !e.name.startsWith('.'))
   const visibleRightEntries = showHidden ? rightEntries : rightEntries.filter(e => !e.name.startsWith('.'))
 
+  // Safe file extensions that don't need open confirmation
+  const SAFE_EXTS = new Set(['.txt','.md','.pdf','.jpg','.jpeg','.png','.gif','.svg','.webp','.bmp','.html','.htm','.css','.json','.xml','.csv','.log','.toml','.yaml','.yml'])
+
+  const navigateTo = useCallback((side: 'left' | 'right', newPath: string) => {
+    const oldPath = side === 'left' ? pane.leftPath : pane.rightPath
+    if (oldPath === newPath) return
+    // Push to history
+    if (!skipHistoryPush.current) {
+      const back = side === 'left' ? leftHistoryBack : rightHistoryBack
+      const fwd = side === 'left' ? leftHistoryFwd : rightHistoryFwd
+      back.current.push(oldPath)
+      if (back.current.length > 50) back.current.shift()
+      fwd.current = []
+    }
+    skipHistoryPush.current = false
+    // Extract folder name for auto-select when going up
+    const oldName = oldPath.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? null
+    if (side === 'left') {
+      setLeftFocusName(oldName)
+      onUpdate({ ...pane, focusedSide: 'left', leftPath: newPath })
+    } else {
+      setRightFocusName(oldName)
+      onUpdate({ ...pane, focusedSide: 'right', rightPath: newPath })
+    }
+  }, [pane, onUpdate])
+
   const activateEntry = useCallback(
     async (side: 'left' | 'right', entry: ListDirEntry) => {
       if (entry.isDirectory) {
-        if (side === 'left') {
-          onUpdate({ ...pane, focusedSide: 'left', leftPath: entry.path })
-        } else {
-          onUpdate({ ...pane, focusedSide: 'right', rightPath: entry.path })
-        }
+        navigateTo(side, entry.path)
         return
+      }
+      // Confirm before opening non-safe file types
+      const ext = entry.name.includes('.') ? '.' + entry.name.split('.').pop()!.toLowerCase() : ''
+      if (!SAFE_EXTS.has(ext)) {
+        if (!confirm(`Open "${entry.name}" with system default app?`)) return
       }
       const err = await window.ananke.shell.openPath(entry.path)
       if (err) alert(err)
     },
-    [onUpdate, pane]
+    [navigateTo]
   )
 
   const openEditor = useCallback(
@@ -206,10 +242,54 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         e.preventDefault()
         onUpdate({ ...pane, focusedSide: pane.focusedSide === 'left' ? 'right' : 'left' })
       }
+      // Ctrl+Right: set right pane to selected folder (when left focused)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowRight' && pane.focusedSide === 'left') {
+        e.preventDefault()
+        const sel = selectedPaths[0]
+        if (sel) {
+          const entry = leftEntries.find(en => en.path === sel)
+          const target = entry?.isDirectory ? entry.path : pane.leftPath
+          onUpdate({ ...pane, rightPath: target })
+        }
+      }
+      // Ctrl+Left: set left pane to selected folder (when right focused)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowLeft' && pane.focusedSide === 'right') {
+        e.preventDefault()
+        const sel = selectedPaths[0]
+        if (sel) {
+          const entry = rightEntries.find(en => en.path === sel)
+          const target = entry?.isDirectory ? entry.path : pane.rightPath
+          onUpdate({ ...pane, leftPath: target })
+        }
+      }
+      // Alt+Left: navigate back in history
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault()
+        const back = pane.focusedSide === 'left' ? leftHistoryBack : rightHistoryBack
+        const fwd = pane.focusedSide === 'left' ? leftHistoryFwd : rightHistoryFwd
+        if (back.current.length > 0) {
+          const prev = back.current.pop()!
+          fwd.current.push(activePath)
+          skipHistoryPush.current = true
+          navigateTo(pane.focusedSide, prev)
+        }
+      }
+      // Alt+Right: navigate forward in history
+      if (e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault()
+        const back = pane.focusedSide === 'left' ? leftHistoryBack : rightHistoryBack
+        const fwd = pane.focusedSide === 'left' ? leftHistoryFwd : rightHistoryFwd
+        if (fwd.current.length > 0) {
+          const next = fwd.current.pop()!
+          back.current.push(activePath)
+          skipHistoryPush.current = true
+          navigateTo(pane.focusedSide, next)
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isActive, selectedPaths, doDelete, openEditor, activePath, refreshActive, pane, leftEntries, rightEntries, onUpdate])
+  }, [isActive, selectedPaths, doDelete, openEditor, activePath, refreshActive, pane, leftEntries, rightEntries, onUpdate, navigateTo])
 
   useEffect(() => {
     if (!isActive) return
@@ -412,11 +492,12 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 entries={visibleLeftEntries}
                 selected={leftSel}
                 focused={pane.focusedSide === 'left'}
+                focusName={leftFocusName}
                 renaming={renaming?.side === 'left' ? renaming : null}
                 onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
                 onRenameCommit={commitRename}
                 onRenameCancel={() => setRenaming(null)}
-                onPathChange={(p) => onUpdate({ ...pane, leftPath: p })}
+                onPathChange={(p) => navigateTo('left', p)}
                 onSelect={(paths, add) => {
                   const next = add ? new Set([...pane.leftSelection, ...paths]) : new Set(paths)
                   onUpdate({
@@ -436,11 +517,12 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 entries={visibleRightEntries}
                 selected={rightSel}
                 focused={pane.focusedSide === 'right'}
+                focusName={rightFocusName}
                 renaming={renaming?.side === 'right' ? renaming : null}
                 onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
                 onRenameCommit={commitRename}
                 onRenameCancel={() => setRenaming(null)}
-                onPathChange={(p) => onUpdate({ ...pane, rightPath: p })}
+                onPathChange={(p) => navigateTo('right', p)}
                 onSelect={(paths, add) => {
                   const next = add ? new Set([...pane.rightSelection, ...paths]) : new Set(paths)
                   onUpdate({
