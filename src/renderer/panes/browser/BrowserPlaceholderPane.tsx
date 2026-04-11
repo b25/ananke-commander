@@ -23,6 +23,12 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
   const findRef = useRef<HTMLInputElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
 
+  // Keep a ref to the latest pane so IPC callbacks never use stale closures
+  const paneRef = useRef(pane)
+  paneRef.current = pane
+  const onUpdateRef = useRef(onUpdate)
+  onUpdateRef.current = onUpdate
+
   useEffect(() => {
     setUrlInput(pane.url || '')
   }, [pane.url])
@@ -33,7 +39,7 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
       if (paneId === pane.id) setNavHistory(entries)
     })
     const unsubTitle = window.ananke.browser.onTitleUpdate(({ paneId, title }) => {
-      if (paneId === pane.id) onUpdate({ ...pane, title })
+      if (paneId === pane.id) onUpdateRef.current({ ...paneRef.current, title })
     })
     const unsubLoading = window.ananke.browser.onLoadingState(({ paneId, loading: l }) => {
       if (paneId === pane.id) setLoading(l)
@@ -41,7 +47,7 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     const unsubUrl = window.ananke.browser.onUrlUpdate(({ paneId, url }) => {
       if (paneId === pane.id) {
         setUrlInput(url)
-        onUpdate({ ...pane, url })
+        onUpdateRef.current({ ...paneRef.current, url })
       }
     })
     return () => {

@@ -542,11 +542,16 @@ export function App() {
 
   useEffect(() => {
     if (drawer === 'none') return
+    // Hide native browser views so they don't overlay the drawer
+    window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: false }))
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setDrawer('none')
     }
     window.addEventListener('keydown', onEsc)
-    return () => window.removeEventListener('keydown', onEsc)
+    return () => {
+      window.removeEventListener('keydown', onEsc)
+      window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: true }))
+    }
   }, [drawer])
 
   if (!snap || !ws || !displayWs || !displayWsForCanvas) return <div className="app-shell" style={{ padding: 16 }}>Loading…</div>
