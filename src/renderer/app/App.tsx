@@ -4,6 +4,8 @@ import { WorkspaceRail } from '../layout/WorkspaceRail'
 import { CanvasWorkspace } from '../layout/CanvasWorkspace'
 import { ScreenSelector } from '../layout/ScreenSelector'
 import { LayoutPicker } from '../layout/LayoutPicker'
+import { NewPanePicker } from '../layout/NewPanePicker'
+import { AppMenuDropdown } from '../layout/AppMenuDropdown'
 import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { TomlEditorModal } from '../layout/TomlEditorModal'
 import { DiagOverlay } from '../layout/DiagOverlay'
@@ -19,9 +21,22 @@ import { LAYOUTS, LAYOUT_SLOTS, applyLayout, bestLayout, nextProgressionLayout, 
 const MIN_W = 300
 const MIN_H = 200
 const MAX_WINDOWS_PER_WORKSPACE = 36
+const MAX_PANES_PER_SCREEN = 9  // 9-grid is the maximum layout
 
 function applyFractions(panes: PaneState[], vpW: number, vpH: number): PaneState[] {
-  return panes.map((p) => ({ ...p, x: p.xPct * vpW, y: p.yPct * vpH, width: Math.max(MIN_W, p.wPct * vpW), height: Math.max(MIN_H, p.hPct * vpH) }))
+  return panes.map((p) => {
+    const pxLeft = Math.round(p.xPct * vpW)
+    const pxTop = Math.round(p.yPct * vpH)
+    const pxRight = Math.round((p.xPct + p.wPct) * vpW)
+    const pxBottom = Math.round((p.yPct + p.hPct) * vpH)
+    return { 
+      ...p, 
+      x: pxLeft, 
+      y: pxTop, 
+      width: Math.max(MIN_W, pxRight - pxLeft), 
+      height: Math.max(MIN_H, pxBottom - pxTop) 
+    }
+  })
 }
 
 function screenIndex(canvasOffset: { x: number; y: number }, vpW: number, vpH: number): number {
@@ -85,8 +100,8 @@ export function App() {
   let ws = snap?.workspaces.find((w) => w.id === snap.activeWorkspaceId)
   if (snap && !ws && snap.workspaces.length > 0) { ws = snap.workspaces[0]; void window.ananke.state.setActiveWorkspace(ws.id) }
 
-  const vpW = viewportSize.w
-  const vpH = viewportSize.h
+  const vpW = viewportSize?.w ?? 0
+  const vpH = viewportSize?.h ?? 0
   const displayWs = useMemo(
     () => ws ? { ...ws, panes: applyFractions(ws.panes, vpW, vpH) } : ws,
     [ws, vpW, vpH]
@@ -109,6 +124,60 @@ export function App() {
     }
     return counts
   }, [ws])
+
+  // Auto-prune: delete ALL collapsed panes on workspace load so each screen
+  // has exactly the number of panes its layout requires, and downgrade
+  // layouts to match actual pane counts.
+  const pruneRan = useRef<string | null>(null)
+  useEffect(() => {
+    if (!ws || pruneRan.current === ws.id) return
+    // Detect if any screen has collapsed panes or mismatched layout
+    let needsFix = false
+    const allCollapsedIds = new Set(Object.values(ws.screenCollapsed ?? {}).flat())
+    if (allCollapsedIds.size > 0) needsFix = true
+    if (!needsFix) {
+      for (const screenIdx of [0, 1, 2, 3] as const) {
+        const col = screenIdx % 2, row = Math.floor(screenIdx / 2)
+        const onScreen = ws.panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row).length
+        const layoutId = ws.screenLayouts?.[screenIdx] ?? 'full'
+        const slots = LAYOUT_SLOTS[layoutId] ?? 1
+        if (onScreen > 0 && onScreen < slots) { needsFix = true; break }
+      }
+    }
+    if (!needsFix) { pruneRan.current = ws.id; return }
+    pruneRan.current = ws.id
+    void (async () => {
+      let panes = ws.panes.filter(p => !allCollapsedIds.has(p.id))
+      for (const screenIdx of [0, 1, 2, 3] as const) {
+        const col = screenIdx % 2, row = Math.floor(screenIdx / 2)
+        const onScreen = panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row)
+        if (onScreen.length === 0) continue
+        // Pick layout that fits the actual pane count
+        const layout = bestLayout(onScreen.length)
+        panes = applyLayout(panes, layout, col, row, vpW, vpH)
+        await window.ananke.state.setScreenCollapsed(ws.id, screenIdx, [])
+        await window.ananke.state.setScreenLayout(ws.id, screenIdx, layout.id)
+        await window.ananke.state.setIntentLayout(ws.id, screenIdx, layout.id)
+      }
+      setSnap(await window.ananke.state.replacePanes(ws.id, panes, ws.activePaneId))
+    })()
+  }, [ws, vpW, vpH])
+
+  // Sanitize canvas offset on workspace load/switch: snap any fractional or
+  // misaligned offset (e.g. from ResizeObserver floating-point drift or direct
+  // store writes) to the nearest valid screen-grid position.
+  const canvasSnapRan = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!ws || !vpW || !vpH) return
+    const key = `${ws.id}:${ws.canvasOffset.x}:${ws.canvasOffset.y}:${vpW}:${vpH}`
+    if (canvasSnapRan.current.has(key)) return
+    canvasSnapRan.current.add(key)
+    const snappedX = Math.max(0, Math.min(vpW, Math.round(ws.canvasOffset.x / vpW) * vpW))
+    const snappedY = Math.max(0, Math.min(vpH, Math.round(ws.canvasOffset.y / vpH) * vpH))
+    if (snappedX !== ws.canvasOffset.x || snappedY !== ws.canvasOffset.y) {
+      void window.ananke.state.setCanvasOffset(ws.id, snappedX, snappedY).then(setSnap)
+    }
+  }, [ws, vpW, vpH])
 
   const setActivePane = useCallback(async (id: string) => {
     if (!ws) return; setSnap(await window.ananke.state.setActivePane(ws.id, id))
@@ -152,8 +221,16 @@ export function App() {
       newCollapsedIds = [...currentCollapsedIds, ...excess]
     }
 
+    // Cap total panes per screen at MAX_PANES_PER_SCREEN: prune oldest collapsed entries
+    const maxCollapsed = MAX_PANES_PER_SCREEN - newSlots
+    let prunedIds: Set<string> = new Set()
+    if (newCollapsedIds.length > maxCollapsed) {
+      const toPrune = newCollapsedIds.slice(0, newCollapsedIds.length - maxCollapsed)
+      prunedIds = new Set(toPrune)
+      newCollapsedIds = newCollapsedIds.slice(newCollapsedIds.length - maxCollapsed)
+    }
     const newCollapsedSet = new Set(newCollapsedIds)
-    const panesForLayout = ws.panes.filter(p => !newCollapsedSet.has(p.id))
+    const panesForLayout = ws.panes.filter(p => !newCollapsedSet.has(p.id) && !prunedIds.has(p.id))
     const arranged = applyLayout(panesForLayout, layout, screenCol, screenRow, vpW, vpH)
     const collapsedPanes = ws.panes.filter(p => newCollapsedSet.has(p.id))
     const finalPanes = [...arranged, ...collapsedPanes]
@@ -177,7 +254,8 @@ export function App() {
 
     const panesOnScrn = (idx: number): number => {
       const col = idx % 2, row = Math.floor(idx / 2)
-      return ws.panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row).length
+      const collapsedSet = new Set(ws.screenCollapsed?.[idx] ?? [])
+      return ws.panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && !collapsedSet.has(p.id)).length
     }
     const slotsOnScrn = (idx: number): number => LAYOUT_SLOTS[ws.screenLayouts?.[idx] ?? ''] ?? 1
 
@@ -200,7 +278,7 @@ export function App() {
           tCol = spillIdx % 2
           tRow = Math.floor(spillIdx / 2)
           tLayoutId = ws.screenLayouts?.[tIdx] ?? 'full'
-          await window.ananke.state.setCanvasOffset(ws.id, tCol * vpW, tRow * vpH)
+          await window.ananke.state.setCanvasOffset(ws.id, Math.round(tCol * vpW), Math.round(tRow * vpH))
         } else {
           if (addErrorTimer.current) clearTimeout(addErrorTimer.current)
           setAddError('Maximum 36 windows per workspace reached')
@@ -213,8 +291,11 @@ export function App() {
     const id = crypto.randomUUID()
     const home = await window.ananke.getPath('home')
     const wPct = 0.5, hPct = 0.5
-    const w = Math.round(wPct * vpW), h = Math.round(hPct * vpH)
-    const base = { id, x: tCol * vpW, y: tRow * vpH, width: w, height: h, xPct: tCol, yPct: tRow, wPct, hPct }
+    const pxLeft = Math.round(tCol * vpW)
+    const pxTop = Math.round(tRow * vpH)
+    const w = Math.round((tCol + wPct) * vpW) - pxLeft
+    const h = Math.round((tRow + hPct) * vpH) - pxTop
+    const base = { id, x: pxLeft, y: pxTop, width: w, height: h, xPct: tCol, yPct: tRow, wPct, hPct }
     let p: PaneState
     if (type === 'file-browser') p = { ...base, type: 'file-browser', title: 'Files', leftPath: home, rightPath: home, focusedSide: 'left', leftSelection: [], rightSelection: [] } satisfies FileBrowserPaneState
     else if (type === 'terminal') p = { ...base, type: 'terminal', title: 'Terminal', cwd: home } satisfies TerminalPaneState
@@ -223,10 +304,20 @@ export function App() {
     else p = { ...base, type: 'notes', title: 'Notes', body: '' } satisfies NotesPaneState
 
     const newPanes = [...ws.panes, p]
-    const layout = LAYOUTS.find(l => l.id === tLayoutId) ?? bestLayout(newPanes.filter(q => Math.floor(q.xPct) === tCol && Math.floor(q.yPct) === tRow).length)
-    const arranged = applyLayout(newPanes, layout, tCol, tRow, vpW, vpH)
+    
+    // Explicitly exclude collapsed panes on the target screen from consuming layout slots
+    const collapsedSet = new Set(ws.screenCollapsed?.[tIdx] ?? [])
+    const panesForLayout = newPanes.filter(q => !collapsedSet.has(q.id))
+    const collapsedPanes = newPanes.filter(q => collapsedSet.has(q.id))
+    
+    const layout = LAYOUTS.find(l => l.id === tLayoutId) ?? bestLayout(panesForLayout.filter(q => Math.floor(q.xPct) === tCol && Math.floor(q.yPct) === tRow).length)
+    const arranged = applyLayout(panesForLayout, layout, tCol, tRow, vpW, vpH)
+    
+    // Recombine arranged (visible) panes with untouched collapsed ones
+    const finalPanes = [...arranged, ...collapsedPanes]
+    
     await window.ananke.state.setScreenLayout(ws.id, tIdx, layout.id)
-    setSnap(await window.ananke.state.replacePanes(ws.id, arranged, id))
+    setSnap(await window.ananke.state.replacePanes(ws.id, finalPanes, id))
   }, [ws, vpW, vpH, screenCol, screenRow, activeScreen])
 
   const applySmartLayouts = useCallback(async (newVpW: number, newVpH: number) => {
@@ -257,11 +348,20 @@ export function App() {
         if (layout.slots.length < visibleOnScreen.length) {
           const excess = visibleOnScreen.slice(layout.slots.length).map(p => p.id)
           newCollapsed = [...existingCollapsed, ...excess]
-          collapsedChanges[screenIdx] = newCollapsed
         }
 
+        // Cap total panes per screen at MAX_PANES_PER_SCREEN: prune oldest collapsed entries
+        const maxCollapsed = MAX_PANES_PER_SCREEN - layout.slots.length
+        let smartPruned: Set<string> = new Set()
+        if (newCollapsed.length > maxCollapsed) {
+          const toPrune = newCollapsed.slice(0, newCollapsed.length - maxCollapsed)
+          smartPruned = new Set(toPrune)
+          newCollapsed = newCollapsed.slice(newCollapsed.length - maxCollapsed)
+        }
+        collapsedChanges[screenIdx] = newCollapsed
+
         const newCollapsedSet = new Set(newCollapsed)
-        const toArrange  = newPanes.filter(p => !(Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && newCollapsedSet.has(p.id)))
+        const toArrange  = newPanes.filter(p => !(Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && (newCollapsedSet.has(p.id) || smartPruned.has(p.id))))
         const toCollapse = newPanes.filter(p =>   Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && newCollapsedSet.has(p.id))
         newPanes = [...applyLayout(toArrange, layout, col, row, newVpW, newVpH), ...toCollapse]
       }
@@ -417,49 +517,37 @@ export function App() {
       return { ...p, xPct: screenCol + xFrac, yPct: screenRow + yFrac }
     })
 
-    // For each screen: re-apply layout, collapse excess visible panes
+    // Delete ALL collapsed panes, keep only visible ones
+    const allCollapsedIds = new Set(Object.values(ws.screenCollapsed ?? {}).flat())
+    panes = panes.filter(p => !allCollapsedIds.has(p.id))
+
+    // For each screen: fit layout to actual pane count and re-arrange
     for (const screenIdx of [0, 1, 2, 3] as const) {
       const col = screenIdx % 2, row = Math.floor(screenIdx / 2)
-      const layoutId = ws.screenLayouts?.[screenIdx] ?? 'full'
-      const layout = LAYOUTS.find(l => l.id === layoutId)
-      if (!layout) continue
-
-      const existingCollapsed = new Set(ws.screenCollapsed?.[screenIdx] ?? [])
       const onScreen = panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row)
-      // Sort spatially so legitimate panes (top-left) get priority slots over relocated orphans
-      const visibleSorted = onScreen
-        .filter(p => !existingCollapsed.has(p.id))
-        .sort((a, b) => {
-          const aY = a.yPct - row, bY = b.yPct - row
-          if (Math.abs(aY - bY) > 0.001) return aY - bY
-          return (a.xPct - col) - (b.xPct - col)
-        })
-      const alreadyCollapsed = onScreen.filter(p => existingCollapsed.has(p.id)).map(p => p.id)
-
-      let newCollapsed = [...alreadyCollapsed]
-      if (visibleSorted.length > layout.slots.length) {
-        const excess = visibleSorted.slice(layout.slots.length).map(p => p.id)
-        newCollapsed = [...alreadyCollapsed, ...excess]
-      }
-
-      const newCollapsedSet = new Set(newCollapsed)
-      const toArrange  = panes.filter(p => !(Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && newCollapsedSet.has(p.id)))
-      const toCollapse = panes.filter(p =>   Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && newCollapsedSet.has(p.id))
-      panes = [...applyLayout(toArrange, layout, col, row, vpW, vpH), ...toCollapse]
-
-      collapsedByScreen[screenIdx] = newCollapsed
-      layoutChanges[screenIdx] = layoutId
+      if (onScreen.length === 0) continue
+      const layout = bestLayout(onScreen.length)
+      panes = applyLayout(panes, layout, col, row, vpW, vpH)
+      await window.ananke.state.setScreenCollapsed(ws.id, screenIdx, [])
+      await window.ananke.state.setScreenLayout(ws.id, screenIdx, layout.id)
+      await window.ananke.state.setIntentLayout(ws.id, screenIdx, layout.id)
     }
 
-    for (const [idx, ids] of Object.entries(collapsedByScreen)) {
-      await window.ananke.state.setScreenCollapsed(ws.id, Number(idx), ids)
-    }
     setSnap(await window.ananke.state.replacePanes(ws.id, panes, ws.activePaneId))
   }, [ws, screenCol, screenRow, vpW, vpH])
 
   const activeCollapsedIds = new Set(ws?.screenCollapsed?.[activeScreen] ?? [])
   const collapsedPanes = displayWs ? displayWs.panes.filter(p => activeCollapsedIds.has(p.id)) : []
   const displayWsForCanvas = displayWs ? { ...displayWs, panes: displayWs.panes.filter(p => !activeCollapsedIds.has(p.id)) } : displayWs
+
+  useEffect(() => {
+    if (drawer === 'none') return
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawer('none')
+    }
+    window.addEventListener('keydown', onEsc)
+    return () => window.removeEventListener('keydown', onEsc)
+  }, [drawer])
 
   if (!snap || !ws || !displayWs || !displayWsForCanvas) return <div className="app-shell" style={{ padding: 16 }}>Loading…</div>
 
@@ -494,31 +582,24 @@ export function App() {
           <div style={{ width: 6 }} />
           <LayoutPicker activeLayoutId={activeLayoutId} screenPanesCount={screenPanesCount} onSelect={(l) => void handleLayoutSelect(l.id)} />
           <div style={{ width: 6, borderRight: '1px solid var(--border)', marginRight: 6 }} />
-          <div style={{ display: 'flex', gap: '4px', borderRight: '1px solid var(--border)', paddingRight: '8px', marginRight: '4px' }}>
-            <button type="button" className="btn-thin" onClick={() => void addPane('file-browser')}>🗂 Files</button>
-            <button type="button" className="btn-thin" onClick={() => void addPane('terminal')}>🖥 Terminal</button>
-            <button type="button" className="btn-thin" onClick={() => void addPane('browser')}>🌐 Browser</button>
-            <button type="button" className="btn-thin" onClick={() => void addPane('notes')}>📝 Notes</button>
-          </div>
+          
+          <NewPanePicker onSelect={(type) => void addPane(type)} />
+          
           <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', gap: '4px', borderRight: '1px solid var(--border)', paddingRight: '8px', marginRight: '4px' }}>
-            <button type="button" className="btn-thin" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F3' }))}>F3 Read</button>
-            <button type="button" className="btn-thin" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F4' }))}>F4 Edit</button>
-            <button type="button" className="btn-thin" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F5' }))}>F5 Copy</button>
-            <button type="button" className="btn-thin" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F6' }))}>F6 Move</button>
-            <button type="button" className="btn-thin" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'F8' }))}>F8 Delete</button>
-            <button type="button" className="btn-thin" onClick={() => window.dispatchEvent(new CustomEvent('global-action', { detail: 'Arc' }))}>Archive</button>
-          </div>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <button type="button" className={`btn-thin${diagOpen ? ' active' : ''}`} onClick={() => setDiagOpen(o => !o)}>Diag</button>
-            <button type="button" className="btn-thin" onClick={() => setDrawer(drawer === 'recent' ? 'none' : 'recent')}>Recent</button>
-            <button type="button" className="btn-thin" onClick={() => setDrawer(drawer === 'settings' ? 'none' : 'settings')}>Settings</button>
-          </div>
+          
+          <AppMenuDropdown 
+            diagOpen={diagOpen} 
+            drawer={drawer} 
+            onToggleDiag={() => setDiagOpen(o => !o)} 
+            onToggleRecent={() => setDrawer(drawer === 'recent' ? 'none' : 'recent')} 
+            onToggleSettings={() => setDrawer(drawer === 'settings' ? 'none' : 'settings')} 
+          />
         </div>
         <CanvasWorkspace workspace={displayWsForCanvas} renderPane={renderPane} onActivate={setActivePane}
           onCanvasOffsetChange={handleCanvasOffsetChange}
           onViewportResize={handleViewportResize}
-          collapsedPanes={collapsedPanes}
+          allPanes={displayWs.panes}
+          collapsedIds={Array.from(activeCollapsedIds)}
           onRestorePane={(id) => void handleRestorePane(id)}
           onCloseCollapsed={(id) => void handleCloseCollapsed(id)} />
         {diagOpen && (
@@ -529,15 +610,20 @@ export function App() {
             screenCol={screenCol}
             screenRow={screenRow}
             activeLayoutId={activeLayoutId}
+            onClose={() => setDiagOpen(false)}
           />
         )}
       </div>
       {drawer === 'settings' && (
-        <aside className="drawer"><h3>Settings</h3><div className="body">
+        <aside className="drawer">
+          <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            Settings
+            <button type="button" onClick={() => setDrawer('none')} style={{ background: 'transparent', border: 'none', fontSize: '16px', padding: 0 }}>✕</button>
+          </h3>
+          <div className="body">
           <NotesSettings value={snap.settings.obsidian} onChange={(obsidian) => setSnap({ ...snap, settings: { ...snap.settings, obsidian } })} />
           <PrivacySettings value={snap.settings.privacy} onChange={(privacy) => setSnap({ ...snap, settings: { ...snap.settings, privacy } })} onPurgeRecentlyClosed={() => void window.ananke.state.purgeRecentlyClosed().then(setSnap)} />
           <button type="button" className="primary" onClick={() => void window.ananke.state.set({ settings: snap.settings }).then(setSnap)}>Save settings</button>
-          <button type="button" style={{ marginLeft: 8 }} onClick={() => setDrawer('none')}>Close</button>
           <hr style={{ margin: '12px 0', borderColor: 'var(--border)' }} />
           <div style={{ fontSize: 12, marginBottom: 6, color: 'var(--muted)' }}>Workspace File (TOML)</div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -554,7 +640,13 @@ export function App() {
         </div></aside>
       )}
       {drawer === 'recent' && (
-        <aside className="drawer"><RecentlyClosedPanel snap={snap} ws={ws} onClose={() => setDrawer('none')} onSnapshot={setSnap} /></aside>
+        <aside className="drawer">
+          <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 0, padding: 'var(--space-inset)', borderBottom: '1px solid var(--border)' }}>
+            Recent Panes
+            <button type="button" onClick={() => setDrawer('none')} style={{ background: 'transparent', border: 'none', fontSize: '16px', padding: 0 }}>✕</button>
+          </h3>
+          <RecentlyClosedPanel snap={snap} ws={ws} onClose={() => setDrawer('none')} onSnapshot={setSnap} />
+        </aside>
       )}
       {tomlEditorOpen && <TomlEditorModal onClose={(s) => void closeTomlEditor(s)} />}
     </div>

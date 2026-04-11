@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { PaneState, WorkspaceState } from '../../shared/contracts'
 
 interface Props {
@@ -8,13 +9,20 @@ interface Props {
   screenCol: number
   screenRow: number
   activeLayoutId: string
+  onClose: () => void
 }
 
 function fmt2(n: number) { return n.toFixed(4) }
 function fmtPx(n: number) { return Math.round(n) }
 function shortId(id: string) { return id.slice(0, 8) }
 
-export function DiagOverlay({ ws, vpW, vpH, activeScreen, screenCol, screenRow, activeLayoutId }: Props) {
+export function DiagOverlay({ ws, vpW, vpH, activeScreen, screenCol, screenRow, activeLayoutId, onClose }: Props) {
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: false }))
+    return () => {
+      window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: true }))
+    }
+  }, [])
   const canvasW = vpW * 2
   const canvasH = vpH * 2
   const ox = ws.canvasOffset.x
@@ -52,6 +60,20 @@ export function DiagOverlay({ ws, vpW, vpH, activeScreen, screenCol, screenRow, 
 
   return (
     <div className="diag-overlay">
+      <button 
+        type="button" 
+        onClick={onClose} 
+        style={{ 
+          position: 'absolute', 
+          top: 'var(--space-inset)', 
+          right: 'var(--space-inset)', 
+          background: 'none', 
+          border: 'none', 
+          color: 'var(--text)', 
+          fontSize: '16px',
+          cursor: 'pointer'
+        }}
+      >✕</button>
       <div className="diag-section">
         <div className="diag-header">Viewport &amp; Canvas</div>
         <table className="diag-table">

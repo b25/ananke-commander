@@ -44,10 +44,27 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     void window.ananke.browser.navigate(pane.id, target)
   }, [pane.id]) // Intentionally only on pane ID change / fresh component mount
 
+  const nativeVisibleRef = useRef(true)
+
+  useEffect(() => {
+    const handler = (e: CustomEvent<boolean>) => {
+      nativeVisibleRef.current = e.detail
+      syncBounds()
+    }
+    window.addEventListener('native-view-visibility', handler as EventListener)
+    return () => window.removeEventListener('native-view-visibility', handler as EventListener)
+  }, [])
+
   const syncBounds = () => {
     const el = hostRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
+    
+    if (!nativeVisibleRef.current) {
+      void window.ananke.browser.layout(pane.id, { x: -9999, y: -9999, width: 10, height: 10 })
+      return
+    }
+
     const bounds = {
       x: Math.round(r.x),
       y: Math.round(r.y),

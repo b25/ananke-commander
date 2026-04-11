@@ -120,7 +120,7 @@ select {
   min-height: 120px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .pane-tile.attention {
@@ -149,7 +149,7 @@ select {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
 }
 
@@ -205,7 +205,7 @@ select {
 .file-job-status-text {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -237,7 +237,7 @@ select {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
   border-right: 1px solid var(--border);
 }
 
@@ -286,7 +286,7 @@ select {
 .file-row .name {
   flex: 1;
   white-space: nowrap;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
 }
 
@@ -295,21 +295,6 @@ select {
   font-size: var(--text-xs);
 }
 
-.file-ops {
-  width: 44px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  padding: var(--space-gap) var(--space-xs);
-  border-left: 1px solid var(--border);
-  background: var(--header);
-}
-
-.file-ops button {
-  padding: var(--space-xs);
-  font-size: var(--text-2xs);
-}
 
 .terminal-host {
   position: absolute;
@@ -399,7 +384,7 @@ select {
   flex-direction: column;
   padding: 0;
   gap: 0;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .toml-editor-header {
@@ -629,7 +614,7 @@ select {
 
 .canvas-workspace {
   flex: 1;
-  overflow: hidden;
+  overflow: clip;
   position: relative;
   isolation: isolate;
   min-height: 0;
@@ -640,7 +625,7 @@ select {
 .canvas-panning-area {
   flex: 1;
   position: relative;
-  overflow: hidden;
+  overflow: clip;
   min-height: 0;
 }
 
@@ -675,6 +660,15 @@ select {
   border-color: var(--accent);
 }
 
+.collapsed-pill.is-ghosted {
+  opacity: 0.5;
+}
+
+.collapsed-pill.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 .collapsed-pill__icon {
   font-size: 10px;
   flex-shrink: 0;
@@ -684,7 +678,7 @@ select {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
 }
 
@@ -714,7 +708,7 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--pane);
-  overflow: hidden;
+  overflow: clip;
   box-shadow: 0 2px 12px rgba(0,0,0,0.35);
   min-width: 300px;
   min-height: 200px;
@@ -824,7 +818,7 @@ select {
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  overflow: clip;
 }
 
 /* ── Screen Selector ──────────────────────────────────── */
@@ -852,7 +846,7 @@ select {
   background: var(--border);
   border-radius: 1px;
   border: 1px solid transparent;
-  overflow: hidden;
+  overflow: clip;
   display: flex;
   align-items: center;
   justify-content: center;

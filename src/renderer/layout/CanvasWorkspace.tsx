@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PaneState, WorkspaceState } from '../../shared/contracts'
 import { FloatingPane } from './FloatingPane'
-import { CollapsedStrip } from './CollapsedStrip'
+import { TaskbarStrip } from './TaskbarStrip'
 
 interface Props {
   workspace: WorkspaceState
@@ -9,12 +9,13 @@ interface Props {
   onActivate: (paneId: string) => void
   onCanvasOffsetChange: (x: number, y: number) => void
   onViewportResize?: (width: number, height: number) => void
-  collapsedPanes?: PaneState[]
+  allPanes?: PaneState[]
+  collapsedIds?: string[]
   onRestorePane?: (paneId: string) => void
   onCloseCollapsed?: (paneId: string) => void
 }
 
-export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOffsetChange, onViewportResize, collapsedPanes = [], onRestorePane, onCloseCollapsed }: Props) {
+export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOffsetChange, onViewportResize, allPanes = [], collapsedIds = [], onRestorePane, onCloseCollapsed }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [viewportSize, setViewportSize] = useState({ width: 800, height: 600 })
   const offsetRef = useRef(workspace.canvasOffset)
@@ -41,7 +42,8 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
     return () => { ro.disconnect(); if (timer) clearTimeout(timer) }
   }, [])
 
-  // Alt+Arrow: jump one screen at a time
+  // Alt+Arrow: jump one screen at a time.
+  // Pass raw new offset — handleCanvasOffsetChange in App.tsx owns clamping+snapping.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!e.altKey) return
@@ -54,10 +56,7 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
       const delta = steps[e.key]
       if (!delta) return
       e.preventDefault()
-      onCanvasOffsetChange(
-        Math.max(0, Math.min(vpW, x + delta[0])),
-        Math.max(0, Math.min(vpH, y + delta[1]))
-      )
+      onCanvasOffsetChange(x + delta[0], y + delta[1])
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -69,13 +68,16 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
 
   return (
     <div className="canvas-workspace">
-      <CollapsedStrip
-        panes={collapsedPanes}
+      <TaskbarStrip
+        panes={allPanes ?? []}
+        activePaneId={workspace.activePaneId}
+        collapsedIds={collapsedIds ?? []}
         onRestore={(id) => onRestorePane?.(id)}
+        onActivate={(id) => onActivate(id)}
         onClose={(id) => onCloseCollapsed?.(id)}
       />
-      <div ref={containerRef} className="canvas-panning-area">
-        <div style={{ position: 'absolute', width: canvasW, height: canvasH, transform: `translate(${-ox}px, ${-oy}px)`, willChange: 'transform' }}>
+      <div ref={containerRef} className="canvas-panning-area" onScroll={(e) => { e.currentTarget.scrollTop = 0; e.currentTarget.scrollLeft = 0 }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: canvasW, height: canvasH, transform: `translate(${-ox}px, ${-oy}px)`, willChange: 'transform' }}>
           {workspace.panes.map((pane) => (
             <FloatingPane
               key={pane.id}

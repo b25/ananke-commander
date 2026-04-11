@@ -50,6 +50,13 @@ export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Pro
     }
   }, [open])
 
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: !open }))
+    return () => {
+      window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: true }))
+    }
+  }, [open])
+
   const activeLayout = LAYOUTS.find(l => l.id === activeLayoutId) ?? LAYOUTS[0]
 
   const pick = (layout: Layout) => { onSelect(layout); setOpen(false) }
