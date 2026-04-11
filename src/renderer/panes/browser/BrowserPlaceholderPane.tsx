@@ -60,7 +60,39 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     if (!el) return
     const r = el.getBoundingClientRect()
     
-    if (!nativeVisibleRef.current) {
+    // In Ananke, native WebContentsViews float above the Chromium compositor and ignore CSS `overflow: clip`.
+    // If the canvas pans out of bounds, the bounds reflect negative coordinates and the View overlays the toolbar!
+    // We must manually intersect the DOM element's bounds with the canvas workspace container limits.
+    const container = el.closest('.canvas-workspace')
+    let isVisible = nativeVisibleRef.current
+
+    if (container && isVisible) {
+      const cr = container.getBoundingClientRect()
+      const intersectRight = Math.min(r.right, cr.right)
+      const intersectBottom = Math.min(r.bottom, cr.bottom)
+      const intersectX = Math.max(r.x, cr.x)
+      const intersectY = Math.max(r.y, cr.y)
+
+      const intersectW = intersectRight - intersectX
+      const intersectH = intersectBottom - intersectY
+
+      if (intersectW <= 0 || intersectH <= 0) {
+        isVisible = false
+      } else {
+        // Feed the rigidly cropped coordinates directly to Electron layout.
+        // This physically prevents Native Views from bleeding over the top menu Toolbar during any panning behavior.
+        const bounds = {
+          x: Math.round(intersectX),
+          y: Math.round(intersectY),
+          width: Math.round(Math.max(intersectW, 120)),
+          height: Math.round(Math.max(intersectH, 120))
+        }
+        void window.ananke.browser.layout(pane.id, bounds)
+        return
+      }
+    }
+
+    if (!isVisible) {
       void window.ananke.browser.layout(pane.id, { x: -9999, y: -9999, width: 10, height: 10 })
       return
     }
