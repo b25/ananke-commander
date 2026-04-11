@@ -243,7 +243,7 @@ export function App() {
     setSnap(await window.ananke.state.replacePanes(ws.id, finalPanes, ws.activePaneId))
   }, [ws, screenCol, screenRow, vpW, vpH, activeScreen])
 
-  const addPane = useCallback(async (type: PaneType) => {
+  const addPane = useCallback(async (type: PaneType, opts?: { cwd?: string }) => {
     if (!ws) return
 
     // Hard cap across all screens
@@ -300,7 +300,7 @@ export function App() {
     const base = { id, x: pxLeft, y: pxTop, width: w, height: h, xPct: tCol, yPct: tRow, wPct, hPct }
     let p: PaneState
     if (type === 'file-browser') p = { ...base, type: 'file-browser', title: 'Files', leftPath: home, rightPath: home, focusedSide: 'left', leftSelection: [], rightSelection: [] } satisfies FileBrowserPaneState
-    else if (type === 'terminal') p = { ...base, type: 'terminal', title: 'Terminal', cwd: home } satisfies TerminalPaneState
+    else if (type === 'terminal') p = { ...base, type: 'terminal', title: 'Terminal', cwd: opts?.cwd || home } satisfies TerminalPaneState
     else if (type === 'browser') p = { ...base, type: 'browser', title: 'Browser', url: 'about:blank' } satisfies BrowserPaneState
     else if (type === 'radar') p = { ...base, type: 'radar', title: 'Radar', rootPath: home, pathHistory: [] } satisfies RadarPaneState
     else if (type === 'gitui') p = { ...base, type: 'gitui', title: 'GitUI', cwd: home } satisfies GitUiPaneState
@@ -323,6 +323,16 @@ export function App() {
     await window.ananke.state.setScreenLayout(ws.id, tIdx, layout.id)
     setSnap(await window.ananke.state.replacePanes(ws.id, finalPanes, id))
   }, [ws, vpW, vpH, screenCol, screenRow, activeScreen])
+
+  // Listen for create-pane events from other components (e.g. "New Terminal Here")
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ type: PaneType; cwd?: string }>).detail
+      void addPane(detail.type, { cwd: detail.cwd })
+    }
+    window.addEventListener('create-pane', handler)
+    return () => window.removeEventListener('create-pane', handler)
+  }, [addPane])
 
   const applySmartLayouts = useCallback(async (newVpW: number, newVpH: number) => {
     if (!ws) return

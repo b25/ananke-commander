@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { AppStateSnapshot, ListDirEntry, PaneState } from '../shared/contracts.js'
 
 const api = {
+  platform: process.platform as 'darwin' | 'win32' | 'linux',
+
   getPath: (name: 'home' | 'documents' | 'downloads' | 'userData') =>
     ipcRenderer.invoke('app:getPath', name),
 
@@ -72,7 +74,11 @@ const api = {
       return () => ipcRenderer.removeListener('fs:folderSize:error', fn)
     },
     rename: (oldPath: string, newPath: string): Promise<void> =>
-      ipcRenderer.invoke('fs:rename', oldPath, newPath)
+      ipcRenderer.invoke('fs:rename', oldPath, newPath),
+    chmod: (filePath: string, mode: string): Promise<void> =>
+      ipcRenderer.invoke('fs:chmod', filePath, mode),
+    createFile: (filePath: string): Promise<void> =>
+      ipcRenderer.invoke('fs:createFile', filePath)
   },
 
   fileJob: {

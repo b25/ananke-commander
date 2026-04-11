@@ -213,6 +213,16 @@ function registerIpcHandlers(): void {
     }
   )
 
+  ipcMain.handle('fs:chmod', async (_e, filePath: string, mode: string) => {
+    const { chmod } = await import('node:fs/promises')
+    await chmod(resolve(filePath), parseInt(mode, 8))
+  })
+
+  ipcMain.handle('fs:createFile', async (_e, filePath: string) => {
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(resolve(filePath), '', { flag: 'wx' }) // wx = fail if exists
+  })
+
   ipcMain.handle(
     'fileJob:start',
     (_e, kind: 'copy' | 'move' | 'delete', sources: string[], destDir?: string) => {

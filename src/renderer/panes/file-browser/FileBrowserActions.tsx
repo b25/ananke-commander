@@ -6,9 +6,13 @@ interface Props {
   onCopy: () => void
   onMove: () => void
   onNewFolder: () => void
+  onNewFile: () => void
   onDelete: () => void
   onArchive: () => void
   onToggleHidden: () => void
+  onCopyPath: () => void
+  onNewTerminal: () => void
+  onChmod?: () => void
 }
 
 export function FileBrowserActions({
@@ -17,9 +21,13 @@ export function FileBrowserActions({
   onCopy,
   onMove,
   onNewFolder,
+  onNewFile,
   onDelete,
   onArchive,
   onToggleHidden,
+  onCopyPath,
+  onNewTerminal,
+  onChmod,
 }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -52,6 +60,12 @@ export function FileBrowserActions({
     setOpen(false)
   }
 
+  const Shortcut = ({ label }: { label: string }) => (
+    <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>{label}</span>
+  )
+
+  const Sep = () => <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+
   return (
     <div className="layout-picker" ref={ref}>
       <button
@@ -59,44 +73,52 @@ export function FileBrowserActions({
         className={`layout-picker__trigger btn-thin${open ? ' open' : ''}`}
         onClick={() => setOpen(o => !o)}
       >
-        Actions <span className="layout-picker__chevron">▾</span>
+        Actions <span className="layout-picker__chevron">&#9662;</span>
       </button>
 
       {open && (
-        <div className="layout-picker__popover" role="menu" style={{ right: 0, left: 'auto' }}>
+        <div className="layout-picker__popover" role="menu" style={{ right: 0, left: 'auto', minWidth: 200 }}>
           <button type="button" className="layout-picker__option" onClick={() => exec(onRead)} role="menuitem">
-            <span className="layout-picker__label">Read</span>
-            <span className="layout-picker__shortcut" style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>F3</span>
+            <span className="layout-picker__label">Read</span><Shortcut label="F3" />
           </button>
           <button type="button" className="layout-picker__option" onClick={() => exec(onEdit)} role="menuitem">
-            <span className="layout-picker__label">Edit</span>
-            <span className="layout-picker__shortcut" style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>F4</span>
+            <span className="layout-picker__label">Edit</span><Shortcut label="F4" />
           </button>
+          <Sep />
           <button type="button" className="layout-picker__option" onClick={() => exec(onCopy)} role="menuitem">
-            <span className="layout-picker__label">Copy…</span>
-            <span className="layout-picker__shortcut" style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>F5</span>
+            <span className="layout-picker__label">Copy...</span><Shortcut label="F5" />
           </button>
           <button type="button" className="layout-picker__option" onClick={() => exec(onMove)} role="menuitem">
-            <span className="layout-picker__label">Move…</span>
-            <span className="layout-picker__shortcut" style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>F6</span>
+            <span className="layout-picker__label">Move...</span><Shortcut label="F6" />
           </button>
           <button type="button" className="layout-picker__option" onClick={() => exec(onNewFolder)} role="menuitem">
-            <span className="layout-picker__label">New Folder</span>
-            <span className="layout-picker__shortcut" style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>F7</span>
+            <span className="layout-picker__label">New Folder</span><Shortcut label="F7" />
           </button>
-          <button type="button" className="layout-picker__option layout-picker__option--danger" onClick={() => exec(onDelete)} role="menuitem" style={{ color: '#ff4d4f' }}>
-            <span className="layout-picker__label">Delete</span>
-            <span className="layout-picker__shortcut" style={{ marginLeft: 'auto', fontSize: 11 }}>F8</span>
+          <button type="button" className="layout-picker__option" onClick={() => exec(onNewFile)} role="menuitem">
+            <span className="layout-picker__label">New File</span><Shortcut label="Alt+F7" />
           </button>
-          <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+          <button type="button" className="layout-picker__option layout-picker__option--danger" onClick={() => exec(onDelete)} role="menuitem" style={{ color: 'var(--danger)' }}>
+            <span className="layout-picker__label">Delete</span><Shortcut label="F8" />
+          </button>
+          <Sep />
+          <button type="button" className="layout-picker__option" onClick={() => exec(onCopyPath)} role="menuitem">
+            <span className="layout-picker__label">Copy Path</span>
+          </button>
+          <button type="button" className="layout-picker__option" onClick={() => exec(onNewTerminal)} role="menuitem">
+            <span className="layout-picker__label">New Terminal Here</span>
+          </button>
+          {onChmod && (
+            <button type="button" className="layout-picker__option" onClick={() => exec(onChmod)} role="menuitem">
+              <span className="layout-picker__label">Set Execute Permission</span>
+            </button>
+          )}
+          <Sep />
           <button type="button" className="layout-picker__option" onClick={() => exec(onArchive)} role="menuitem">
-            <span className="layout-picker__label">Pack / Unpack</span>
-            <span className="layout-picker__shortcut" style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>Arc</span>
+            <span className="layout-picker__label">Pack / Unpack</span><Shortcut label="Arc" />
           </button>
-          <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+          <Sep />
           <button type="button" className="layout-picker__option" onClick={() => exec(onToggleHidden)} role="menuitem">
-            <span className="layout-picker__label">Toggle Hidden Files</span>
-            <span className="layout-picker__shortcut" style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>H</span>
+            <span className="layout-picker__label">Toggle Hidden Files</span><Shortcut label="H" />
           </button>
         </div>
       )}

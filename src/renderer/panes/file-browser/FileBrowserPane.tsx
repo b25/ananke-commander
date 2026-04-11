@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { FileBrowserPaneState, ListDirEntry, PaneState } from '../../../shared/contracts'
 import { joinPath } from '../../lib/pathUtils'
 import { FileList } from './FileList'
@@ -277,6 +278,16 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
           navigateTo(pane.focusedSide, prev)
         }
       }
+      // Alt+F7: create new file
+      if (e.altKey && e.key === 'F7') {
+        e.preventDefault()
+        const fileName = prompt('New file name:')
+        if (fileName?.trim()) {
+          void window.ananke.fs.createFile(joinPath(activePath, fileName.trim()))
+            .then(() => refreshActive())
+            .catch((err: Error) => alert(err.message))
+        }
+      }
       // Alt+Right: navigate forward in history
       if (e.altKey && e.key === 'ArrowRight') {
         e.preventDefault()
@@ -403,9 +414,41 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         },
         { label: 'Read', shortcut: 'F3', onClick: () => void openEditor(true) },
         { label: 'Edit', shortcut: 'F4', onClick: () => void openEditor(false) },
+        {
+          label: 'Rename', shortcut: 'F2', onClick: () => {
+            const entries = pane.focusedSide === 'left' ? leftEntries : rightEntries
+            const entry = entries.find(en => en.path === ctxMenu.path)
+            if (entry) setRenaming({ path: entry.path, side: pane.focusedSide, name: entry.name })
+          }
+        },
+        { label: 'Copy Path', onClick: () => void window.ananke.clipboard.writeText(ctxMenu.path) },
+        { label: '', separator: true, onClick: () => {} },
         { label: 'Copy…', shortcut: 'F5', onClick: () => setCopyOpen(true) },
         { label: 'Move…', shortcut: 'F6', onClick: () => setMoveOpen(true) },
         { label: 'Archive…', onClick: () => setArchiveOpen(true) },
+        { label: '', separator: true, onClick: () => {} },
+        {
+          label: 'New File', shortcut: 'Alt+F7', onClick: () => {
+            const fileName = prompt('New file name:')
+            if (fileName?.trim()) {
+              void window.ananke.fs.createFile(joinPath(activePath, fileName.trim()))
+                .then(() => refreshActive())
+                .catch((err: Error) => alert(err.message))
+            }
+          }
+        },
+        {
+          label: 'New Terminal Here', onClick: () => {
+            window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'terminal', cwd: activePath } }))
+          }
+        },
+        ...(window.ananke.platform !== 'win32' ? [{
+          label: 'Set Execute Permission', onClick: () => {
+            void window.ananke.fs.chmod(ctxMenu.path, '755')
+              .then(() => refreshActive())
+              .catch((err: Error) => alert(err.message))
+          }
+        }] : []),
         { label: '', separator: true, onClick: () => {} },
         {
           label: 'Delete', shortcut: 'F8', danger: true, onClick: () => {
@@ -451,7 +494,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         paneType="file-browser" 
         onClose={onClose} 
         actions={
-          <FileBrowserActions 
+          <FileBrowserActions
             onRead={() => void openEditor(true)}
             onEdit={() => void openEditor(false)}
             onCopy={() => setCopyOpen(true)}
@@ -462,6 +505,14 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 void window.ananke.fs.quickOp('mkdir', joinPath(activePath, folderName.trim())).then(() => refreshActive())
               }
             }}
+            onNewFile={() => {
+              const fileName = prompt('New file name:')
+              if (fileName?.trim()) {
+                void window.ananke.fs.createFile(joinPath(activePath, fileName.trim()))
+                  .then(() => refreshActive())
+                  .catch((err: Error) => alert(err.message))
+              }
+            }}
             onDelete={() => {
               if (!selectedPaths.length) return
               if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
@@ -469,6 +520,19 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
             }}
             onArchive={() => setArchiveOpen(true)}
             onToggleHidden={() => setShowHidden(h => !h)}
+            onCopyPath={() => {
+              if (selectedPaths.length === 1) void window.ananke.clipboard.writeText(selectedPaths[0])
+              else void window.ananke.clipboard.writeText(activePath)
+            }}
+            onNewTerminal={() => {
+              window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'terminal', cwd: activePath } }))
+            }}
+            onChmod={window.ananke.platform !== 'win32' ? () => {
+              if (selectedPaths.length !== 1) return
+              void window.ananke.fs.chmod(selectedPaths[0], '755')
+                .then(() => refreshActive())
+                .catch((err: Error) => alert(err.message))
+            } : undefined}
           />
         }
       />
@@ -558,7 +622,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         </div>
       </div>
 
-      {(copyOpen || moveOpen) && (
+      {(copyOpen || moveOpen) && createPortal(
         <div className="modal-backdrop" role="presentation" onClick={() => { setCopyOpen(false); setMoveOpen(false) }}>
           <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()}>
             <h2>{copyOpen ? 'Copy (F5)' : 'Move (F6)'}</h2>
@@ -592,10 +656,11 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {archiveOpen && (
+      {archiveOpen && createPortal(
         <ArchiveDialog
           suggestedPackPath={suggestedArchive}
           onClose={() => setArchiveOpen(false)}
@@ -608,17 +673,19 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
             await window.ananke.archive.unpack(format, archivePath, outDir)
             refreshBoth()
           }}
-        />
+        />,
+        document.body
       )}
 
-      {editorState && (
+      {editorState && createPortal(
         <FileEditor
           path={editorState.path}
           text={editorState.text}
           readOnly={editorState.readOnly}
           onSave={saveEditor}
           onClose={() => setEditorState(null)}
-        />
+        />,
+        document.body
       )}
     </div>
   )
