@@ -103,16 +103,26 @@ const api = {
     resize: (paneId: string, cols: number, rows: number) =>
       ipcRenderer.invoke('pty:resize', paneId, cols, rows),
     dispose: (paneId: string) => ipcRenderer.invoke('pty:dispose', paneId),
-    onData: (cb: (msg: { paneId: string; data: string }) => void) => {
-      const fn = (_: unknown, msg: { paneId: string; data: string }) => cb(msg)
-      ipcRenderer.on('pty:data', fn)
-      return () => ipcRenderer.removeListener('pty:data', fn)
-    },
-    onExit: (cb: (msg: { paneId: string; exitCode: number }) => void) => {
-      const fn = (_: unknown, msg: { paneId: string; exitCode: number }) => cb(msg)
-      ipcRenderer.on('pty:exit', fn)
-      return () => ipcRenderer.removeListener('pty:exit', fn)
-    }
+    onData: (() => {
+      const subs = new Set<(msg: { paneId: string; data: string }) => void>()
+      ipcRenderer.on('pty:data', (_: unknown, msg: { paneId: string; data: string }) => {
+        subs.forEach(cb => cb(msg))
+      })
+      return (cb: (msg: { paneId: string; data: string }) => void) => {
+        subs.add(cb)
+        return () => subs.delete(cb)
+      }
+    })(),
+    onExit: (() => {
+      const subs = new Set<(msg: { paneId: string; exitCode: number }) => void>()
+      ipcRenderer.on('pty:exit', (_: unknown, msg: { paneId: string; exitCode: number }) => {
+        subs.forEach(cb => cb(msg))
+      })
+      return (cb: (msg: { paneId: string; exitCode: number }) => void) => {
+        subs.add(cb)
+        return () => subs.delete(cb)
+      }
+    })()
   },
 
   browser: {
