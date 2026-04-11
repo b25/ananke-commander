@@ -244,6 +244,7 @@ export class StateStore {
 
   setCanvasOffset(workspaceId: string, x: number, y: number): void {
     this.store.set('workspaces', this.store.get('workspaces').map((ws) => ws.id === workspaceId ? { ...ws, canvasOffset: { x, y } } : ws))
+    this.scheduleTomlFlush()
   }
 
   renameWorkspace(workspaceId: string, name: string): void {

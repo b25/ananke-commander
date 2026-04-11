@@ -6,6 +6,7 @@ import { FileEditor } from './FileEditor'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { ArchiveDialog } from './ArchiveDialog'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
+import { FileBrowserActions } from './FileBrowserActions'
 
 type Props = {
   pane: FileBrowserPaneState
@@ -362,7 +363,32 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
 
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
-      <PaneHeader title={pane.title} paneType="file-browser" onClose={onClose} />
+      <PaneHeader 
+        title={pane.title} 
+        paneType="file-browser" 
+        onClose={onClose} 
+        actions={
+          <FileBrowserActions 
+            onRead={() => void openEditor(true)}
+            onEdit={() => void openEditor(false)}
+            onCopy={() => setCopyOpen(true)}
+            onMove={() => setMoveOpen(true)}
+            onNewFolder={() => {
+              const folderName = prompt('New folder name:')
+              if (folderName?.trim()) {
+                void window.ananke.fs.quickOp('mkdir', joinPath(activePath, folderName.trim())).then(() => refreshActive())
+              }
+            }}
+            onDelete={() => {
+              if (!selectedPaths.length) return
+              if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
+              void doDelete()
+            }}
+            onArchive={() => setArchiveOpen(true)}
+            onToggleHidden={() => setShowHidden(h => !h)}
+          />
+        }
+      />
       <div className="pane-body">
         <div className="file-browser">
           {fileJobLine && (
@@ -427,39 +453,6 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 onContextMenu={onFileContextMenu}
               />
             </div>
-          </div>
-          <div className="file-ops">
-            <button type="button" title="Toggle hidden files" onClick={() => setShowHidden(h => !h)}>
-              H
-            </button>
-            <button type="button" title="Copy F5" onClick={() => setCopyOpen(true)}>
-              F5
-            </button>
-            <button type="button" title="Move F6" onClick={() => setMoveOpen(true)}>
-              F6
-            </button>
-            <button type="button" title="New folder F7" onClick={() => {
-              const folderName = prompt('New folder name:')
-              if (folderName?.trim()) {
-                void window.ananke.fs.quickOp('mkdir', joinPath(activePath, folderName.trim())).then(() => refreshActive())
-              }
-            }}>
-              F7
-            </button>
-            <button
-              type="button"
-              title="Delete F8"
-              onClick={() => {
-                if (!selectedPaths.length) return
-                if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
-                void doDelete()
-              }}
-            >
-              F8
-            </button>
-            <button type="button" title="Pack / unpack" onClick={() => setArchiveOpen(true)}>
-              Arc
-            </button>
           </div>
           {ctxMenu && (
             <ContextMenu

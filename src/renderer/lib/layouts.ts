@@ -190,13 +190,19 @@ export function applyLayout(
     const yPct = screenRow + slot.yFrac
     const wPct = slot.wFrac
     const hPct = slot.hFrac
+
+    const pxLeft = Math.round(xPct * vpW)
+    const pxTop = Math.round(yPct * vpH)
+    const pxRight = Math.round((xPct + wPct) * vpW)
+    const pxBottom = Math.round((yPct + hPct) * vpH)
+
     return {
       ...pane,
       xPct, yPct, wPct, hPct,
-      x:      xPct * vpW,
-      y:      yPct * vpH,
-      width:  Math.max(MIN_W, wPct * vpW),
-      height: Math.max(MIN_H, hPct * vpH)
+      x:      pxLeft,
+      y:      pxTop,
+      width:  Math.max(MIN_W, pxRight - pxLeft),
+      height: Math.max(MIN_H, pxBottom - pxTop)
     }
   })
 
