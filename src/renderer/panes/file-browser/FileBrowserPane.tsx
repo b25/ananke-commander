@@ -103,13 +103,16 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       fwd.current = []
     }
     skipHistoryPush.current = false
-    // Extract folder name for auto-select when going up
-    const oldName = oldPath.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? null
+    // Only set focusName when navigating UP (so cursor lands on the folder we came from)
+    const normOld = oldPath.replace(/[/\\]+$/, '')
+    const normNew = newPath.replace(/[/\\]+$/, '')
+    const goingUp = normOld.startsWith(normNew) && normOld !== normNew
+    const focusName = goingUp ? normOld.split(/[/\\]/).pop() ?? null : null
     if (side === 'left') {
-      setLeftFocusName(oldName)
+      setLeftFocusName(focusName)
       onUpdate({ ...pane, focusedSide: 'left', leftPath: newPath })
     } else {
-      setRightFocusName(oldName)
+      setRightFocusName(focusName)
       onUpdate({ ...pane, focusedSide: 'right', rightPath: newPath })
     }
   }, [pane, onUpdate])

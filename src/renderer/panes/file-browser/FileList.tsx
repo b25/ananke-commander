@@ -67,20 +67,21 @@ export function FileList({
 
   const displayEntries = parentEntry ? [parentEntry, ...entries] : [...entries]
 
-  // Auto-select a named entry after navigating up (so cursor lands on the folder we came from)
-  const prevFocusName = useRef<string | null>(null)
+  // Auto-select a named entry after navigating up (so cursor lands on the folder we came from).
+  // We track whether we've already applied the focusName for the current path to avoid re-triggering.
+  const appliedFocusRef = useRef<string | null>(null)
   useEffect(() => {
-    if (focusName && focusName !== prevFocusName.current && displayEntries.length > 0) {
-      const idx = displayEntries.findIndex(e => e.name === focusName)
-      if (idx >= 0) {
-        onSelect([displayEntries[idx].path], false)
-        anchorIdxRef.current = idx
-        // Defer scroll until virtualizer is ready
-        setTimeout(() => virtualizer.scrollToIndex(idx, { align: 'auto' }), 0)
-      }
+    if (!focusName || entries.length === 0) return
+    const key = `${path}:${focusName}`
+    if (appliedFocusRef.current === key) return
+    const idx = displayEntries.findIndex(e => e.name === focusName)
+    if (idx >= 0) {
+      appliedFocusRef.current = key
+      onSelect([displayEntries[idx].path], false)
+      anchorIdxRef.current = idx
+      setTimeout(() => virtualizer.scrollToIndex(idx, { align: 'auto' }), 0)
     }
-    prevFocusName.current = focusName ?? null
-  }, [focusName, path])
+  }, [focusName, path, entries])
 
   const virtualizer = useVirtualizer({
     count: displayEntries.length,
