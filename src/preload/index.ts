@@ -143,6 +143,7 @@ const api = {
     },
     clearHistory: (paneId: string) => ipcRenderer.invoke('browser:clearHistory', paneId),
     reload: (paneId: string) => ipcRenderer.invoke('browser:reload', paneId),
+    suspend: (paneId: string) => ipcRenderer.invoke('browser:suspend', paneId),
     destroy: (paneId: string) => ipcRenderer.invoke('browser:destroy', paneId),
     onTitleUpdate: (cb: (msg: { paneId: string; title: string }) => void) => {
       const fn = (_: unknown, msg: { paneId: string; title: string }) => cb(msg)

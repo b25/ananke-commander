@@ -133,7 +133,9 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     return () => {
       ro.disconnect()
       window.removeEventListener('resize', syncBounds)
-      void window.ananke.browser.destroy(pane.id)
+      // Suspend (hide offscreen) instead of destroy — keeps the page alive
+      // when pane is collapsed. Actual destroy happens via explicit close.
+      void window.ananke.browser.suspend(pane.id)
     }
   }, [pane.id])
 
@@ -154,12 +156,30 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     return () => window.removeEventListener('keydown', onKey)
   }, [isActive, pane.id])
 
+  const looksLikeUrl = (input: string): boolean => {
+    if (input.includes(' ')) return false
+    // IP address (v4)
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?(\/.*)?$/.test(input)) return true
+    // Has a dot followed by at least 2 chars (domain-like: example.com, foo.co.uk)
+    if (/\.[a-z]{2,}(:\d+)?(\/.*)?$/i.test(input)) return true
+    // Contains port number (e.g. myhost:3000)
+    if (/^[a-zA-Z0-9_-]+(:\d+)(\/.*)?$/.test(input)) return true
+    return false
+  }
+
   const doNav = (u: string) => {
     let target = u.trim() || 'about:blank'
-    if (target !== 'about:blank' && !target.startsWith('http://') && !target.startsWith('https://') && !target.startsWith('data:') && !target.startsWith('localhost')) {
-      target = 'https://' + target
-    } else if (target.startsWith('localhost')) {
+    if (target === 'about:blank') {
+      // no-op
+    } else if (/^(https?:\/\/|data:)/.test(target)) {
+      // Already has protocol
+    } else if (/^localhost(:\d+)?/.test(target)) {
       target = 'http://' + target
+    } else if (looksLikeUrl(target)) {
+      target = 'https://' + target
+    } else {
+      // Treat as search query
+      target = 'https://www.google.com/search?q=' + encodeURIComponent(target)
     }
     void window.ananke.browser.navigate(pane.id, target)
     onUpdate({ ...pane, url: target })

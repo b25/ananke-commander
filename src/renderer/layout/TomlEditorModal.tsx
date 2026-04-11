@@ -30,6 +30,13 @@ export function TomlEditorModal({ onClose }: Props) {
     })
   }, [])
 
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: false }))
+    return () => {
+      window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: true }))
+    }
+  }, [])
+
   // Compute all match positions (case-insensitive)
   const matches = useMemo(() => {
     if (!findQuery || text === null) return []

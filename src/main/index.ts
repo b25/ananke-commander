@@ -283,6 +283,10 @@ function registerIpcHandlers(): void {
     getBrowserPanes().clearHistory(paneId)
   })
 
+  ipcMain.handle('browser:suspend', (_e, paneId: string) => {
+    getBrowserPanes().suspend(paneId)
+  })
+
   ipcMain.handle('browser:destroy', (_e, paneId: string) => {
     getBrowserPanes().destroy(paneId)
   })

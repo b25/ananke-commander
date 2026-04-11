@@ -1,8 +1,11 @@
 import { BrowserWindow, WebContentsView } from 'electron'
+import Store from 'electron-store'
 import { attachGuestWebContentsGuards, hardenGuestSession, isNavigationAllowed } from '../security/browserSecurity.js'
 import { HarCapture } from './harCapture.js'
 
 export type HistoryEntry = { url: string; timestamp: number }
+
+type HistoryStoreSchema = { histories: Record<string, HistoryEntry[]> }
 
 type HistoryOptions = {
   maxEntries: () => number
@@ -16,10 +19,34 @@ export class BrowserPaneManager {
   private histories = new Map<string, HistoryEntry[]>()
   private harCaptures = new Map<string, HarCapture>()
   private historyOpts: HistoryOptions
+  private historyStore: Store<HistoryStoreSchema>
+  private persistTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(mainWindow: BrowserWindow, historyOpts: HistoryOptions) {
     this.mainWindow = mainWindow
     this.historyOpts = historyOpts
+    this.historyStore = new Store<HistoryStoreSchema>({
+      name: 'ananke-browser-history',
+      defaults: { histories: {} }
+    })
+    // Restore persisted history into memory
+    const saved = this.historyStore.get('histories', {})
+    for (const [paneId, entries] of Object.entries(saved)) {
+      if (Array.isArray(entries) && entries.length > 0) {
+        this.histories.set(paneId, entries)
+      }
+    }
+  }
+
+  private persistHistory(): void {
+    if (this.persistTimer) clearTimeout(this.persistTimer)
+    this.persistTimer = setTimeout(() => {
+      const obj: Record<string, HistoryEntry[]> = {}
+      for (const [id, entries] of this.histories) {
+        if (entries.length > 0) obj[id] = entries
+      }
+      this.historyStore.set('histories', obj)
+    }, 1000) // Debounce 1s
   }
 
   private appendHistory(paneId: string, url: string): void {
@@ -39,6 +66,7 @@ export class BrowserPaneManager {
     h = h.slice(-max)
     this.histories.set(paneId, h)
     this.historyOpts.onHistory(paneId, h)
+    this.persistHistory()
   }
 
   getHistory(paneId: string): HistoryEntry[] {
@@ -48,6 +76,7 @@ export class BrowserPaneManager {
   clearHistory(paneId: string): void {
     this.histories.set(paneId, [])
     this.historyOpts.onHistory(paneId, [])
+    this.persistHistory()
   }
 
   layout(paneId: string, bounds: Electron.Rectangle): void {
@@ -178,12 +207,25 @@ export class BrowserPaneManager {
     view.webContents.stopFindInPage('clearSelection')
   }
 
+  suspend(paneId: string): void {
+    const view = this.views.get(paneId)
+    if (!view) return
+    // Move offscreen but keep the view alive — preserves page state,
+    // session cookies, scroll position, and form data.
+    view.setBounds({ x: -9999, y: -9999, width: 10, height: 10 })
+  }
+
+  hasSuspended(paneId: string): boolean {
+    return this.views.has(paneId)
+  }
+
   destroy(paneId: string): void {
     const view = this.views.get(paneId)
     if (!view) return
     this.harCaptures.get(paneId)?.stop()
     this.harCaptures.delete(paneId)
     this.histories.delete(paneId)
+    this.persistHistory()
     if (!this.mainWindow.isDestroyed()) {
       try { this.mainWindow.contentView.removeChildView(view) } catch {}
     }
