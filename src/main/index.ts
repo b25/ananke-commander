@@ -49,9 +49,9 @@ function getBrowserPanes(): BrowserPaneManager {
     browserPanes = new BrowserPaneManager(mainWindow!, {
       maxEntries: () => stateStore!.getSettings().privacy.browserHistoryMax,
       shouldRecord: () => !stateStore!.getSettings().privacy.privateMode,
-      onHistory: (paneId, urls) => {
+      onHistory: (paneId, entries) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('browser:history', { paneId, urls })
+          mainWindow.webContents.send('browser:history', { paneId, entries })
         }
       }
     })
@@ -279,12 +279,56 @@ function registerIpcHandlers(): void {
     return getBrowserPanes().getHistory(paneId)
   })
 
+  ipcMain.handle('browser:clearHistory', (_e, paneId: string) => {
+    getBrowserPanes().clearHistory(paneId)
+  })
+
   ipcMain.handle('browser:destroy', (_e, paneId: string) => {
     getBrowserPanes().destroy(paneId)
   })
 
   ipcMain.handle('browser:reload', (_e, paneId: string) => {
     getBrowserPanes().reload(paneId)
+  })
+
+  ipcMain.handle('browser:harStart', (_e, paneId: string) => {
+    getBrowserPanes().harStart(paneId)
+  })
+
+  ipcMain.handle('browser:harStop', (_e, paneId: string) => {
+    getBrowserPanes().harStop(paneId)
+  })
+
+  ipcMain.handle('browser:harGetData', (_e, paneId: string) => {
+    return getBrowserPanes().harGetData(paneId)
+  })
+
+  ipcMain.handle('browser:harIsRecording', (_e, paneId: string) => {
+    return getBrowserPanes().harIsRecording(paneId)
+  })
+
+  ipcMain.handle('browser:harGetEntryCount', (_e, paneId: string) => {
+    return getBrowserPanes().harGetEntryCount(paneId)
+  })
+
+  ipcMain.handle('browser:openDevTools', (_e, paneId: string) => {
+    getBrowserPanes().openDevTools(paneId)
+  })
+
+  ipcMain.handle('browser:setZoom', (_e, paneId: string, delta: number) => {
+    return getBrowserPanes().setZoom(paneId, delta)
+  })
+
+  ipcMain.handle('browser:resetZoom', (_e, paneId: string) => {
+    getBrowserPanes().resetZoom(paneId)
+  })
+
+  ipcMain.handle('browser:findInPage', (_e, paneId: string, text: string, forward: boolean) => {
+    getBrowserPanes().findInPage(paneId, text, forward)
+  })
+
+  ipcMain.handle('browser:stopFindInPage', (_e, paneId: string) => {
+    getBrowserPanes().stopFindInPage(paneId)
   })
 
   ipcMain.handle('shell:openExternal', async (_e, url: string) => {

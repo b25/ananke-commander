@@ -317,6 +317,99 @@ select {
   font-size: var(--text-sm);
 }
 
+/* ── Browser Pane ──────────────────────────────────────── */
+
+.browser-pane-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--rail);
+}
+
+.browser-toolbar__nav {
+  display: flex;
+  gap: 2px;
+}
+
+.browser-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.browser-toolbar__btn:hover {
+  background: var(--header);
+  border-color: var(--border);
+}
+
+.browser-toolbar__btn:active {
+  background: var(--border);
+}
+
+.browser-toolbar__url-form {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 4px;
+  min-width: 0;
+}
+
+.browser-toolbar__url-form:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.browser-toolbar__ssl-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px 0 2px;
+  flex-shrink: 0;
+  min-width: 16px;
+}
+
+.browser-toolbar__url-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  padding: 5px 0;
+  outline: none;
+  min-width: 0;
+}
+
+.browser-toolbar__url-input::placeholder {
+  color: var(--muted);
+}
+
+.browser-toolbar__url-form .browser-toolbar__btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+}
+
 .browser-host {
   flex: 1;
   min-height: 0;
@@ -745,6 +838,240 @@ select {
   0% { left: 0; right: 100%; }
   50% { left: 25%; right: 0%; }
   100% { left: 100%; right: 0; }
+}
+
+/* ── Browser History Panel ─────────────────────────────── */
+
+.browser-history__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.browser-history__popover {
+  min-width: 320px;
+  max-height: 400px;
+  right: 0;
+  left: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.browser-history__header {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.browser-history__search {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 8px;
+  outline: none;
+}
+
+.browser-history__search:focus {
+  border-color: var(--accent);
+}
+
+.browser-history__clear-btn {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.browser-history__clear-btn:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.browser-history__list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.browser-history__empty {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.browser-history__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.browser-history__item:hover {
+  background: var(--header);
+}
+
+.browser-history__url {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.browser-history__time {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* ── Browser Menu ──────────────────────────────────────── */
+
+.browser-menu__popover {
+  min-width: 220px;
+  right: 0;
+  left: auto;
+}
+
+.browser-menu__section-label {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.browser-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.browser-menu__item:hover {
+  background: var(--header);
+}
+
+.browser-menu__shortcut {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.browser-menu__indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.browser-menu__indicator.recording {
+  background: #e53e3e;
+  box-shadow: 0 0 4px #e53e3e;
+  animation: pulse-recording 1.5s infinite;
+}
+
+.browser-menu__recording {
+  color: #e53e3e;
+}
+
+@keyframes pulse-recording {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.browser-menu__zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 10px 6px;
+}
+
+.browser-menu__zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.browser-menu__zoom-btn:hover {
+  background: var(--header);
+}
+
+/* ── Browser Find Bar ──────────────────────────────────── */
+
+.browser-find-bar {
+  display: flex;
+  padding: 4px 8px;
+  background: var(--rail);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.browser-find-bar__form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.browser-find-bar__input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+  font-family: var(--font-mono);
+}
+
+.browser-find-bar__input:focus {
+  border-color: var(--accent);
 }
 
 .notes-status-bar {

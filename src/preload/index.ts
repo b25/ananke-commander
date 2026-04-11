@@ -134,12 +134,14 @@ const api = {
     goBack: (paneId: string) => ipcRenderer.invoke('browser:goBack', paneId),
     goForward: (paneId: string) => ipcRenderer.invoke('browser:goForward', paneId),
     stop: (paneId: string) => ipcRenderer.invoke('browser:stop', paneId),
-    getHistory: (paneId: string): Promise<string[]> => ipcRenderer.invoke('browser:getHistory', paneId),
-    onHistory: (cb: (msg: { paneId: string; urls: string[] }) => void) => {
-      const fn = (_: unknown, msg: { paneId: string; urls: string[] }) => cb(msg)
+    getHistory: (paneId: string): Promise<Array<{ url: string; timestamp: number }>> =>
+      ipcRenderer.invoke('browser:getHistory', paneId),
+    onHistory: (cb: (msg: { paneId: string; entries: Array<{ url: string; timestamp: number }> }) => void) => {
+      const fn = (_: unknown, msg: { paneId: string; entries: Array<{ url: string; timestamp: number }> }) => cb(msg)
       ipcRenderer.on('browser:history', fn)
       return () => ipcRenderer.removeListener('browser:history', fn)
     },
+    clearHistory: (paneId: string) => ipcRenderer.invoke('browser:clearHistory', paneId),
     reload: (paneId: string) => ipcRenderer.invoke('browser:reload', paneId),
     destroy: (paneId: string) => ipcRenderer.invoke('browser:destroy', paneId),
     onTitleUpdate: (cb: (msg: { paneId: string; title: string }) => void) => {
@@ -151,7 +153,22 @@ const api = {
       const fn = (_: unknown, msg: { paneId: string; loading: boolean }) => cb(msg)
       ipcRenderer.on('browser:loadingState', fn)
       return () => ipcRenderer.removeListener('browser:loadingState', fn)
-    }
+    },
+    onUrlUpdate: (cb: (msg: { paneId: string; url: string }) => void) => {
+      const fn = (_: unknown, msg: { paneId: string; url: string }) => cb(msg)
+      ipcRenderer.on('browser:urlUpdate', fn)
+      return () => ipcRenderer.removeListener('browser:urlUpdate', fn)
+    },
+    harStart: (paneId: string) => ipcRenderer.invoke('browser:harStart', paneId),
+    harStop: (paneId: string) => ipcRenderer.invoke('browser:harStop', paneId),
+    harGetData: (paneId: string): Promise<object | null> => ipcRenderer.invoke('browser:harGetData', paneId),
+    harIsRecording: (paneId: string): Promise<boolean> => ipcRenderer.invoke('browser:harIsRecording', paneId),
+    harGetEntryCount: (paneId: string): Promise<number> => ipcRenderer.invoke('browser:harGetEntryCount', paneId),
+    openDevTools: (paneId: string) => ipcRenderer.invoke('browser:openDevTools', paneId),
+    setZoom: (paneId: string, delta: number): Promise<number> => ipcRenderer.invoke('browser:setZoom', paneId, delta),
+    resetZoom: (paneId: string) => ipcRenderer.invoke('browser:resetZoom', paneId),
+    findInPage: (paneId: string, text: string, forward: boolean) => ipcRenderer.invoke('browser:findInPage', paneId, text, forward),
+    stopFindInPage: (paneId: string) => ipcRenderer.invoke('browser:stopFindInPage', paneId)
   },
 
   shell: {
