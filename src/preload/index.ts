@@ -200,7 +200,13 @@ const api = {
 
   notes: {
     saveVault: (vaultPath: string, subfolder: string, filename: string, body: string) =>
-      ipcRenderer.invoke('notes:saveVault', vaultPath, subfolder, filename, body)
+      ipcRenderer.invoke('notes:saveVault', vaultPath, subfolder, filename, body),
+    listVault: (vaultPath: string, subfolder: string): Promise<Array<{ filename: string; modified: number }>> =>
+      ipcRenderer.invoke('notes:listVault', vaultPath, subfolder),
+    readVault: (vaultPath: string, subfolder: string, filename: string): Promise<string | null> =>
+      ipcRenderer.invoke('notes:readVault', vaultPath, subfolder, filename),
+    deleteVault: (vaultPath: string, subfolder: string, filename: string): Promise<void> =>
+      ipcRenderer.invoke('notes:deleteVault', vaultPath, subfolder, filename)
   },
 
   clipboard: {

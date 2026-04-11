@@ -58,6 +58,7 @@ export interface BrowserPaneState extends PaneStateBase {
 export interface NotesPaneState extends PaneStateBase {
   type: 'notes'
   body: string
+  currentFile?: string
 }
 
 export interface RadarPaneState extends PaneStateBase {

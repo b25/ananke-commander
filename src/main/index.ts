@@ -15,7 +15,7 @@ import { TerminalManager } from './pty/terminalManager.js'
 import { BrowserPaneManager } from './browser/browserPaneManager.js'
 import { isNavigationAllowed } from './security/browserSecurity.js'
 import * as archive from './archive/archiveService.js'
-import { saveMarkdownToVault } from './notes/notesService.js'
+import { saveMarkdownToVault, listVaultNotes, readVaultNote, deleteVaultNote } from './notes/notesService.js'
 import type { AppStateSnapshot, PaneState } from '../shared/contracts.js'
 import { randomUUID } from 'node:crypto'
 import { installAppMenu } from './menu.js'
@@ -386,6 +386,18 @@ function registerIpcHandlers(): void {
       return saveMarkdownToVault(vaultPath, subfolder, filename, body)
     }
   )
+
+  ipcMain.handle('notes:listVault', async (_e, vaultPath: string, subfolder: string) => {
+    return listVaultNotes(vaultPath, subfolder)
+  })
+
+  ipcMain.handle('notes:readVault', async (_e, vaultPath: string, subfolder: string, filename: string) => {
+    return readVaultNote(vaultPath, subfolder, filename)
+  })
+
+  ipcMain.handle('notes:deleteVault', async (_e, vaultPath: string, subfolder: string, filename: string) => {
+    return deleteVaultNote(vaultPath, subfolder, filename)
+  })
 
   ipcMain.handle('state:setCanvasOffset', (_e, wsId: string, x: number, y: number) => {
     stateStore!.setCanvasOffset(wsId, x, y)

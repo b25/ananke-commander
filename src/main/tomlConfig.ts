@@ -28,7 +28,9 @@ function paneToToml(p: PaneState): Record<string, unknown> {
   } else if (p.type === 'browser') {
     base.url = (p as BrowserPaneState).url
   } else if (p.type === 'notes') {
-    base.body = (p as NotesPaneState).body
+    const n = p as NotesPaneState
+    base.body = n.body
+    if (n.currentFile) base.current_file = n.currentFile
   } else if (p.type === 'radar') {
     const r = p as RadarPaneState
     base.root_path = r.rootPath.replace(/\\/g, '/')
@@ -119,7 +121,8 @@ function parsePaneFromToml(raw: unknown, idx: number): PaneState {
     return { ...base, type: 'browser', url: str(raw.url, 'about:blank') } satisfies BrowserPaneState
   }
   if (type === 'notes') {
-    return { ...base, type: 'notes', body: str(raw.body) } satisfies NotesPaneState
+    const cf = str(raw.current_file)
+    return { ...base, type: 'notes', body: str(raw.body), ...(cf ? { currentFile: cf } : {}) } satisfies NotesPaneState
   }
   if (type === 'radar') {
     return { ...base, type: 'radar',
