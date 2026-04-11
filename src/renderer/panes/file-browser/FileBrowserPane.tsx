@@ -223,11 +223,13 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         e.preventDefault()
         setMoveOpen(true)
       }
-      if (e.key === 'F7') {
+      if (e.key === 'F7' && !e.altKey) {
         e.preventDefault()
         const folderName = prompt('New folder name:')
         if (folderName?.trim()) {
-          void window.ananke.fs.quickOp('mkdir', joinPath(activePath, folderName.trim())).then(() => refreshActive())
+          void window.ananke.fs.quickOp('mkdir', joinPath(activePath, folderName.trim()))
+            .then(() => refreshActive())
+            .catch((err: Error) => alert(err.message))
         }
       }
       if (e.key === 'F8') {
