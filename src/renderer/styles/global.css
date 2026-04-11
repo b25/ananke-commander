@@ -1196,8 +1196,9 @@ select {
 }
 
 .screen-selector__cell.active {
-  background: #f5c200;
+  background: var(--accent);
   opacity: 1;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
 }
 
 /* ── Arrange Strip ────────────────────────────────────── */
