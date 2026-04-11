@@ -24,7 +24,7 @@
     "archiver": "^7.0.1",
     "d3-hierarchy": "^3.1.2",
     "electron-store": "^10.0.0",
-    "node-pty": "^1.0.0",
+    "node-pty": "^1.2.0-beta.12",
     "protobufjs": "^8.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
