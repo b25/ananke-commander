@@ -9,8 +9,51 @@ function clampScrollback(n: number): number {
 }
 
 // Track which pane IDs already have a PTY process running in the main process.
-// This prevents double-spawning on React remounts (HMR, layout changes, etc.).
 const spawnedPanes = new Set<string>()
+
+// Ring buffer of PTY output per pane so we can replay on remount.
+// Keeps up to MAX_BUFFER_SIZE bytes of recent output.
+const MAX_BUFFER_SIZE = 512 * 1024 // 512 KB — enough for ~10K+ lines
+const outputBuffers = new Map<string, string[]>()
+const outputSizes = new Map<string, number>()
+
+function appendBuffer(paneId: string, data: string): void {
+  let buf = outputBuffers.get(paneId)
+  if (!buf) { buf = []; outputBuffers.set(paneId, buf) }
+  buf.push(data)
+  const size = (outputSizes.get(paneId) || 0) + data.length
+  outputSizes.set(paneId, size)
+  // Trim oldest chunks if over limit
+  while (size > MAX_BUFFER_SIZE && buf.length > 1) {
+    const removed = buf.shift()!
+    outputSizes.set(paneId, (outputSizes.get(paneId) || 0) - removed.length)
+  }
+}
+
+function drainBuffer(paneId: string): string {
+  const buf = outputBuffers.get(paneId)
+  if (!buf || buf.length === 0) return ''
+  return buf.join('')
+}
+
+function clearBuffer(paneId: string): void {
+  outputBuffers.delete(paneId)
+  outputSizes.delete(paneId)
+}
+
+// Global listener that captures PTY data even when no Terminal is mounted.
+// This ensures output produced while the component is unmounted is buffered.
+const globalListenerActive = { value: false }
+function ensureGlobalListener(): void {
+  if (globalListenerActive.value) return
+  globalListenerActive.value = true
+  window.ananke.pty.onData(({ paneId, data }) => {
+    if (spawnedPanes.has(paneId)) appendBuffer(paneId, data)
+  })
+  window.ananke.pty.onExit(({ paneId }) => {
+    spawnedPanes.delete(paneId)
+  })
+}
 
 export function useXterm(paneId: string, cwd: string | undefined, scrollback: number, onTitleChange?: (title: string) => void, cmd?: string, args?: string[]) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -18,10 +61,11 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
   const fitRef = useRef<FitAddon | null>(null)
 
   useEffect(() => {
+    ensureGlobalListener()
+
     const host = hostRef.current
     if (!host) return
 
-    // Restore visibility if previously hidden
     host.style.display = ''
 
     const term = new Terminal({
@@ -53,11 +97,16 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     termRef.current = term
     fitRef.current = fit
 
+    // Replay buffered output from before this mount
+    const buffered = drainBuffer(paneId)
+    if (buffered) term.write(buffered)
+
     term.onSelectionChange(() => {
       const sel = term.getSelection()
       if (sel) void window.ananke.clipboard.writeText(sel)
     })
 
+    // Local listener writes to xterm in real-time (global listener buffers)
     const d = window.ananke.pty.onData(({ paneId: id, data }) => {
       if (id === paneId) term.write(data)
     })
@@ -65,6 +114,7 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
       if (id === paneId) {
         term.writeln('\r\n[Process exited]')
         spawnedPanes.delete(paneId)
+        clearBuffer(paneId)
       }
     })
 
@@ -76,7 +126,6 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
       if (onTitleChange) onTitleChange(title)
     })
 
-    // Spawn PTY once we have real layout dimensions, but only if not already running.
     let resizeFrame: number
 
     const doSpawnIfNeeded = () => {
@@ -100,7 +149,6 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     })
     ro.observe(host)
 
-    // If the host already has dimensions at mount time, spawn immediately.
     if (host.clientWidth > 0 && host.clientHeight > 0) {
       try { fit.fit() } catch { /* ignore */ }
       doSpawnIfNeeded()
@@ -113,9 +161,6 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
       subTitle.dispose()
       d()
       x()
-      // Do NOT dispose the PTY here — keep it alive across remounts.
-      // The PTY is disposed by state:closePane in the main process when
-      // the pane is actually closed.
 
       host.style.display = 'none'
       setTimeout(() => {
