@@ -362,7 +362,9 @@ export function App() {
 
   const copyDebugInfo = useCallback(() => {
     if (!ws) return
-    const collapsedIds = new Set(ws.screenCollapsed?.[activeScreen] ?? [])
+    // Build a global collapsed set across all screens
+    const allCollapsed = Object.values(ws.screenCollapsed ?? {}).flat()
+    const collapsedIds = new Set(allCollapsed)
     const lines: string[] = [
       '=== Ananke Commander Debug Info ===',
       `Timestamp:      ${new Date().toISOString()}`,
