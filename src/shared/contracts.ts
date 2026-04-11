@@ -13,9 +13,15 @@ export interface ObsidianSettings {
   subfolder: string
 }
 
+export interface TerminalSettings {
+  fontSize: number
+  fontFamily: string
+}
+
 export interface AppSettings {
   privacy: PrivacySettings
   obsidian: ObsidianSettings
+  terminal: TerminalSettings
 }
 
 export interface PaneStateBase {
@@ -123,7 +129,8 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   privacy: DEFAULT_PRIVACY,
-  obsidian: { vaultPath: '', subfolder: 'ananke-commander-notes' }
+  obsidian: { vaultPath: '', subfolder: 'ananke-commander-notes' },
+  terminal: { fontSize: 10, fontFamily: 'ui-monospace, monospace' }
 }
 
 export interface ListDirEntry {

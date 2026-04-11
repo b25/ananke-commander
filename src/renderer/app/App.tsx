@@ -430,10 +430,10 @@ export function App() {
   const renderPane = (pane: PaneState) => {
     const isActive = displayWs!.activePaneId === pane.id
     if (pane.type === 'file-browser') return <FileBrowserPane pane={pane} isActive={isActive} allPanes={displayWs!.panes} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'terminal') return <TerminalPane pane={pane} isActive={isActive} scrollback={snap!.settings.privacy.terminalHistoryMax} onClose={() => void closePane(pane.id)} />
+    if (pane.type === 'terminal') return <TerminalPane pane={pane} isActive={isActive} scrollback={snap!.settings.privacy.terminalHistoryMax} fontSize={snap!.settings.terminal?.fontSize ?? 10} fontFamily={snap!.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'browser') return <BrowserPlaceholderPane pane={pane} isActive={isActive} canvasOffset={displayWs!.canvasOffset} onClose={() => void closePane(pane.id)} onUpdate={(next) => void updatePane(pane.id, next)} />
     if (pane.type === 'radar') return <RadarPane pane={pane} isActive={isActive} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'gitui') return <GitUiPane pane={pane} isActive={isActive} onClose={() => void closePane(pane.id)} />
+    if (pane.type === 'gitui') return <GitUiPane pane={pane} isActive={isActive} fontSize={snap!.settings.terminal?.fontSize ?? 10} fontFamily={snap!.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'api-toolkit') return <ApiToolkitPane pane={pane} isActive={isActive} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'notes') return <NotesPane pane={pane} isActive={isActive} notesUndoMax={snap!.settings.privacy.notesUndoMax} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
   }
@@ -643,6 +643,18 @@ export function App() {
           </h3>
           <div className="body">
           <NotesSettings value={snap.settings.obsidian} onChange={(obsidian) => setSnap({ ...snap, settings: { ...snap.settings, obsidian } })} />
+          <div style={{ marginBottom: 12 }}>
+            <p className="muted" style={{ marginBottom: 4 }}>Terminal font size</p>
+            <input type="number" min={6} max={32} value={snap.settings.terminal?.fontSize ?? 10} onChange={(e) => {
+              const terminal = { ...snap.settings.terminal ?? { fontSize: 10, fontFamily: 'ui-monospace, monospace' }, fontSize: Math.max(6, Math.min(32, Number(e.target.value) || 10)) }
+              setSnap({ ...snap, settings: { ...snap.settings, terminal } })
+            }} style={{ width: 60, marginRight: 12 }} />
+            <p className="muted" style={{ marginBottom: 4, marginTop: 8 }}>Terminal font family</p>
+            <input type="text" value={snap.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onChange={(e) => {
+              const terminal = { ...snap.settings.terminal ?? { fontSize: 10, fontFamily: 'ui-monospace, monospace' }, fontFamily: e.target.value }
+              setSnap({ ...snap, settings: { ...snap.settings, terminal } })
+            }} style={{ width: '100%' }} />
+          </div>
           <PrivacySettings value={snap.settings.privacy} onChange={(privacy) => setSnap({ ...snap, settings: { ...snap.settings, privacy } })} onPurgeRecentlyClosed={() => void window.ananke.state.purgeRecentlyClosed().then(setSnap)} />
           <button type="button" className="primary" onClick={() => void window.ananke.state.set({ settings: snap.settings }).then(setSnap)}>Save settings</button>
           <hr style={{ margin: '12px 0', borderColor: 'var(--border)' }} />

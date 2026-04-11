@@ -7,13 +7,15 @@ import { useXterm } from '../terminal/useXterm'
 type Props = {
   pane: GitUiPaneState
   isActive: boolean
+  fontSize: number
+  fontFamily: string
   onClose: () => void
 }
 
-export function GitUiPane({ pane, isActive, onClose }: Props) {
+export function GitUiPane({ pane, isActive, fontSize, fontFamily, onClose }: Props) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const outputRef = useRef('')
-  const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, 5000, undefined, 'gitui', [])
+  const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, 5000, undefined, 'gitui', [], fontSize, fontFamily)
 
   useEffect(() => {
     if (isActive) {

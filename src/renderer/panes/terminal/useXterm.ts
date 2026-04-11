@@ -55,7 +55,7 @@ function ensureGlobalListener(): void {
   })
 }
 
-export function useXterm(paneId: string, cwd: string | undefined, scrollback: number, onTitleChange?: (title: string) => void, cmd?: string, args?: string[]) {
+export function useXterm(paneId: string, cwd: string | undefined, scrollback: number, onTitleChange?: (title: string) => void, cmd?: string, args?: string[], fontSize?: number, fontFamily?: string) {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -70,7 +70,8 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
 
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 8,
+      fontSize: fontSize || 10,
+      fontFamily: fontFamily || 'ui-monospace, monospace',
       scrollback: clampScrollback(scrollback),
       theme: { background: '#0d1117', foreground: '#e6edf3' }
     })

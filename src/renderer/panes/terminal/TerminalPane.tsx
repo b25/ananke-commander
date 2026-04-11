@@ -8,18 +8,19 @@ type Props = {
   pane: TerminalPaneState
   isActive: boolean
   scrollback: number
+  fontSize: number
+  fontFamily: string
   onClose: () => void
 }
 
-export function TerminalPane({ pane, isActive, scrollback, onClose }: Props) {
+export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily, onClose }: Props) {
   const [termTitle, setTermTitle] = useState(pane.cwd)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, scrollback, (title) => {
-    // Strip leading emoji and 'user@host:' prefix – keep only the directory/custom part.
     let cleanTitle = title.replace(/^🖥\s*/, '')
     cleanTitle = cleanTitle.replace(/^[^@\s]+@[^:\s]+:\s*/, '')
     setTermTitle(cleanTitle || pane.cwd)
-  })
+  }, undefined, undefined, fontSize, fontFamily)
 
   useEffect(() => {
     if (isActive) {
