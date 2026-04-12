@@ -523,6 +523,22 @@ async function createWindow(): Promise<void> {
   }
 
   win.on('closed', () => {
+    // Auto-save open terminal sessions before shutdown
+    if (terminals && stateStore && !stateStore.getSettings().privacy.privateMode) {
+      const sessions = terminals.drainAllSessions()
+      const max = stateStore.getSettings().privacy.terminalHistoryMax
+      for (const s of sessions) {
+        void getTermHistory().save({
+          id: randomUUID(),
+          paneId: s.paneId,
+          title: s.cwd.split('/').pop() || 'terminal',
+          cwd: s.cwd,
+          startedAt: s.startedAt,
+          endedAt: Date.now(),
+          lineCount: s.text.split('\n').length
+        }, s.text, max)
+      }
+    }
     stateStore?.flushSnapshot()
     stateStore?.flushToml()
     stateStore?.dispose()

@@ -177,10 +177,14 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     if (!info) return
     const content = info.selectedText || info.bodyText.slice(0, 20000)
     const date = new Date().toISOString()
+    const wsIdx = snap.workspaces.findIndex(w => w.id === snap.activeWorkspaceId)
+    const wsName = snap.workspaces[wsIdx]?.name || 'Workspace'
+    const wsLabel = `${wsIdx + 1}-${wsName}`
     const safeTitle = (info.title || 'Untitled').replace(/[/\\:*?"<>|]/g, '-')
     const body = [
       '---',
       `title: "${info.title}"`,
+      `workspace: "${wsLabel}"`,
       `url: ${info.url}`,
       `date: ${date}`,
       `tags: [web-clipper]`,

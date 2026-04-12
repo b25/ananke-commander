@@ -29,6 +29,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   const [listFilter, setListFilter] = useState('')
   const [vaultPath, setVaultPath] = useState('')
   const [wsName, setWsName] = useState('')
+  const [wsLabel, setWsLabel] = useState('')
 
   useEffect(() => { setLocalBody(pane.body) }, [pane.id])
 
@@ -36,8 +37,10 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   useEffect(() => {
     void window.ananke.state.get().then(snap => {
       setVaultPath(snap.settings.obsidian.vaultPath)
-      const ws = snap.workspaces.find(w => w.id === snap.activeWorkspaceId)
-      setWsName(ws?.name ?? 'default')
+      const wsIdx = snap.workspaces.findIndex(w => w.id === snap.activeWorkspaceId)
+      const name = snap.workspaces[wsIdx]?.name ?? 'default'
+      setWsName(name)
+      setWsLabel(`${wsIdx + 1}-${name}`)
     })
   }, [pane.id])
 
@@ -90,7 +93,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
     const safeTitle = title.replace(/[/\\:*?"<>|]/g, '-')
     const filename = pane.currentFile || `${safeTitle}.md`
     const date = new Date().toISOString()
-    const body = `---\ntitle: "${title}"\ndate: ${date}\ntags: [notes]\n---\n\n${localBody}`
+    const body = `---\ntitle: "${title}"\nworkspace: "${wsLabel}"\ndate: ${date}\ntags: [notes]\n---\n\n${localBody}`
     await window.ananke.notes.saveVault(vaultPath, subfolder(), filename.endsWith('.md') ? filename.replace(/\.md$/, '') : filename, body)
     onUpdate({ ...pane, currentFile: filename.endsWith('.md') ? filename : `${filename}.md` })
   }

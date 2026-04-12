@@ -63,11 +63,15 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
       if (!text.trim()) { alert('Terminal is empty.'); return }
       const date = new Date().toISOString()
       const shortCwd = cwd.split('/').pop() || 'terminal'
-      const safeTitle = `terminal-${shortCwd}-${date.slice(0, 10)}-${date.slice(11, 16).replace(':', '')}`
+      const wsIdx = snap.workspaces.findIndex(w => w.id === snap.activeWorkspaceId)
+      const wsName = snap.workspaces[wsIdx]?.name || 'Workspace'
+      const wsLabel = `${wsIdx + 1}-${wsName}`
+      const safeTitle = `terminal-${wsLabel}-${shortCwd}-${date.slice(0, 10)}-${date.slice(11, 16).replace(':', '')}`
         .replace(/[/\\:*?"<>|]/g, '-')
       const body = [
         '---',
         `title: "Terminal: ${shortCwd}"`,
+        `workspace: "${wsLabel}"`,
         `cwd: ${cwd}`,
         `date: ${date}`,
         `tags: [terminal-capture]`,
