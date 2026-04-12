@@ -22,7 +22,9 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
   const lastCwdRef = useRef(pane.cwd)
   const lastTitleRef = useRef(pane.cwd)
   const homeDirRef = useRef('')
+  const cwdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => { void window.ananke.getPath('home').then((h: string) => { homeDirRef.current = h }) }, [])
+  useEffect(() => { return () => { if (cwdTimerRef.current) clearTimeout(cwdTimerRef.current) } }, [])
 
   const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, scrollback, (title) => {
     let cleanTitle = title.replace(/^🖥\s*/, '')
@@ -32,14 +34,17 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
       lastTitleRef.current = display
       setTermTitle(display)
     }
-    // Expand ~ to absolute home path before persisting
+    // Expand ~ to absolute home path before persisting (debounced)
     let absCwd = cleanTitle
     if (absCwd && absCwd.startsWith('~') && homeDirRef.current) {
       absCwd = homeDirRef.current + absCwd.slice(1)
     }
     if (absCwd && absCwd.startsWith('/') && absCwd !== lastCwdRef.current) {
       lastCwdRef.current = absCwd
-      onUpdate({ ...paneRef.current, cwd: absCwd })
+      if (cwdTimerRef.current) clearTimeout(cwdTimerRef.current)
+      cwdTimerRef.current = setTimeout(() => {
+        onUpdate({ ...paneRef.current, cwd: absCwd })
+      }, 1000)
     }
   }, undefined, undefined, fontSize, fontFamily)
 
