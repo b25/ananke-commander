@@ -21,6 +21,9 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
   paneRef.current = pane
   const lastCwdRef = useRef(pane.cwd)
   const lastTitleRef = useRef(pane.cwd)
+  const homeDirRef = useRef('')
+  useEffect(() => { void window.ananke.getPath('home').then((h: string) => { homeDirRef.current = h }) }, [])
+
   const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, scrollback, (title) => {
     let cleanTitle = title.replace(/^🖥\s*/, '')
     cleanTitle = cleanTitle.replace(/^[^@\s]+@[^:\s]+:\s*/, '')
@@ -29,10 +32,14 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
       lastTitleRef.current = display
       setTermTitle(display)
     }
-    // Only persist absolute paths as cwd (shell titles may contain ~ or relative paths)
-    if (cleanTitle && cleanTitle !== lastCwdRef.current && cleanTitle.startsWith('/')) {
-      lastCwdRef.current = cleanTitle
-      onUpdate({ ...paneRef.current, cwd: cleanTitle })
+    // Expand ~ to absolute home path before persisting
+    let absCwd = cleanTitle
+    if (absCwd && absCwd.startsWith('~') && homeDirRef.current) {
+      absCwd = homeDirRef.current + absCwd.slice(1)
+    }
+    if (absCwd && absCwd.startsWith('/') && absCwd !== lastCwdRef.current) {
+      lastCwdRef.current = absCwd
+      onUpdate({ ...paneRef.current, cwd: absCwd })
     }
   }, undefined, undefined, fontSize, fontFamily)
 
