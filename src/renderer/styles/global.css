@@ -916,11 +916,20 @@ select {
 }
 
 .collapsed-pill__title {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: clip;
+  text-overflow: ellipsis;
+}
+
+.collapsed-pill__subtitle {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
   overflow: clip;
   text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 10px;
 }
 
 .collapsed-pill__close {

@@ -66,10 +66,19 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
   const canvasW = viewportSize.width * 2
   const canvasH = viewportSize.height * 2
 
+  // Determine which screen is visible based on canvas offset
+  const screenCol = viewportSize.width > 0 ? Math.round(ox / viewportSize.width) : 0
+  const screenRow = viewportSize.height > 0 ? Math.round(oy / viewportSize.height) : 0
+
+  // Filter taskbar to only show panes on the current screen
+  const screenPanes = (allPanes ?? []).filter(p =>
+    Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow
+  )
+
   return (
     <div className="canvas-workspace">
       <TaskbarStrip
-        panes={allPanes ?? []}
+        panes={screenPanes}
         activePaneId={workspace.activePaneId}
         collapsedIds={collapsedIds ?? []}
         onRestore={(id) => onRestorePane?.(id)}
