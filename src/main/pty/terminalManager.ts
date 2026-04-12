@@ -55,12 +55,19 @@ export class TerminalManager {
     this.dispose(paneId)
     const shell = cmd || defaultShell()
     const args = argsOverride || (process.platform !== 'win32' && !cmd ? ['--login'] : [])
+    // Validate cwd: must be absolute path that exists, else fall back to home
+    let safeCwd = homedir()
+    if (cwd && cwd.startsWith('/')) {
+      try { if (require('node:fs').statSync(cwd).isDirectory()) safeCwd = cwd } catch { /* use home */ }
+    } else if (cwd && /^[A-Za-z]:/.test(cwd)) {
+      try { if (require('node:fs').statSync(cwd).isDirectory()) safeCwd = cwd } catch { /* use home */ }
+    }
     try {
       const proc = pty.spawn(shell, args, {
         name: 'xterm-256color',
         cols: Math.max(1, cols || 80),
         rows: Math.max(1, rows || 24),
-        cwd: cwd || homedir(),
+        cwd: safeCwd,
         env: process.env as Record<string, string>
       })
       this.procs.set(paneId, proc)

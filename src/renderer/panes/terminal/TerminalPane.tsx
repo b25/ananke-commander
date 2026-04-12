@@ -29,7 +29,8 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
       lastTitleRef.current = display
       setTermTitle(display)
     }
-    if (cleanTitle && cleanTitle !== lastCwdRef.current) {
+    // Only persist absolute paths as cwd (shell titles may contain ~ or relative paths)
+    if (cleanTitle && cleanTitle !== lastCwdRef.current && cleanTitle.startsWith('/')) {
       lastCwdRef.current = cleanTitle
       onUpdate({ ...paneRef.current, cwd: cleanTitle })
     }
