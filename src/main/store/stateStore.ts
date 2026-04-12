@@ -189,6 +189,7 @@ export class StateStore {
     this.store.set('workspaces', this.store.get('workspaces').map((ws) =>
       ws.id !== workspaceId ? ws : { ...ws, panes: ws.panes.map((p) => p.id === paneId ? updater(p) : p) }
     ))
+    this.scheduleTomlFlush()
   }
 
   private tomlDebounceTimer: ReturnType<typeof setTimeout> | null = null
