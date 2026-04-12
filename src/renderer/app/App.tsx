@@ -430,7 +430,7 @@ export function App() {
   const renderPane = (pane: PaneState) => {
     const isActive = displayWs!.activePaneId === pane.id
     if (pane.type === 'file-browser') return <FileBrowserPane pane={pane} isActive={isActive} allPanes={displayWs!.panes} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'terminal') return <TerminalPane pane={pane} isActive={isActive} scrollback={snap!.settings.privacy.terminalHistoryMax} fontSize={snap!.settings.terminal?.fontSize ?? 10} fontFamily={snap!.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onClose={() => void closePane(pane.id)} />
+    if (pane.type === 'terminal') return <TerminalPane pane={pane} isActive={isActive} scrollback={snap!.settings.privacy.terminalHistoryMax} fontSize={snap!.settings.terminal?.fontSize ?? 10} fontFamily={snap!.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'browser') return <BrowserPlaceholderPane pane={pane} isActive={isActive} canvasOffset={displayWs!.canvasOffset} onClose={() => void closePane(pane.id)} onUpdate={(next) => void updatePane(pane.id, next)} />
     if (pane.type === 'radar') return <RadarPane pane={pane} isActive={isActive} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'gitui') return <GitUiPane pane={pane} isActive={isActive} fontSize={snap!.settings.terminal?.fontSize ?? 10} fontFamily={snap!.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onClose={() => void closePane(pane.id)} />

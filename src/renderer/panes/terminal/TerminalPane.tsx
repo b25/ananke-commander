@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalPaneState } from '../../../shared/contracts'
 import { PaneHeader } from '../../layout/PaneHeader'
@@ -10,16 +10,23 @@ type Props = {
   scrollback: number
   fontSize: number
   fontFamily: string
+  onUpdate: (next: TerminalPaneState) => void
   onClose: () => void
 }
 
-export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily, onClose }: Props) {
+export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily, onUpdate, onClose }: Props) {
   const [termTitle, setTermTitle] = useState(pane.cwd)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const paneRef = useRef(pane)
+  paneRef.current = pane
   const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, scrollback, (title) => {
     let cleanTitle = title.replace(/^🖥\s*/, '')
     cleanTitle = cleanTitle.replace(/^[^@\s]+@[^:\s]+:\s*/, '')
     setTermTitle(cleanTitle || pane.cwd)
+    // Update pane cwd so taskbar reflects current directory
+    if (cleanTitle && cleanTitle !== paneRef.current.cwd) {
+      onUpdate({ ...paneRef.current, cwd: cleanTitle })
+    }
   }, undefined, undefined, fontSize, fontFamily)
 
   useEffect(() => {
