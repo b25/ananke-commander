@@ -1854,36 +1854,22 @@ select {
   border: none;
 }
 
-/* ── Terminal History Modal ──────────────────────── */
+/* ── Terminal History Inline Viewer ───────────────── */
 
-.term-history-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.term-history-modal__content {
-  width: 80%;
-  max-width: 900px;
-  height: 70%;
-  background: var(--pane);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+.term-history-inline {
+  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--pane);
 }
 
-.term-history-modal__header {
+.term-history-inline__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-sm);
-  height: 32px;
+  height: 28px;
   background: var(--header);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
@@ -1891,13 +1877,19 @@ select {
   flex-shrink: 0;
 }
 
-.term-history-modal__body {
+.term-history-inline__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.term-history-inline__body {
   flex: 1;
   overflow: auto;
   padding: var(--space-sm);
 }
 
-.term-history-modal__pre {
+.term-history-inline__pre {
   font-family: var(--font-mono);
   font-size: 11px;
   white-space: pre-wrap;

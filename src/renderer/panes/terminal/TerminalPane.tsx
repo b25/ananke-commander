@@ -105,47 +105,48 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
       <PaneHeader title={termTitle} paneType="terminal" onClose={() => void handleClose()} actions={actions} />
-      <div className="pane-body" onClick={() => setCtxMenu(null)}>
-        <div
-          ref={hostRef}
-          className="terminal-host"
-          onContextMenu={(e) => {
-            e.preventDefault()
-            setCtxMenu({ x: e.clientX, y: e.clientY })
-          }}
-        />
-        {ctxMenu && (
-          <div
-            style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 200 }}
-            className="ctx-menu"
-            onMouseLeave={() => setCtxMenu(null)}
-          >
-            <button type="button" className="ctx-menu__item" onClick={() => {
-              const sel = termRef.current?.getSelection()
-              if (sel) void window.ananke.clipboard.writeText(sel)
-              setCtxMenu(null)
-            }}>Copy</button>
-            <button type="button" className="ctx-menu__item" onClick={async () => {
-              try {
-                const text = await navigator.clipboard.readText()
-                if (text) void window.ananke.pty.write(pane.id, text)
-              } catch { /* ignore */ }
-              setCtxMenu(null)
-            }}>Paste</button>
-            <div className="ctx-menu__sep" />
-            <button type="button" className="ctx-menu__item" onClick={() => {
-              termRef.current?.clear()
-              setCtxMenu(null)
-            }}>Clear</button>
-          </div>
-        )}
-      </div>
-      {viewingSession && (
+      {viewingSession ? (
         <TerminalHistoryPanel
           sessionId={viewingSession.id}
           title={viewingSession.title || viewingSession.cwd}
           onClose={() => setViewingSession(null)}
         />
+      ) : (
+        <div className="pane-body" onClick={() => setCtxMenu(null)}>
+          <div
+            ref={hostRef}
+            className="terminal-host"
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setCtxMenu({ x: e.clientX, y: e.clientY })
+            }}
+          />
+          {ctxMenu && (
+            <div
+              style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 200 }}
+              className="ctx-menu"
+              onMouseLeave={() => setCtxMenu(null)}
+            >
+              <button type="button" className="ctx-menu__item" onClick={() => {
+                const sel = termRef.current?.getSelection()
+                if (sel) void window.ananke.clipboard.writeText(sel)
+                setCtxMenu(null)
+              }}>Copy</button>
+              <button type="button" className="ctx-menu__item" onClick={async () => {
+                try {
+                  const text = await navigator.clipboard.readText()
+                  if (text) void window.ananke.pty.write(pane.id, text)
+                } catch { /* ignore */ }
+                setCtxMenu(null)
+              }}>Paste</button>
+              <div className="ctx-menu__sep" />
+              <button type="button" className="ctx-menu__item" onClick={() => {
+                termRef.current?.clear()
+                setCtxMenu(null)
+              }}>Clear</button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

@@ -61,8 +61,10 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
       if (!vaultPath) { alert('Set Obsidian vault path in Settings first.'); return }
       const text = extractTerminalText(term)
       if (!text.trim()) { alert('Terminal is empty.'); return }
-      const date = new Date().toISOString()
+      const lineCount = text.split('\n').length
       const shortCwd = cwd.split('/').pop() || 'terminal'
+      if (!confirm(`Save ${lineCount} lines from "${shortCwd}" to Obsidian vault?`)) return
+      const date = new Date().toISOString()
       const wsIdx = snap.workspaces.findIndex(w => w.id === snap.activeWorkspaceId)
       const wsName = snap.workspaces[wsIdx]?.name || 'Workspace'
       const wsLabel = `${wsIdx + 1}-${wsName}`

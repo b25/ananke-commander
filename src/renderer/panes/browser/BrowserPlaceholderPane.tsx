@@ -181,6 +181,7 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     const wsName = snap.workspaces[wsIdx]?.name || 'Workspace'
     const wsLabel = `${wsIdx + 1}-${wsName}`
     const safeTitle = (info.title || 'Untitled').replace(/[/\\:*?"<>|]/g, '-')
+    if (!confirm(`Save "${info.title || 'Untitled'}" to Obsidian vault?`)) return
     const body = [
       '---',
       `title: "${info.title}"`,
