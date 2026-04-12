@@ -66,8 +66,7 @@ export function TaskbarStrip({ panes, activePaneId, collapsedIds, onRestore, onA
             onClick={() => isCollapsed ? onRestore(pane.id) : onActivate(pane.id)}
           >
             <span className="collapsed-pill__icon">{PANE_ICONS[pane.type] ?? '▪'}</span>
-            <span className="collapsed-pill__title">{pane.title}</span>
-            {subtitle && <span className="collapsed-pill__subtitle">{subtitle}</span>}
+            <span className="collapsed-pill__title">{subtitle || pane.title}</span>
             <button
               type="button"
               className="collapsed-pill__close"
