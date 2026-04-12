@@ -13,10 +13,11 @@ import { FileJobManager } from './jobs/fileJobManager.js'
 import { FolderSizeManager } from './jobs/folderSizeManager.js'
 import { TerminalManager } from './pty/terminalManager.js'
 import { BrowserPaneManager } from './browser/browserPaneManager.js'
+import { TerminalSessionStore } from './pty/terminalSessionStore.js'
 import { isNavigationAllowed } from './security/browserSecurity.js'
 import * as archive from './archive/archiveService.js'
 import { saveMarkdownToVault, listVaultNotes, readVaultNote, deleteVaultNote } from './notes/notesService.js'
-import type { AppStateSnapshot, PaneState } from '../shared/contracts.js'
+import type { AppStateSnapshot, PaneState, TerminalSessionMeta } from '../shared/contracts.js'
 import { randomUUID } from 'node:crypto'
 import { installAppMenu } from './menu.js'
 
@@ -28,6 +29,7 @@ let fileJobs: FileJobManager | null = null
 let folderSizeMgr: FolderSizeManager | null = null
 let terminals: TerminalManager | null = null
 let browserPanes: BrowserPaneManager | null = null
+let termHistory: TerminalSessionStore | null = null
 
 function getTerminals(): TerminalManager {
   if (!terminals) terminals = new TerminalManager(mainWindow!)
@@ -42,6 +44,11 @@ function getFileJobs(): FileJobManager {
 function getFolderSizeMgr(): FolderSizeManager {
   if (!folderSizeMgr) folderSizeMgr = new FolderSizeManager(mainWindow!)
   return folderSizeMgr
+}
+
+function getTermHistory(): TerminalSessionStore {
+  if (!termHistory) termHistory = new TerminalSessionStore()
+  return termHistory
 }
 
 function getBrowserPanes(): BrowserPaneManager {
@@ -468,6 +475,19 @@ function registerIpcHandlers(): void {
     const error = stateStore!.validateAndApplyToml(raw)
     return { error, snapshot: error ? null : stateStore!.getSnapshot() }
   })
+
+  ipcMain.handle('termHistory:save', async (_e, meta: TerminalSessionMeta, text: string) => {
+    const max = stateStore!.getSettings().privacy.terminalHistoryMax
+    await getTermHistory().save(meta, text, max)
+  })
+
+  ipcMain.handle('termHistory:list', () => getTermHistory().list())
+
+  ipcMain.handle('termHistory:read', (_e, id: string) => getTermHistory().read(id))
+
+  ipcMain.handle('termHistory:delete', (_e, id: string) => getTermHistory().delete(id))
+
+  ipcMain.handle('termHistory:clear', () => getTermHistory().clear())
 }
 
 async function createWindow(): Promise<void> {
@@ -514,6 +534,7 @@ async function createWindow(): Promise<void> {
     terminals = null
     browserPanes?.destroyAll()
     browserPanes = null
+    termHistory = null
     stateStore = null
     mainWindow = null
   })

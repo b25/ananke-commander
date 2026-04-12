@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import '@xterm/xterm/css/xterm.css'
-import type { TerminalPaneState } from '../../../shared/contracts'
+import type { TerminalPaneState, TerminalSessionMeta } from '../../../shared/contracts'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { useXterm } from './useXterm'
+import { TerminalActions, extractTerminalText } from './TerminalActions'
+import { TerminalHistoryPanel } from './TerminalHistoryPanel'
 
 type Props = {
   pane: TerminalPaneState
@@ -17,6 +19,8 @@ type Props = {
 export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily, onUpdate, onClose }: Props) {
   const [termTitle, setTermTitle] = useState(pane.cwd)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const [viewingSession, setViewingSession] = useState<TerminalSessionMeta | null>(null)
+  const sessionStartRef = useRef(Date.now())
   const paneRef = useRef(pane)
   paneRef.current = pane
   const lastCwdRef = useRef(pane.cwd)
@@ -65,9 +69,42 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
     }
   }, [isActive, fitRef, termRef])
 
+  const handleClose = async () => {
+    try {
+      const snap = await window.ananke.state.get()
+      if (!snap.settings.privacy.privateMode) {
+        const term = termRef.current
+        if (term) {
+          const text = extractTerminalText(term)
+          if (text.trim()) {
+            await window.ananke.termHistory.save({
+              id: crypto.randomUUID(),
+              paneId: pane.id,
+              title: termTitle || pane.cwd,
+              cwd: pane.cwd,
+              startedAt: sessionStartRef.current,
+              endedAt: Date.now(),
+              lineCount: text.split('\n').length
+            }, text)
+          }
+        }
+      }
+    } catch { /* don't block close on save failure */ }
+    onClose()
+  }
+
+  const actions = (
+    <TerminalActions
+      paneId={pane.id}
+      termRef={termRef}
+      cwd={pane.cwd}
+      onViewSession={setViewingSession}
+    />
+  )
+
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
-      <PaneHeader title={termTitle} paneType="terminal" onClose={onClose} />
+      <PaneHeader title={termTitle} paneType="terminal" onClose={() => void handleClose()} actions={actions} />
       <div className="pane-body" onClick={() => setCtxMenu(null)}>
         <div
           ref={hostRef}
@@ -103,6 +140,13 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
           </div>
         )}
       </div>
+      {viewingSession && (
+        <TerminalHistoryPanel
+          sessionId={viewingSession.id}
+          title={viewingSession.title || viewingSession.cwd}
+          onClose={() => setViewingSession(null)}
+        />
+      )}
     </div>
   )
 }

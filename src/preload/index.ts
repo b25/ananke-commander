@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppStateSnapshot, ListDirEntry, PaneState } from '../shared/contracts.js'
+import type { AppStateSnapshot, ListDirEntry, PaneState, TerminalSessionMeta } from '../shared/contracts.js'
 
 const api = {
   platform: process.platform as 'darwin' | 'win32' | 'linux',
@@ -213,6 +213,19 @@ const api = {
       ipcRenderer.invoke('notes:readVault', vaultPath, subfolder, filename),
     deleteVault: (vaultPath: string, subfolder: string, filename: string): Promise<void> =>
       ipcRenderer.invoke('notes:deleteVault', vaultPath, subfolder, filename)
+  },
+
+  termHistory: {
+    save: (meta: TerminalSessionMeta, text: string): Promise<void> =>
+      ipcRenderer.invoke('termHistory:save', meta, text),
+    list: (): Promise<TerminalSessionMeta[]> =>
+      ipcRenderer.invoke('termHistory:list'),
+    read: (id: string): Promise<string | null> =>
+      ipcRenderer.invoke('termHistory:read', id),
+    delete: (id: string): Promise<void> =>
+      ipcRenderer.invoke('termHistory:delete', id),
+    clear: (): Promise<void> =>
+      ipcRenderer.invoke('termHistory:clear')
   },
 
   clipboard: {

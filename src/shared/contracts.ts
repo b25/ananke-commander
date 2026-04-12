@@ -149,6 +149,16 @@ export interface FileJobProgress {
   current?: string
 }
 
+export interface TerminalSessionMeta {
+  id: string
+  paneId: string
+  title: string
+  cwd: string
+  startedAt: number
+  endedAt: number
+  lineCount: number
+}
+
 export type FileJobKind = 'copy' | 'move' | 'delete'
 
 export interface FileJobPayload {

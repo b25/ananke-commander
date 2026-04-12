@@ -1787,3 +1787,122 @@ select {
   border-color: var(--accent);
   color: var(--text);
 }
+
+/* ── Terminal History ────────────────────────────── */
+
+.term-history-popover {
+  right: 0;
+  left: auto;
+}
+
+.term-history__item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.term-history__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.term-history__main:hover {
+  background: var(--hover);
+}
+
+.term-history__title {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.term-history__meta {
+  font-size: var(--text-2xs);
+  color: var(--muted);
+}
+
+.term-history__delete {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+}
+
+.term-history__delete:hover {
+  color: var(--danger);
+  background: none;
+  border: none;
+}
+
+/* ── Terminal History Modal ──────────────────────── */
+
+.term-history-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.term-history-modal__content {
+  width: 80%;
+  max-width: 900px;
+  height: 70%;
+  background: var(--pane);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.term-history-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-sm);
+  height: 32px;
+  background: var(--header);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  flex-shrink: 0;
+}
+
+.term-history-modal__body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-sm);
+}
+
+.term-history-modal__pre {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.5;
+}
