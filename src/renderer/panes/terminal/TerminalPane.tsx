@@ -19,12 +19,18 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const paneRef = useRef(pane)
   paneRef.current = pane
+  const lastCwdRef = useRef(pane.cwd)
+  const lastTitleRef = useRef(pane.cwd)
   const { hostRef, fitRef, termRef } = useXterm(pane.id, pane.cwd, scrollback, (title) => {
     let cleanTitle = title.replace(/^🖥\s*/, '')
     cleanTitle = cleanTitle.replace(/^[^@\s]+@[^:\s]+:\s*/, '')
-    setTermTitle(cleanTitle || pane.cwd)
-    // Update pane cwd so taskbar reflects current directory
-    if (cleanTitle && cleanTitle !== paneRef.current.cwd) {
+    const display = cleanTitle || pane.cwd
+    if (display !== lastTitleRef.current) {
+      lastTitleRef.current = display
+      setTermTitle(display)
+    }
+    if (cleanTitle && cleanTitle !== lastCwdRef.current) {
+      lastCwdRef.current = cleanTitle
       onUpdate({ ...paneRef.current, cwd: cleanTitle })
     }
   }, undefined, undefined, fontSize, fontFamily)
