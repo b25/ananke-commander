@@ -35,6 +35,7 @@ function applyAuth(auth: AuthConfig, headers: Record<string, string>): void {
       break
     case 'apiKey':
       if (auth.in === 'header') headers[auth.key] = auth.value
+      // query injection handled in buildUrl
       break
     case 'oauth2':
       headers['Authorization'] = `Bearer ${auth.accessToken}`
@@ -44,6 +45,12 @@ function applyAuth(auth: AuthConfig, headers: Record<string, string>): void {
 
 function buildUrl(req: HttpRequest): string {
   const enabledParams = req.params.filter((p) => p.enabled && p.key.trim())
+
+  // apiKey-in-query auth
+  if (req.auth.type === 'apiKey' && req.auth.in === 'query' && req.auth.key.trim()) {
+    enabledParams.push({ key: req.auth.key, value: req.auth.value, enabled: true })
+  }
+
   if (enabledParams.length === 0) return req.url
 
   const base = req.url.includes('?') ? req.url : req.url + '?'
