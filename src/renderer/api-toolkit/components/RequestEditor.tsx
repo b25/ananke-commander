@@ -1,0 +1,217 @@
+import { useState } from 'react'
+import { useStore } from '../store'
+import type { Tab } from '../store'
+import type { HttpMethod, AuthConfig } from '../../../shared/api-toolkit-contracts'
+import { KvEditor } from './KvEditor'
+import { GrpcPanel } from './GrpcPanel'
+
+const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE']
+
+interface Props {
+  tab: Tab
+}
+
+export function RequestEditor({ tab }: Props) {
+  const { setHttpMethod, setHttpUrl, setHttpParams, setHttpHeaders, setHttpBody, setHttpAuth, updateTab } = useStore()
+  const req = tab.httpRequest
+  const [innerTab, setInnerTab] = useState<'params' | 'headers' | 'body' | 'auth'>('params')
+  const [sending, setSending] = useState(false)
+
+  const enabledParams = req.params.filter((p) => p.enabled && p.key).length
+  const enabledHeaders = req.headers.filter((h) => h.enabled && h.key).length
+
+  async function send() {
+    setSending(true)
+    updateTab(tab.id, { loading: true, error: null, httpResponse: null })
+    const id = tab.id
+    try {
+      const resp = await window.ananke.apiToolkit.http.send(id, req)
+      updateTab(id, { httpResponse: resp, loading: false })
+      // persist history
+      window.ananke.apiToolkit.storage.addHistory({
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        protocol: 'http',
+        name: req.url || 'Request',
+        httpRequest: req,
+        httpResponse: resp,
+        duration: resp.timings.total,
+      })
+    } catch (e) {
+      updateTab(id, { error: String(e), loading: false })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function cancel() {
+    window.ananke.apiToolkit.http.cancel(tab.id)
+    updateTab(tab.id, { loading: false })
+    setSending(false)
+  }
+
+  if (tab.protocol === 'grpc') {
+    return (
+      <div className="request-editor" style={{ flex: '0 0 auto', maxHeight: '50%', overflow: 'hidden' }}>
+        <div className="url-bar" style={{ paddingBottom: 4 }}>
+          <span className="method-badge method-grpc" style={{ fontSize: 12 }}>gRPC</span>
+          <span style={{ flex: 1, color: 'var(--text-2)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+            {tab.grpcRequest.endpoint || 'Configure endpoint below'}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-2)' }}>
+            {tab.grpcRequest.serviceMethod || 'Select method'}
+          </span>
+        </div>
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <GrpcPanel tab={tab} />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="request-editor" style={{ flex: '0 0 auto' }}>
+      {/* URL bar */}
+      <div className="url-bar">
+        <select
+          className="method-select"
+          value={req.method}
+          onChange={(e) => setHttpMethod(tab.id, e.target.value as HttpMethod)}
+          style={{ color: `var(--method-${req.method})` }}
+        >
+          {METHODS.map((m) => <option key={m} value={m} style={{ color: 'var(--text-0)' }}>{m}</option>)}
+        </select>
+        <input
+          className="url-input"
+          placeholder="https://api.example.com/endpoint"
+          value={req.url}
+          onChange={(e) => setHttpUrl(tab.id, e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') send() }}
+        />
+        {tab.loading || sending
+          ? <button className="send-btn cancel" onClick={cancel}>Cancel</button>
+          : <button className="send-btn" onClick={send} disabled={!req.url}>Send</button>
+        }
+      </div>
+
+      {/* Inner tabs */}
+      <div className="panel-tabs">
+        {(['params', 'headers', 'body', 'auth'] as const).map((t) => (
+          <div
+            key={t}
+            className={`panel-tab ${innerTab === t ? 'active' : ''}`}
+            onClick={() => setInnerTab(t)}
+          >
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'params' && enabledParams > 0 && <span className="panel-tab-count">{enabledParams}</span>}
+            {t === 'headers' && enabledHeaders > 0 && <span className="panel-tab-count">{enabledHeaders}</span>}
+            {t === 'body' && req.body.mode !== 'none' && <span className="panel-tab-count">•</span>}
+            {t === 'auth' && req.auth.type !== 'none' && <span className="panel-tab-count">•</span>}
+          </div>
+        ))}
+      </div>
+
+      <div className="panel-body" style={{ maxHeight: 240, overflow: 'auto' }}>
+        {innerTab === 'params' && (
+          <KvEditor
+            rows={req.params}
+            onChange={(rows) => setHttpParams(tab.id, rows)}
+            keyPlaceholder="Parameter"
+            valuePlaceholder="Value"
+          />
+        )}
+
+        {innerTab === 'headers' && (
+          <KvEditor
+            rows={req.headers}
+            onChange={(rows) => setHttpHeaders(tab.id, rows)}
+            keyPlaceholder="Header"
+            valuePlaceholder="Value"
+          />
+        )}
+
+        {innerTab === 'body' && (
+          <BodyEditor tab={tab} />
+        )}
+
+        {innerTab === 'auth' && (
+          <AuthEditor tab={tab} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BodyEditor({ tab }: { tab: Tab }) {
+  const { setHttpBody } = useStore()
+  const body = tab.httpRequest.body
+
+  return (
+    <div>
+      <select
+        className="select"
+        value={body.mode}
+        onChange={(e) => setHttpBody(tab.id, { ...body, mode: e.target.value as typeof body.mode })}
+        style={{ marginBottom: 10 }}
+      >
+        {['none', 'raw', 'json', 'urlencoded', 'form'].map((m) => (
+          <option key={m} value={m}>{m}</option>
+        ))}
+      </select>
+
+      {body.mode !== 'none' && body.mode !== 'form' && body.mode !== 'urlencoded' && (
+        <textarea
+          className="code-editor"
+          style={{ minHeight: 140 }}
+          placeholder={body.mode === 'json' ? '{\n  "key": "value"\n}' : 'Request body…'}
+          value={body.raw ?? ''}
+          onChange={(e) => setHttpBody(tab.id, { ...body, raw: e.target.value })}
+        />
+      )}
+
+      {(body.mode === 'form' || body.mode === 'urlencoded') && (
+        <KvEditor
+          rows={body.formFields ?? []}
+          onChange={(rows) => setHttpBody(tab.id, { ...body, formFields: rows })}
+        />
+      )}
+    </div>
+  )
+}
+
+function AuthEditor({ tab }: { tab: Tab }) {
+  const { setHttpAuth } = useStore()
+  const auth: AuthConfig = tab.httpRequest.auth
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div>
+        <select className="select" value={auth.type} onChange={(e) => setHttpAuth(tab.id, { type: e.target.value } as AuthConfig)}>
+          {['none', 'basic', 'bearer', 'apiKey'].map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+
+      {auth.type === 'basic' && (
+        <>
+          <input className="kv-input" placeholder="Username" value={auth.username} onChange={(e) => setHttpAuth(tab.id, { ...auth, username: e.target.value })} />
+          <input className="kv-input" placeholder="Password" type="password" value={auth.password} onChange={(e) => setHttpAuth(tab.id, { ...auth, password: e.target.value })} />
+        </>
+      )}
+
+      {auth.type === 'bearer' && (
+        <input className="kv-input" placeholder="Bearer token" value={auth.token} onChange={(e) => setHttpAuth(tab.id, { ...auth, token: e.target.value })} />
+      )}
+
+      {auth.type === 'apiKey' && (
+        <>
+          <input className="kv-input" placeholder="Header / query key name" value={auth.key} onChange={(e) => setHttpAuth(tab.id, { ...auth, key: e.target.value })} />
+          <input className="kv-input" placeholder="Value" value={auth.value} onChange={(e) => setHttpAuth(tab.id, { ...auth, value: e.target.value })} />
+          <select className="select" value={auth.in} onChange={(e) => setHttpAuth(tab.id, { ...auth, in: e.target.value as 'header' | 'query' })}>
+            <option value="header">Header</option>
+            <option value="query">Query param</option>
+          </select>
+        </>
+      )}
+    </div>
+  )
+}

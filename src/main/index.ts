@@ -20,6 +20,7 @@ import { saveMarkdownToVault, listVaultNotes, readVaultNote, deleteVaultNote } f
 import type { AppStateSnapshot, PaneState, TerminalSessionMeta } from '../shared/contracts.js'
 import { randomUUID } from 'node:crypto'
 import { installAppMenu } from './menu.js'
+import { registerApiToolkitHandlers } from './api-toolkit/ipcHandlers.js'
 
 registerPrivilegedAppScheme()
 
@@ -488,6 +489,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle('termHistory:delete', (_e, id: string) => getTermHistory().delete(id))
 
   ipcMain.handle('termHistory:clear', () => getTermHistory().clear())
+
+  // Register all API Toolkit HTTP/gRPC/storage IPC channels
+  registerApiToolkitHandlers()
 }
 
 async function createWindow(): Promise<void> {

@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppStateSnapshot, ListDirEntry, PaneState, TerminalSessionMeta } from '../shared/contracts.js'
+import type {
+  HttpRequest, HttpResponse,
+  GrpcRequest, GrpcResponse, GrpcMessage, GrpcStatus, ProtoDiscovery,
+  Collection, Environment, HistoryEntry,
+} from '../shared/api-toolkit-contracts.js'
 
 const api = {
   platform: process.platform as 'darwin' | 'win32' | 'linux',
@@ -230,6 +235,61 @@ const api = {
 
   clipboard: {
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text)
+  },
+
+  apiToolkit: {
+    http: {
+      send: (id: string, req: HttpRequest): Promise<HttpResponse> =>
+        ipcRenderer.invoke('at:http:send', id, req),
+      cancel: (id: string): void =>
+        ipcRenderer.send('at:http:cancel', id),
+    },
+    grpc: {
+      discover: (req: GrpcRequest): Promise<ProtoDiscovery> =>
+        ipcRenderer.invoke('at:grpc:discover', req),
+      unary: (req: GrpcRequest): Promise<GrpcResponse> =>
+        ipcRenderer.invoke('at:grpc:unary', req),
+      streamStart: (streamId: string, req: GrpcRequest): void =>
+        ipcRenderer.send('at:grpc:stream:start', streamId, req),
+      streamSend: (streamId: string, jsonStr: string): void =>
+        ipcRenderer.send('at:grpc:stream:send', streamId, jsonStr),
+      streamCancel: (streamId: string): void =>
+        ipcRenderer.send('at:grpc:stream:cancel', streamId),
+      onStreamMessage: (cb: (streamId: string, msg: GrpcMessage) => void) => {
+        const fn = (_e: Electron.IpcRendererEvent, streamId: string, msg: GrpcMessage) => cb(streamId, msg)
+        ipcRenderer.on('at:grpc:stream:message', fn)
+        return () => ipcRenderer.removeListener('at:grpc:stream:message', fn)
+      },
+      onStreamEnd: (cb: (streamId: string, status: GrpcStatus, trailers: Record<string, string>) => void) => {
+        const fn = (_e: Electron.IpcRendererEvent, streamId: string, status: GrpcStatus, trailers: Record<string, string>) => cb(streamId, status, trailers)
+        ipcRenderer.on('at:grpc:stream:end', fn)
+        return () => ipcRenderer.removeListener('at:grpc:stream:end', fn)
+      },
+      onStreamError: (cb: (streamId: string, err: string) => void) => {
+        const fn = (_e: Electron.IpcRendererEvent, streamId: string, err: string) => cb(streamId, err)
+        ipcRenderer.on('at:grpc:stream:error', fn)
+        return () => ipcRenderer.removeListener('at:grpc:stream:error', fn)
+      },
+    },
+    storage: {
+      getCollections: (): Promise<Collection[]> => ipcRenderer.invoke('at:storage:getCollections'),
+      saveCollection: (col: Collection): Promise<void> => ipcRenderer.invoke('at:storage:saveCollection', col),
+      deleteCollection: (id: string): Promise<void> => ipcRenderer.invoke('at:storage:deleteCollection', id),
+      getEnvironments: (): Promise<Environment[]> => ipcRenderer.invoke('at:storage:getEnvironments'),
+      saveEnvironment: (env: Environment): Promise<void> => ipcRenderer.invoke('at:storage:saveEnvironment', env),
+      deleteEnvironment: (id: string): Promise<void> => ipcRenderer.invoke('at:storage:deleteEnvironment', id),
+      getHistory: (): Promise<HistoryEntry[]> => ipcRenderer.invoke('at:storage:getHistory'),
+      addHistory: (entry: HistoryEntry): Promise<void> => ipcRenderer.invoke('at:storage:addHistory', entry),
+      clearHistory: (): Promise<void> => ipcRenderer.invoke('at:storage:clearHistory'),
+    },
+    dialog: {
+      openProto: (): Promise<Array<{ name: string; content: string; fullPath: string }> | null> =>
+        ipcRenderer.invoke('at:dialog:openProto'),
+      openFile: (): Promise<string | null> =>
+        ipcRenderer.invoke('at:dialog:openFile'),
+      saveFile: (content: string, defaultName: string): Promise<boolean> =>
+        ipcRenderer.invoke('at:dialog:saveFile', content, defaultName),
+    },
   },
 
   config: {
