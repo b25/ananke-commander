@@ -1,11 +1,10 @@
 /* ── API Toolkit tokens (scoped to this pane) ─────────────────────────────── */
-:root {
+.api-toolkit-scope {
   --bg-0: #0f0f1a;
   --bg-1: #16162a;
   --bg-2: #1e1e35;
   --bg-3: #252540;
   --bg-4: #2d2d50;
-  --border: #2e2e4a;
   --border-focus: #5c6bc0;
 
   --text-0: #e8e8f0;
@@ -27,19 +26,17 @@
   --status-5xx: #ef4444;
   --status-err: #dc2626;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
   --radius-lg: 10px;
 
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Consolas, monospace;
   --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
 }
 
-/* ── Scrollbar ────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--bg-4); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-2); }
+/* ── Scrollbar (scoped to api-toolkit) ────────────────────────────────────── */
+.api-toolkit-scope ::-webkit-scrollbar { width: 6px; height: 6px; }
+.api-toolkit-scope ::-webkit-scrollbar-track { background: transparent; }
+.api-toolkit-scope ::-webkit-scrollbar-thumb { background: var(--bg-4); border-radius: 3px; }
+.api-toolkit-scope ::-webkit-scrollbar-thumb:hover { background: var(--text-2); }
 
 /* ── Layout ───────────────────────────────────────────────────────────────── */
 .app-root {

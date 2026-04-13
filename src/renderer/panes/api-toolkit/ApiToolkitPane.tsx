@@ -11,7 +11,7 @@ type Props = {
 
 export function ApiToolkitPane({ pane, isActive, onClose }: Props) {
   return (
-    <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
+    <div className={`pane-tile api-toolkit-scope ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
       <PaneHeader title="API Toolkit" paneType="api-toolkit" onClose={onClose} actions={<ProtocolToggle />} />
       <div className="pane-body" style={{ padding: 0, overflow: 'hidden' }}>
         <App />
