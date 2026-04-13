@@ -6,10 +6,21 @@ import { useFolderSize, type FolderSizeState } from './useFolderSize'
 
 const ROW_HEIGHT = 16
 
+export type SortKey = 'name' | 'size' | 'date' | 'kind'
+export type SortDir = 'asc' | 'desc'
+export type SortState = { key: SortKey; dir: SortDir }
+
 function formatSize(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatDate(ms: number): string {
+  if (!ms) return ''
+  const d = new Date(ms)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function renderFolderSize(state: FolderSizeState | undefined): ReactNode {
@@ -28,6 +39,13 @@ type Props = {
   focused: boolean
   focusName?: string | null
   renaming: { path: string; name: string } | null
+  sort: SortState
+  onSortChange: (next: SortState) => void
+  filterActive: boolean
+  filterText: string
+  onFilterChange: (text: string) => void
+  onFilterOpen: () => void
+  onFilterClose: () => void
   onRenameChange: (name: string) => void
   onRenameCommit: () => void
   onRenameCancel: () => void
@@ -44,6 +62,13 @@ export function FileList({
   focused,
   focusName,
   renaming,
+  sort,
+  onSortChange,
+  filterActive,
+  filterText,
+  onFilterChange,
+  onFilterOpen,
+  onFilterClose,
   onRenameChange,
   onRenameCommit,
   onRenameCancel,
@@ -55,6 +80,8 @@ export function FileList({
   const wrapRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const anchorIdxRef = useRef<number>(0)
+  const typeaheadRef = useRef<{ text: string; timer: ReturnType<typeof setTimeout> | null }>({ text: '', timer: null })
+  const filterInputRef = useRef<HTMLInputElement>(null)
   const { sizes: folderSizes, startCalculation } = useFolderSize(path)
 
   // Build display entries: ".." parent entry (if not at root) + actual entries
@@ -68,7 +95,6 @@ export function FileList({
   const displayEntries = parentEntry ? [parentEntry, ...entries] : [...entries]
 
   // Auto-select a named entry after navigating up (so cursor lands on the folder we came from).
-  // We track whether we've already applied the focusName for the current path to avoid re-triggering.
   const appliedFocusRef = useRef<string | null>(null)
   useEffect(() => {
     if (!focusName || entries.length === 0) return
@@ -90,12 +116,19 @@ export function FileList({
     overscan: 15
   })
 
-  // Focus the wrapper when this panel is focused
+  // Focus the wrapper when this panel is focused (unless filter input is active)
   useEffect(() => {
-    if (focused) {
+    if (focused && !filterActive) {
       wrapRef.current?.focus()
     }
-  }, [focused])
+  }, [focused, filterActive])
+
+  // Auto-focus filter input when activated
+  useEffect(() => {
+    if (filterActive && focused) {
+      filterInputRef.current?.focus()
+    }
+  }, [filterActive, focused])
 
   // Find current cursor index from selection
   const getCursorIdx = (): number => {
@@ -103,6 +136,18 @@ export function FileList({
     const lastSelected = [...selected][selected.size - 1]
     const idx = displayEntries.findIndex((e) => e.path === lastSelected)
     return idx >= 0 ? idx : 0
+  }
+
+  const toggleSort = (key: SortKey) => {
+    onSortChange({
+      key,
+      dir: sort.key === key && sort.dir === 'asc' ? 'desc' : 'asc'
+    })
+  }
+
+  const sortIndicator = (key: SortKey) => {
+    if (sort.key !== key) return ''
+    return sort.dir === 'asc' ? ' \u25B2' : ' \u25BC'
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -113,7 +158,6 @@ export function FileList({
         e.preventDefault()
         const nextIdx = Math.min(cursorIdx + 1, displayEntries.length - 1)
         if (e.shiftKey) {
-          // Range select from anchor to nextIdx
           const anchor = anchorIdxRef.current
           const start = Math.min(anchor, nextIdx)
           const end = Math.max(anchor, nextIdx)
@@ -193,8 +237,32 @@ export function FileList({
         onActivate(entry)
         break
       }
-      default:
+      default: {
+        // Quick-jump: type a letter to jump to matching entry
+        if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) break
+        if (e.key === '/') { e.preventDefault(); onFilterOpen(); break }
+        e.preventDefault()
+        const ta = typeaheadRef.current
+        if (ta.timer) clearTimeout(ta.timer)
+        ta.text += e.key.toLowerCase()
+        ta.timer = setTimeout(() => { ta.text = '' }, 500)
+        const prefix = ta.text
+        const total = displayEntries.length
+        const searchFrom = (cursorIdx + (prefix.length === 1 ? 1 : 0)) % total
+        let found = -1
+        for (let i = 0; i < total; i++) {
+          const idx = (searchFrom + i) % total
+          if (displayEntries[idx].name.toLowerCase().startsWith(prefix)) {
+            found = idx
+            break
+          }
+        }
+        if (found === -1) break
+        anchorIdxRef.current = found
+        onSelect([displayEntries[found].path], false)
+        virtualizer.scrollToIndex(found, { align: 'auto' })
         break
+      }
     }
   }
 
@@ -204,7 +272,6 @@ export function FileList({
     ev: React.MouseEvent
   ) => {
     if (ev.shiftKey) {
-      // Range select from anchor to clicked index
       const anchor = anchorIdxRef.current
       const start = Math.min(anchor, index)
       const end = Math.max(anchor, index)
@@ -226,6 +293,54 @@ export function FileList({
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
+      {/* Column headers */}
+      <div className="file-col-headers">
+        <span
+          className={`file-col-header file-col-header--name${sort.key === 'name' ? ' active' : ''}`}
+          onClick={() => toggleSort('name')}
+        >
+          Name{sortIndicator('name')}
+        </span>
+        <span
+          className={`file-col-header file-col-header--size${sort.key === 'size' ? ' active' : ''}`}
+          onClick={() => toggleSort('size')}
+        >
+          Size{sortIndicator('size')}
+        </span>
+        <span
+          className={`file-col-header file-col-header--date${sort.key === 'date' ? ' active' : ''}`}
+          onClick={() => toggleSort('date')}
+        >
+          Date{sortIndicator('date')}
+        </span>
+        <span
+          className={`file-col-header file-col-header--kind${sort.key === 'kind' ? ' active' : ''}`}
+          onClick={() => toggleSort('kind')}
+        >
+          Kind{sortIndicator('kind')}
+        </span>
+      </div>
+
+      {/* Filter bar */}
+      {filterActive && (
+        <div className="file-filter-bar">
+          <input
+            ref={filterInputRef}
+            className="file-filter-input"
+            placeholder="Filter..."
+            value={filterText}
+            onChange={e => onFilterChange(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') { e.stopPropagation(); onFilterClose() }
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.stopPropagation()
+              if (e.key === 'Enter') { e.stopPropagation(); wrapRef.current?.focus() }
+            }}
+          />
+          <span className="file-filter-count">{entries.length} match{entries.length !== 1 ? 'es' : ''}</span>
+          <button type="button" className="file-filter-close" onClick={onFilterClose} tabIndex={-1}>&times;</button>
+        </div>
+      )}
+
       <div
         ref={scrollRef}
         style={{ overflow: 'auto', flex: 1, minHeight: 0 }}
@@ -290,9 +405,14 @@ export function FileList({
                   </span>
                 )}
                 {!isParent && (
-                  <span className="muted">
-                    {entry.isDirectory ? renderFolderSize(folderSizes[entry.path]) : formatSize(entry.size)}
-                  </span>
+                  <>
+                    <span className="muted file-col--size">
+                      {entry.isDirectory ? renderFolderSize(folderSizes[entry.path]) : formatSize(entry.size)}
+                    </span>
+                    <span className="muted file-col--date">
+                      {formatDate(entry.mtimeMs)}
+                    </span>
+                  </>
                 )}
               </div>
             )

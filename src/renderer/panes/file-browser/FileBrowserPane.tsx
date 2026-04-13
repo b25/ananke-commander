@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { FileBrowserPaneState, ListDirEntry, PaneState } from '../../../shared/contracts'
 import { joinPath } from '../../lib/pathUtils'
-import { FileList } from './FileList'
+import { FileList, type SortState } from './FileList'
 import { FileEditor } from './FileEditor'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { ArchiveDialog } from './ArchiveDialog'
@@ -32,6 +32,12 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   } | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string } | null>(null)
   const [showHidden, setShowHidden] = useState(false)
+  const [leftSort, setLeftSort] = useState<SortState>({ key: 'name', dir: 'asc' })
+  const [rightSort, setRightSort] = useState<SortState>({ key: 'name', dir: 'asc' })
+  const [leftFilterActive, setLeftFilterActive] = useState(false)
+  const [leftFilterText, setLeftFilterText] = useState('')
+  const [rightFilterActive, setRightFilterActive] = useState(false)
+  const [rightFilterText, setRightFilterText] = useState('')
   const [renaming, setRenaming] = useState<{ path: string; side: 'left' | 'right'; name: string } | null>(null)
   const [editingPath, setEditingPath] = useState<{ side: 'left' | 'right'; value: string } | null>(null)
   const activeJobId = useRef<string | null>(null)
@@ -93,9 +99,31 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     }
   }, [pane.focusedSide, pane.leftPath, pane.rightPath, refreshDir])
 
-  // Hidden file filter
-  const visibleLeftEntries = showHidden ? leftEntries : leftEntries.filter(e => !e.name.startsWith('.'))
-  const visibleRightEntries = showHidden ? rightEntries : rightEntries.filter(e => !e.name.startsWith('.'))
+  // Hidden file filter + text filter + sort
+  function applyFilterAndSort(entries: ListDirEntry[], hidden: boolean, filterActive: boolean, filterText: string, sort: SortState): ListDirEntry[] {
+    let result = hidden ? entries : entries.filter(e => !e.name.startsWith('.'))
+    if (filterActive && filterText) {
+      const lower = filterText.toLowerCase()
+      result = result.filter(e => e.name.toLowerCase().includes(lower))
+    }
+    result = [...result].sort((a, b) => {
+      // Directories always first
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+      let cmp = 0
+      if (sort.key === 'name') cmp = a.name.localeCompare(b.name)
+      else if (sort.key === 'size') cmp = a.size - b.size
+      else if (sort.key === 'date') cmp = a.mtimeMs - b.mtimeMs
+      else if (sort.key === 'kind') {
+        const extA = a.name.includes('.') ? a.name.slice(a.name.lastIndexOf('.')) : ''
+        const extB = b.name.includes('.') ? b.name.slice(b.name.lastIndexOf('.')) : ''
+        cmp = extA.localeCompare(extB)
+      }
+      return sort.dir === 'asc' ? cmp : -cmp
+    })
+    return result
+  }
+  const visibleLeftEntries = applyFilterAndSort(leftEntries, showHidden, leftFilterActive, leftFilterText, leftSort)
+  const visibleRightEntries = applyFilterAndSort(rightEntries, showHidden, rightFilterActive, rightFilterText, rightSort)
 
   // Safe file extensions that don't need open confirmation
   const SAFE_EXTS = new Set(['.txt','.md','.pdf','.jpg','.jpeg','.png','.gif','.svg','.webp','.bmp','.html','.htm','.css','.json','.xml','.csv','.log','.toml','.yaml','.yml'])
@@ -592,6 +620,13 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 focused={pane.focusedSide === 'left'}
                 focusName={leftFocusName}
                 renaming={renaming?.side === 'left' ? renaming : null}
+                sort={leftSort}
+                onSortChange={setLeftSort}
+                filterActive={leftFilterActive}
+                filterText={leftFilterText}
+                onFilterChange={setLeftFilterText}
+                onFilterOpen={() => setLeftFilterActive(true)}
+                onFilterClose={() => { setLeftFilterActive(false); setLeftFilterText('') }}
                 onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
                 onRenameCommit={commitRename}
                 onRenameCancel={() => setRenaming(null)}
@@ -617,6 +652,13 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 focused={pane.focusedSide === 'right'}
                 focusName={rightFocusName}
                 renaming={renaming?.side === 'right' ? renaming : null}
+                sort={rightSort}
+                onSortChange={setRightSort}
+                filterActive={rightFilterActive}
+                filterText={rightFilterText}
+                onFilterChange={setRightFilterText}
+                onFilterOpen={() => setRightFilterActive(true)}
+                onFilterClose={() => { setRightFilterActive(false); setRightFilterText('') }}
                 onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
                 onRenameCommit={commitRename}
                 onRenameCancel={() => setRenaming(null)}
