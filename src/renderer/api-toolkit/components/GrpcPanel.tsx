@@ -7,6 +7,8 @@ import { useStore } from '../store'
 import type { Tab } from '../store'
 import type { ProtoDiscovery, MessageSchema, GrpcMessage } from '../../../shared/api-toolkit-contracts'
 import { ProtoFormEditor } from './ProtoFormEditor'
+import { KvEditor } from './KvEditor'
+import { applyVarsToGrpcRequest } from '../lib/substituteVars'
 
 interface Props {
   tab: Tab
@@ -15,7 +17,7 @@ interface Props {
 type SourceMode = 'text' | 'file' | 'reflection'
 
 export function GrpcPanel({ tab }: Props) {
-  const { setGrpcEndpoint, setGrpcServiceMethod, setGrpcMessageJson, setGrpcMetadata, setGrpcTls, setGrpcDiscovery, updateTab } = useStore()
+  const { setGrpcEndpoint, setGrpcServiceMethod, setGrpcMessageJson, setGrpcMetadata, setGrpcTls, setGrpcDiscovery, updateTab, environments, activeEnvironmentId } = useStore()
   const req = tab.grpcRequest
   const [sourceMode, setSourceMode] = useState<SourceMode>((req.protoSource.type as SourceMode) ?? 'text')
   const [protoText, setProtoText] = useState(req.protoSource.type === 'text' ? req.protoSource.content : '')
@@ -70,17 +72,19 @@ export function GrpcPanel({ tab }: Props) {
   }
 
   function send() {
+    const activeVars = environments.find((e) => e.id === activeEnvironmentId)?.variables.filter((v) => v.enabled) ?? []
+    const resolvedReq = applyVarsToGrpcRequest(req, activeVars)
     if (isStreaming) {
       if (active) {
         window.ananke.apiToolkit.grpc.streamCancel(tab.id)
         updateTab(tab.id, { grpcStreamActive: false, loading: false })
       } else {
         updateTab(tab.id, { grpcMessages: [], grpcStreamActive: true, loading: true, error: null })
-        window.ananke.apiToolkit.grpc.streamStart(tab.id, { ...req, messageJson: tab.grpcRequest.messageJson })
+        window.ananke.apiToolkit.grpc.streamStart(tab.id, { ...resolvedReq, messageJson: tab.grpcRequest.messageJson })
       }
     } else {
       updateTab(tab.id, { loading: true, error: null, grpcResponse: null })
-      window.ananke.apiToolkit.grpc.unary(req).then((resp) => {
+      window.ananke.apiToolkit.grpc.unary(resolvedReq).then((resp) => {
         updateTab(tab.id, { grpcResponse: resp, loading: false })
       }).catch((e: unknown) => {
         updateTab(tab.id, { error: String(e), loading: false })
@@ -180,54 +184,61 @@ export function GrpcPanel({ tab }: Props) {
         </div>
       )}
 
-      {/* Message form */}
+      {/* Message / Metadata tabs */}
       {req.serviceMethod && (
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-2)', flex: 1 }}>
-              {reqSchema ? reqSchema.fullName : 'Request message'}
-            </span>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer', color: 'var(--text-2)' }}>
-              <input type="checkbox" checked={jsonMode} onChange={(e) => setJsonMode(e.target.checked)} style={{ accentColor: 'var(--text-accent)' }} />
-              Raw JSON
-            </label>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="panel-tabs" style={{ display: 'flex', alignItems: 'center' }}>
+            <div className={`panel-tab ${!jsonMode ? 'active' : ''}`} onClick={() => setJsonMode(false)}>
+              Message {reqSchema ? `(${reqSchema.fullName.split('.').pop()})` : ''}
+            </div>
+            <div className={`panel-tab ${jsonMode ? 'active' : ''}`} onClick={() => setJsonMode(true)}>
+              JSON
+            </div>
+            <div className="panel-tab" style={{ marginLeft: 'auto', color: 'var(--text-2)', cursor: 'default' }} />
             <button
               className="send-btn"
               disabled={!req.serviceMethod || tab.loading}
               onClick={send}
-              style={{ padding: '3px 14px', fontSize: 12 }}
+              style={{ padding: '2px 12px', fontSize: 10, margin: '0 8px' }}
               title={isStreaming ? (active ? 'Stop stream' : 'Start stream') : 'Send'}
             >
               {tab.loading ? (active ? 'Stop' : '…') : isStreaming ? (active ? 'Stop' : 'Stream') : 'Send'}
             </button>
           </div>
-
-          {jsonMode ? (
-            <textarea
-              className="code-editor"
-              style={{ minHeight: 120 }}
-              value={req.messageJson}
-              onChange={(e) => setGrpcMessageJson(tab.id, e.target.value)}
+          <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
+            {jsonMode ? (
+              <textarea
+                className="code-editor"
+                style={{ minHeight: 120 }}
+                value={req.messageJson}
+                onChange={(e) => setGrpcMessageJson(tab.id, e.target.value)}
+              />
+            ) : reqSchema ? (
+              <ProtoFormEditor schema={reqSchema} value={formValue} onChange={setFormValue} />
+            ) : (
+              <textarea
+                className="code-editor"
+                style={{ minHeight: 120 }}
+                value={req.messageJson}
+                onChange={(e) => setGrpcMessageJson(tab.id, e.target.value)}
+              />
+            )}
+            {isStreaming && active && selectedMethod?.clientStreaming && (
+              <StreamSendBar tabId={tab.id} reqSchema={reqSchema} />
+            )}
+          </div>
+          {/* Metadata section */}
+          <div style={{ borderTop: '1px solid var(--border)', padding: '6px 12px', flexShrink: 0 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-2)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+              Metadata {req.metadata.filter(m => m.enabled && m.key).length > 0 && `(${req.metadata.filter(m => m.enabled && m.key).length})`}
+            </div>
+            <KvEditor
+              rows={req.metadata.length ? req.metadata : [{ key: '', value: '', enabled: true }]}
+              onChange={(rows) => setGrpcMetadata(tab.id, rows)}
+              keyPlaceholder="Metadata key"
+              valuePlaceholder="Value"
             />
-          ) : reqSchema ? (
-            <ProtoFormEditor
-              schema={reqSchema}
-              value={formValue}
-              onChange={setFormValue}
-            />
-          ) : (
-            <textarea
-              className="code-editor"
-              style={{ minHeight: 120 }}
-              value={req.messageJson}
-              onChange={(e) => setGrpcMessageJson(tab.id, e.target.value)}
-            />
-          )}
-
-          {/* Streaming send for client/bidi */}
-          {isStreaming && active && (selectedMethod?.clientStreaming) && (
-            <StreamSendBar tabId={tab.id} reqSchema={reqSchema} />
-          )}
+          </div>
         </div>
       )}
     </div>

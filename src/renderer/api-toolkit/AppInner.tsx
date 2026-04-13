@@ -112,7 +112,13 @@ function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
           )}
           <span className="tab-name" title={tab.name}>{tab.name}</span>
           {tab.dirty && <span style={{ fontSize: 9, color: 'var(--text-2)' }}>●</span>}
-          <span className="tab-close" onClick={(e) => { e.stopPropagation(); onClose(tab.id) }}>×</span>
+          <span className="tab-close" onClick={(e) => {
+            e.stopPropagation()
+            if (tab.dirty && tab.collectionId) {
+              if (!window.confirm(`"${tab.name}" has unsaved changes. Close anyway?`)) return
+            }
+            onClose(tab.id)
+          }}>×</span>
         </div>
       ))}
       <div className="tab-new-btn" onClick={onNew} title="New request">+</div>

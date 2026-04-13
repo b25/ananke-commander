@@ -5,7 +5,7 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { readFileSync } from 'node:fs'
 import { IPC } from '../../shared/api-toolkit-contracts.js'
-import type { HttpRequest, GrpcRequest, Collection, Environment, HistoryEntry } from '../../shared/api-toolkit-contracts.js'
+import type { HttpRequest, GrpcRequest, Collection, CollectionItem, Environment, HistoryEntry } from '../../shared/api-toolkit-contracts.js'
 import { sendHttp, cancelHttp } from './http-client.js'
 import { discoverProto, grpcUnary, grpcStream } from './grpc-engine.js'
 import * as storage from './storage.js'
@@ -56,6 +56,14 @@ export function registerApiToolkitHandlers(): void {
   ipcMain.handle(IPC.STORAGE_GET_COLLECTIONS, () => storage.getCollections())
   ipcMain.handle(IPC.STORAGE_SAVE_COLLECTION, (_e, col: Collection) => storage.saveCollection(col))
   ipcMain.handle(IPC.STORAGE_DELETE_COLLECTION, (_e, id: string) => storage.deleteCollection(id))
+  ipcMain.handle(IPC.STORAGE_ADD_COLLECTION_ITEM, (_e, colId: string, item: CollectionItem, parentId?: string) =>
+    storage.addCollectionItem(colId, item, parentId))
+  ipcMain.handle(IPC.STORAGE_UPDATE_COLLECTION_ITEM, (_e, colId: string, itemId: string, patch: Partial<CollectionItem>) =>
+    storage.updateCollectionItem(colId, itemId, patch))
+  ipcMain.handle(IPC.STORAGE_DELETE_COLLECTION_ITEM, (_e, colId: string, itemId: string) =>
+    storage.deleteCollectionItem(colId, itemId))
+  ipcMain.handle(IPC.STORAGE_IMPORT_COLLECTION, (_e, jsonStr: string) =>
+    storage.importPostmanCollection(jsonStr))
 
   ipcMain.handle(IPC.STORAGE_GET_ENVIRONMENTS, () => storage.getEnvironments())
   ipcMain.handle(IPC.STORAGE_SAVE_ENVIRONMENT, (_e, env: Environment) => storage.saveEnvironment(env))

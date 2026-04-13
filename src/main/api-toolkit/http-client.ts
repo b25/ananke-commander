@@ -82,6 +82,9 @@ export async function sendHttp(
   const ac = new AbortController()
   activeFetches.set(id, ac)
 
+  const timeoutMs = req.timeout > 0 ? req.timeout : 30000
+  const timeoutHandle = setTimeout(() => ac.abort(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs)
+
   const startMs = performance.now()
   let ttfbMs: number | undefined
 
@@ -125,6 +128,7 @@ export async function sendHttp(
       redirects: [],
     }
   } finally {
+    clearTimeout(timeoutHandle)
     activeFetches.delete(id)
   }
 }

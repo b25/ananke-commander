@@ -3,7 +3,7 @@ import type { AppStateSnapshot, ListDirEntry, PaneState, TerminalSessionMeta } f
 import type {
   HttpRequest, HttpResponse,
   GrpcRequest, GrpcResponse, GrpcMessage, GrpcStatus, ProtoDiscovery,
-  Collection, Environment, HistoryEntry,
+  Collection, CollectionItem, Environment, HistoryEntry,
 } from '../shared/api-toolkit-contracts.js'
 
 const api = {
@@ -275,6 +275,14 @@ const api = {
       getCollections: (): Promise<Collection[]> => ipcRenderer.invoke('at:storage:getCollections'),
       saveCollection: (col: Collection): Promise<void> => ipcRenderer.invoke('at:storage:saveCollection', col),
       deleteCollection: (id: string): Promise<void> => ipcRenderer.invoke('at:storage:deleteCollection', id),
+      addCollectionItem: (colId: string, item: CollectionItem, parentId?: string): Promise<Collection | null> =>
+        ipcRenderer.invoke('at:storage:addCollectionItem', colId, item, parentId),
+      updateCollectionItem: (colId: string, itemId: string, patch: Partial<CollectionItem>): Promise<Collection | null> =>
+        ipcRenderer.invoke('at:storage:updateCollectionItem', colId, itemId, patch),
+      deleteCollectionItem: (colId: string, itemId: string): Promise<Collection | null> =>
+        ipcRenderer.invoke('at:storage:deleteCollectionItem', colId, itemId),
+      importCollection: (jsonStr: string): Promise<{ collection: Collection; count: number }> =>
+        ipcRenderer.invoke('at:storage:importCollection', jsonStr),
       getEnvironments: (): Promise<Environment[]> => ipcRenderer.invoke('at:storage:getEnvironments'),
       saveEnvironment: (env: Environment): Promise<void> => ipcRenderer.invoke('at:storage:saveEnvironment', env),
       deleteEnvironment: (id: string): Promise<void> => ipcRenderer.invoke('at:storage:deleteEnvironment', id),

@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import type { Tab } from '../store'
 import type { HttpMethod, AuthConfig } from '../../../shared/api-toolkit-contracts'
 import { KvEditor } from './KvEditor'
 import { GrpcPanel } from './GrpcPanel'
+import { applyVarsToHttpRequest } from '../lib/substituteVars'
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE']
 
@@ -12,10 +13,54 @@ interface Props {
 }
 
 export function RequestEditor({ tab }: Props) {
-  const { setHttpMethod, setHttpUrl, setHttpParams, setHttpHeaders, setHttpBody, setHttpAuth, updateTab } = useStore()
+  const { setHttpMethod, setHttpUrl, setHttpParams, setHttpHeaders, setHttpBody, setHttpAuth, updateTab, saveTabToCollection, collections, addItemToCollection, environments, activeEnvironmentId } = useStore()
   const req = tab.httpRequest
   const [innerTab, setInnerTab] = useState<'params' | 'headers' | 'body' | 'auth'>('params')
   const [sending, setSending] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [showSavePicker, setShowSavePicker] = useState(false)
+
+  // Cmd+S / Ctrl+S to save
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        void handleSave()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [tab.id, tab.collectionId])
+
+  async function handleSave() {
+    if (saving) return
+    if (tab.collectionId && tab.requestId) {
+      setSaving(true)
+      try { await saveTabToCollection(tab.id) } finally { setSaving(false) }
+    } else {
+      setShowSavePicker(true)
+    }
+  }
+
+  async function saveToCollection(colId: string) {
+    setShowSavePicker(false)
+    setSaving(true)
+    const itemId = crypto.randomUUID()
+    const item = {
+      type: 'request' as const,
+      id: itemId,
+      name: tab.name || req.url || 'New Request',
+      protocol: tab.protocol,
+      httpRequest: tab.httpRequest,
+      grpcRequest: tab.grpcRequest,
+    }
+    try {
+      await addItemToCollection(colId, item)
+      updateTab(tab.id, { collectionId: colId, requestId: itemId, dirty: false })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const enabledParams = req.params.filter((p) => p.enabled && p.key).length
   const enabledHeaders = req.headers.filter((h) => h.enabled && h.key).length
@@ -24,8 +69,10 @@ export function RequestEditor({ tab }: Props) {
     setSending(true)
     updateTab(tab.id, { loading: true, error: null, httpResponse: null })
     const id = tab.id
+    const activeVars = environments.find((e) => e.id === activeEnvironmentId)?.variables.filter((v) => v.enabled) ?? []
+    const resolvedReq = applyVarsToHttpRequest(req, activeVars)
     try {
-      const resp = await window.ananke.apiToolkit.http.send(id, req)
+      const resp = await window.ananke.apiToolkit.http.send(id, resolvedReq)
       updateTab(id, { httpResponse: resp, loading: false })
       // persist history
       window.ananke.apiToolkit.storage.addHistory({
@@ -61,7 +108,30 @@ export function RequestEditor({ tab }: Props) {
           <span style={{ fontSize: 11, color: 'var(--text-2)' }}>
             {tab.grpcRequest.serviceMethod || 'Select method'}
           </span>
+          <button
+            className="send-btn"
+            style={{ background: 'var(--bg-3)', color: tab.dirty ? 'var(--text-accent)' : 'var(--text-2)', border: '1px solid var(--border)', minWidth: 'unset', padding: '2px 8px' }}
+            onClick={handleSave}
+            disabled={saving || !tab.dirty}
+            title={tab.collectionId ? 'Save to collection (⌘S)' : 'Save to collection…'}
+          >
+            {saving ? '…' : '💾'}
+          </button>
         </div>
+        {showSavePicker && (
+          <div style={{ padding: '6px 8px', background: 'var(--bg-1)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 10, color: 'var(--text-2)', flexShrink: 0 }}>Save to:</span>
+            {collections.length === 0
+              ? <span style={{ fontSize: 10, color: 'var(--text-2)' }}>No collections — create one first</span>
+              : collections.map((col) => (
+                <button key={col.id} style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-0)', cursor: 'pointer' }} onClick={() => void saveToCollection(col.id)}>
+                  {col.name}
+                </button>
+              ))
+            }
+            <button style={{ marginLeft: 'auto', fontSize: 10, background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer' }} onClick={() => setShowSavePicker(false)}>✕</button>
+          </div>
+        )}
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <GrpcPanel tab={tab} />
         </div>
@@ -92,7 +162,41 @@ export function RequestEditor({ tab }: Props) {
           ? <button className="send-btn cancel" onClick={cancel}>Cancel</button>
           : <button className="send-btn" onClick={send} disabled={!req.url}>Send</button>
         }
+        <button
+          className="send-btn"
+          style={{ background: 'var(--bg-3)', color: tab.dirty ? 'var(--text-accent)' : 'var(--text-2)', border: '1px solid var(--border)', minWidth: 'unset', padding: '2px 8px' }}
+          onClick={handleSave}
+          disabled={saving || !tab.dirty}
+          title={tab.collectionId ? 'Save to collection (⌘S)' : 'Save to collection…'}
+        >
+          {saving ? '…' : '💾'}
+        </button>
       </div>
+
+      {/* Save-to-collection picker */}
+      {showSavePicker && (
+        <div style={{ padding: '6px 8px', background: 'var(--bg-1)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-2)', flexShrink: 0 }}>Save to:</span>
+          {collections.length === 0
+            ? <span style={{ fontSize: 10, color: 'var(--text-2)' }}>No collections — create one first</span>
+            : collections.map((col) => (
+              <button
+                key={col.id}
+                style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-0)', cursor: 'pointer' }}
+                onClick={() => void saveToCollection(col.id)}
+              >
+                {col.name}
+              </button>
+            ))
+          }
+          <button
+            style={{ marginLeft: 'auto', fontSize: 10, background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer' }}
+            onClick={() => setShowSavePicker(false)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Inner tabs */}
       <div className="panel-tabs">

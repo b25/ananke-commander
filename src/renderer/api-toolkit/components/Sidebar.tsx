@@ -1,9 +1,13 @@
 import { useStore } from '../store'
 import { CollectionTree } from './CollectionTree'
 import { HistoryList } from './HistoryList'
+import { EnvEditor } from './EnvEditor'
+
+type SidebarTab = 'collections' | 'history' | 'environments'
 
 export function Sidebar() {
-  const { sidebarTab, setSidebarTab } = useStore()
+  const { sidebarTab, setSidebarTab, activeEnvironmentId, environments } = useStore()
+  const activeEnvName = environments.find((e) => e.id === activeEnvironmentId)?.name
 
   return (
     <aside className="sidebar">
@@ -20,9 +24,18 @@ export function Sidebar() {
         >
           History
         </div>
+        <div
+          className={`sidebar-tab ${sidebarTab === 'environments' ? 'active' : ''}`}
+          onClick={() => setSidebarTab('environments' as SidebarTab)}
+          title={activeEnvName ? `Active: ${activeEnvName}` : 'No active environment'}
+        >
+          Env{activeEnvName ? ' ✓' : ''}
+        </div>
       </div>
 
-      {sidebarTab === 'collections' ? <CollectionTree /> : <HistoryList />}
+      {sidebarTab === 'collections' && <CollectionTree />}
+      {sidebarTab === 'history' && <HistoryList />}
+      {sidebarTab === ('environments' as SidebarTab) && <EnvEditor />}
     </aside>
   )
 }

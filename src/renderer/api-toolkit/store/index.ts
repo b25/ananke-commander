@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type {
   HttpRequest, HttpResponse, GrpcRequest, GrpcResponse, GrpcMessage, GrpcStatus,
-  Collection, Environment, HistoryEntry, KeyValue, HttpBody, AuthConfig, TlsConfig, ProtoDiscovery,
+  Collection, CollectionItem, RequestItem, Environment, HistoryEntry, KeyValue, HttpBody, AuthConfig, TlsConfig, ProtoDiscovery,
 } from '../../../shared/api-toolkit-contracts'
 
 export type Protocol = 'http' | 'grpc'
@@ -76,7 +76,7 @@ interface AppState {
   environments: Environment[]
   activeEnvironmentId: string | null
   history: HistoryEntry[]
-  sidebarTab: 'collections' | 'history'
+  sidebarTab: 'collections' | 'history' | 'environments'
 
   // Tab actions
   openTab: (overrides?: Partial<Tab>) => void
@@ -108,8 +108,15 @@ interface AppState {
   setHistory: (h: HistoryEntry[]) => void
   addHistoryEntry: (entry: HistoryEntry) => void
   clearHistory: () => void
-  setSidebarTab: (t: 'collections' | 'history') => void
+  setSidebarTab: (t: 'collections' | 'history' | 'environments') => void
   setActiveEnvironment: (id: string | null) => void
+
+  // Collection item CRUD
+  addItemToCollection: (colId: string, item: CollectionItem, parentId?: string) => Promise<void>
+  updateCollectionItem: (colId: string, itemId: string, patch: Partial<CollectionItem>) => Promise<void>
+  removeCollectionItem: (colId: string, itemId: string) => Promise<void>
+  saveTabToCollection: (tabId: string) => Promise<void>
+  importPostmanCollection: (jsonStr: string) => Promise<{ count: number }>
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -215,7 +222,7 @@ export const useStore = create<AppState>((set, get) => ({
   addGrpcStreamMessage: (tabId, msg) =>
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, grpcMessages: [...t.grpcMessages, msg] } : t
+        t.id === tabId ? { ...t, grpcMessages: [...t.grpcMessages, msg].slice(-500) } : t
       ),
     })),
 
@@ -236,6 +243,48 @@ export const useStore = create<AppState>((set, get) => ({
   clearHistory: () => set({ history: [] }),
   setSidebarTab: (sidebarTab) => set({ sidebarTab }),
   setActiveEnvironment: (activeEnvironmentId) => set({ activeEnvironmentId }),
+
+  addItemToCollection: async (colId, item, parentId) => {
+    const updated = await window.ananke.apiToolkit.storage.addCollectionItem(colId, item, parentId)
+    if (updated) set((s) => ({ collections: s.collections.map((c) => c.id === colId ? updated : c) }))
+  },
+
+  updateCollectionItem: async (colId, itemId, patch) => {
+    const updated = await window.ananke.apiToolkit.storage.updateCollectionItem(colId, itemId, patch)
+    if (updated) set((s) => ({ collections: s.collections.map((c) => c.id === colId ? updated : c) }))
+  },
+
+  removeCollectionItem: async (colId, itemId) => {
+    const updated = await window.ananke.apiToolkit.storage.deleteCollectionItem(colId, itemId)
+    if (updated) set((s) => ({ collections: s.collections.map((c) => c.id === colId ? updated : c) }))
+  },
+
+  saveTabToCollection: async (tabId) => {
+    const { tabs, collections } = get()
+    const tab = tabs.find((t) => t.id === tabId)
+    if (!tab?.collectionId || !tab.requestId) return
+    const col = collections.find((c) => c.id === tab.collectionId)
+    if (!col) return
+    const patch: Partial<RequestItem> = {
+      name: tab.name,
+      protocol: tab.protocol,
+      httpRequest: tab.httpRequest,
+      grpcRequest: tab.grpcRequest,
+    }
+    const updated = await window.ananke.apiToolkit.storage.updateCollectionItem(tab.collectionId, tab.requestId, patch)
+    if (updated) {
+      set((s) => ({
+        collections: s.collections.map((c) => c.id === tab.collectionId ? updated : c),
+        tabs: s.tabs.map((t) => t.id === tabId ? { ...t, dirty: false } : t),
+      }))
+    }
+  },
+
+  importPostmanCollection: async (jsonStr) => {
+    const result = await window.ananke.apiToolkit.storage.importCollection(jsonStr)
+    set((s) => ({ collections: [...s.collections, result.collection] }))
+    return { count: result.count }
+  },
 }))
 
 // Helper: get active tab

@@ -412,6 +412,9 @@ export function FileList({
                     <span className="muted file-col--date">
                       {formatDate(entry.mtimeMs)}
                     </span>
+                    <span className="muted file-col--kind">
+                      {entry.isDirectory ? '' : (entry.name.includes('.') ? entry.name.split('.').pop()!.toUpperCase() : '')}
+                    </span>
                   </>
                 )}
               </div>
