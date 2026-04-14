@@ -8,6 +8,23 @@ import { PaneHeader } from '../../layout/PaneHeader'
 import { ArchiveDialog } from './ArchiveDialog'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { FileBrowserActions } from './FileBrowserActions'
+import { FindBar } from './FindBar'
+
+type FindState = {
+  active: boolean
+  pattern: string
+  recursive: boolean
+  results: ListDirEntry[]
+  status: 'idle' | 'searching' | 'done' | 'error'
+}
+
+function toFindResultEntries(results: ListDirEntry[], root: string): ListDirEntry[] {
+  const normRoot = root.replace(/[/\\]+$/, '')
+  return results.map(entry => ({
+    ...entry,
+    name: entry.path.slice(normRoot.length + 1) || entry.name
+  }))
+}
 
 type Props = {
   pane: FileBrowserPaneState
@@ -40,6 +57,8 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const [rightFilterText, setRightFilterText] = useState('')
   const [renaming, setRenaming] = useState<{ path: string; side: 'left' | 'right'; name: string } | null>(null)
   const [editingPath, setEditingPath] = useState<{ side: 'left' | 'right'; value: string } | null>(null)
+  const [leftFind, setLeftFind] = useState<FindState>({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
+  const [rightFind, setRightFind] = useState<FindState>({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
   const activeJobId = useRef<string | null>(null)
   // Inline prompt state (replaces window.prompt which doesn't work in Electron)
   const [inlinePrompt, setInlinePrompt] = useState<{ label: string; onSubmit: (value: string) => void } | null>(null)
@@ -122,8 +141,24 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     })
     return result
   }
-  const visibleLeftEntries = applyFilterAndSort(leftEntries, showHidden, leftFilterActive, leftFilterText, leftSort)
-  const visibleRightEntries = applyFilterAndSort(rightEntries, showHidden, rightFilterActive, rightFilterText, rightSort)
+  const runFind = async (side: 'left' | 'right', findState: FindState) => {
+    const setFind = side === 'left' ? setLeftFind : setRightFind
+    const root = side === 'left' ? pane.leftPath : pane.rightPath
+    setFind(f => ({ ...f, status: 'searching', results: [] }))
+    try {
+      const results = await window.ananke.fs.findFiles(root, findState.pattern || '*', findState.recursive)
+      setFind(f => ({ ...f, status: 'done', results }))
+    } catch {
+      setFind(f => ({ ...f, status: 'error' }))
+    }
+  }
+
+  const visibleLeftEntries = leftFind.active
+    ? applyFilterAndSort(toFindResultEntries(leftFind.results, pane.leftPath), true, leftFilterActive, leftFilterText, leftSort)
+    : applyFilterAndSort(leftEntries, showHidden, leftFilterActive, leftFilterText, leftSort)
+  const visibleRightEntries = rightFind.active
+    ? applyFilterAndSort(toFindResultEntries(rightFind.results, pane.rightPath), true, rightFilterActive, rightFilterText, rightSort)
+    : applyFilterAndSort(rightEntries, showHidden, rightFilterActive, rightFilterText, rightSort)
 
   // Safe file extensions that don't need open confirmation
   const SAFE_EXTS = new Set(['.txt','.md','.pdf','.jpg','.jpeg','.png','.gif','.svg','.webp','.bmp','.html','.htm','.css','.json','.xml','.csv','.log','.toml','.yaml','.yml'])
@@ -336,6 +371,12 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
           navigateTo(pane.focusedSide, next)
         }
       }
+      // Ctrl+F: open find bar for focused panel
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        const setFind = pane.focusedSide === 'left' ? setLeftFind : setRightFind
+        setFind(f => ({ ...f, active: true }))
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -375,6 +416,15 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     window.addEventListener('radar-navigate', onRadarNav)
     return () => window.removeEventListener('radar-navigate', onRadarNav)
   }, [isActive, pane, onUpdate])
+
+  // Close find mode when the active directory changes
+  useEffect(() => {
+    setLeftFind(f => f.active ? { active: false, pattern: '', recursive: true, results: [], status: 'idle' } : f)
+  }, [pane.leftPath])
+
+  useEffect(() => {
+    setRightFind(f => f.active ? { active: false, pattern: '', recursive: true, results: [], status: 'idle' } : f)
+  }, [pane.rightPath])
 
   useEffect(() => {
     const offP = window.ananke.fileJob.onProgress((msg) => {
@@ -613,6 +663,18 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
           <div className="lists">
             <div className="file-list-panel">
               {renderPathBar('left')}
+              {leftFind.active && (
+                <FindBar
+                  pattern={leftFind.pattern}
+                  recursive={leftFind.recursive}
+                  status={leftFind.status}
+                  resultCount={leftFind.results.length}
+                  onPatternChange={pattern => setLeftFind(f => ({ ...f, pattern }))}
+                  onRecursiveChange={recursive => setLeftFind(f => ({ ...f, recursive }))}
+                  onSearch={() => void runFind('left', leftFind)}
+                  onClose={() => setLeftFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })}
+                />
+              )}
               <FileList
                 path={pane.leftPath}
                 entries={visibleLeftEntries}
@@ -639,12 +701,27 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                     leftSelection: [...next]
                   })
                 }}
-                onActivate={(entry) => void activateEntry('left', entry)}
+                onActivate={(entry) => {
+                  if (leftFind.active) setLeftFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
+                  void activateEntry('left', entry)
+                }}
                 onContextMenu={onFileContextMenu}
               />
             </div>
             <div className="file-list-panel">
               {renderPathBar('right')}
+              {rightFind.active && (
+                <FindBar
+                  pattern={rightFind.pattern}
+                  recursive={rightFind.recursive}
+                  status={rightFind.status}
+                  resultCount={rightFind.results.length}
+                  onPatternChange={pattern => setRightFind(f => ({ ...f, pattern }))}
+                  onRecursiveChange={recursive => setRightFind(f => ({ ...f, recursive }))}
+                  onSearch={() => void runFind('right', rightFind)}
+                  onClose={() => setRightFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })}
+                />
+              )}
               <FileList
                 path={pane.rightPath}
                 entries={visibleRightEntries}
@@ -671,7 +748,10 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                     rightSelection: [...next]
                   })
                 }}
-                onActivate={(entry) => void activateEntry('right', entry)}
+                onActivate={(entry) => {
+                  if (rightFind.active) setRightFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
+                  void activateEntry('right', entry)
+                }}
                 onContextMenu={onFileContextMenu}
               />
             </div>

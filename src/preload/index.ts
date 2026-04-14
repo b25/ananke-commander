@@ -83,7 +83,9 @@ const api = {
     chmod: (filePath: string, mode: string): Promise<void> =>
       ipcRenderer.invoke('fs:chmod', filePath, mode),
     createFile: (filePath: string): Promise<void> =>
-      ipcRenderer.invoke('fs:createFile', filePath)
+      ipcRenderer.invoke('fs:createFile', filePath),
+    findFiles: (root: string, pattern: string, recursive: boolean): Promise<ListDirEntry[]> =>
+      ipcRenderer.invoke('fs:findFiles', root, pattern, recursive)
   },
 
   fileJob: {

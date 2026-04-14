@@ -87,6 +87,24 @@ function focusedOrMain(): BrowserWindow | null {
   return BrowserWindow.getFocusedWindow() ?? mainWindow
 }
 
+function globToRegex(pattern: string): RegExp {
+  // Escape regex special chars except glob ones (* ? { } ,)
+  let p = pattern.replace(/[.+^$()|[\]\\]/g, '\\$&')
+  // {a,b,c} → (?:a|b|c)
+  p = p.replace(/\{([^}]+)\}/g, (_, inner: string) =>
+    `(?:${inner.split(',').map((s: string) => s.trim()).join('|')})`
+  )
+  // ** → placeholder first to avoid the single-* step clobbering it
+  p = p.replace(/\*\*\/?/g, '\x00')
+  // * → match any char except path separator
+  p = p.replace(/\*/g, '[^\\/]*')
+  // ? → match any single char except path separator
+  p = p.replace(/\?/g, '[^\\/]')
+  // restore ** placeholder as match-anything (including separators)
+  p = p.replace(/\x00/g, '.*')
+  return new RegExp(`^${p}$`, 'i')
+}
+
 function registerIpcHandlers(): void {
   if (ipcRegistered) return
   ipcRegistered = true
@@ -115,6 +133,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('state:addWorkspace', (_e, name: string) => {
     const ws = stateStore!.addWorkspace(name)
     stateStore!.setActiveWorkspace(ws.id)
+    stateStore!.flushToml()
     return stateStore!.getSnapshot()
   })
 
@@ -149,6 +168,7 @@ function registerIpcHandlers(): void {
     if (pane?.type === 'terminal' || pane?.type === 'gitui') getTerminals().dispose(paneId)
     if (pane?.type === 'browser') getBrowserPanes().destroy(paneId)
     stateStore!.replaceWorkspacePanes(workspaceId, panes, active)
+    stateStore!.flushToml()
     return stateStore!.getSnapshot()
   })
 
@@ -229,6 +249,39 @@ function registerIpcHandlers(): void {
   ipcMain.handle('fs:createFile', async (_e, filePath: string) => {
     const { writeFile } = await import('node:fs/promises')
     await writeFile(resolve(filePath), '', { flag: 'wx' }) // wx = fail if exists
+  })
+
+  ipcMain.handle('fs:findFiles', async (_e, root: string, pattern: string, recursive: boolean) => {
+    const abs = resolve(root)
+    const regex = globToRegex(pattern || '*')
+    const matchRelPath = pattern.includes('/') || pattern.includes('\\') || pattern.includes('**')
+    const results: { name: string; path: string; isDirectory: boolean; size: number; mtimeMs: number }[] = []
+
+    const collect = async (dir: string): Promise<void> => {
+      if (results.length >= 5000) return
+      let entries: import('node:fs').Dirent[]
+      try {
+        entries = await readdir(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        if (results.length >= 5000) break
+        const p = join(dir, entry.name)
+        const isDir = entry.isDirectory()
+        const testStr = matchRelPath ? p.slice(abs.length + 1) : entry.name
+        if (regex.test(testStr)) {
+          try {
+            const st = await stat(p)
+            results.push({ name: entry.name, path: p, isDirectory: isDir, size: st.size, mtimeMs: st.mtimeMs })
+          } catch { /* skip inaccessible */ }
+        }
+        if (isDir && recursive) await collect(p)
+      }
+    }
+
+    await collect(abs)
+    return results
   })
 
   ipcMain.handle(
@@ -440,16 +493,19 @@ function registerIpcHandlers(): void {
   ipcMain.handle('state:cloneWorkspace', (_e, wsId: string) => {
     const ws = stateStore!.cloneWorkspace(wsId)
     if (ws) stateStore!.setActiveWorkspace(ws.id)
+    stateStore!.flushToml()
     return stateStore!.getSnapshot()
   })
 
   ipcMain.handle('state:renameWorkspace', (_e, wsId: string, name: string) => {
     stateStore!.renameWorkspace(wsId, name)
+    stateStore!.flushToml()
     return stateStore!.getSnapshot()
   })
 
   ipcMain.handle('state:deleteWorkspace', (_e, wsId: string) => {
     stateStore!.deleteWorkspace(wsId)
+    stateStore!.flushToml()
     return stateStore!.getSnapshot()
   })
 

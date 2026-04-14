@@ -343,7 +343,7 @@ export function FileList({
 
       <div
         ref={scrollRef}
-        style={{ overflow: 'auto', flex: 1, minHeight: 0 }}
+        style={{ overflow: 'auto', scrollbarGutter: 'stable', flex: 1, minHeight: 0 }}
       >
         <div
           style={{
