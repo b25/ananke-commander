@@ -558,6 +558,10 @@ select {
   gap: var(--space-gap);
 }
 
+.notes-editor input {
+  font-size: var(--text-sm);
+}
+
 .notes-editor textarea {
   flex: 1;
   resize: none;
