@@ -221,6 +221,27 @@ export interface HistoryEntry {
   error?: string
 }
 
+// ─── Mock proxy server ──────────────────────────────────────────────────────
+
+export interface MockRoute {
+  id: string
+  name: string
+  enabled: boolean
+  method: HttpMethod | '*'
+  urlPattern: string          // exact or glob: /api/users, /api/users/*
+  statusCode: number
+  responseHeaders: Record<string, string>
+  responseBody: string
+  delay: number               // ms simulated latency
+  hitCount: number
+  createdAt: number
+}
+
+export interface MockServerData {
+  port: number                // default 3001
+  routes: MockRoute[]
+}
+
 // ─── IPC channel names ───────────────────────────────────────────────────────
 
 export const IPC = {
@@ -262,4 +283,11 @@ export const IPC = {
   DIALOG_OPEN_PROTO: 'at:dialog:openProto',
   DIALOG_OPEN_FILE: 'at:dialog:openFile',
   DIALOG_SAVE_FILE: 'at:dialog:saveFile',
+
+  // Mock proxy server
+  MOCK_GET_DATA: 'at:mock:getData',
+  MOCK_SAVE_DATA: 'at:mock:saveData',
+  MOCK_START: 'at:mock:start',
+  MOCK_STOP: 'at:mock:stop',
+  MOCK_ROUTE_HIT: 'at:mock:routeHit',
 } as const

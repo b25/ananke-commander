@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { Tab } from '../store'
+import { useStore } from '../store'
+import type { MockRoute } from '../../../shared/api-toolkit-contracts'
 import { StreamLog } from './GrpcPanel'
 
 interface Props {
@@ -10,11 +12,41 @@ export function ResponseViewer({ tab }: Props) {
   const [innerTab, setInnerTab] = useState<'body' | 'headers' | 'timing'>('body')
   const [rawMode, setRawMode] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [savedAsMock, setSavedAsMock] = useState(false)
+  const { mockData, saveMockData, setSidebarTab } = useStore()
 
   function copyBody(body: string) {
     window.ananke.clipboard.writeText(body)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  async function saveAsMock() {
+    if (!tab.httpResponse) return
+    const req = tab.httpRequest
+    let urlPattern = '/'
+    try {
+      urlPattern = new URL(req.url).pathname || '/'
+    } catch {
+      urlPattern = req.url.startsWith('/') ? req.url.split('?')[0] : '/' + req.url.split('?')[0]
+    }
+    const route: MockRoute = {
+      id: crypto.randomUUID(),
+      name: tab.name !== 'New Request' ? tab.name : urlPattern,
+      enabled: true,
+      method: req.method,
+      urlPattern,
+      statusCode: tab.httpResponse.status,
+      responseHeaders: { 'Content-Type': tab.httpResponse.headers['content-type'] ?? 'application/json' },
+      responseBody: tab.httpResponse.body,
+      delay: 0,
+      hitCount: 0,
+      createdAt: Date.now(),
+    }
+    await saveMockData({ ...mockData, routes: [...mockData.routes, route] })
+    setSidebarTab('mock')
+    setSavedAsMock(true)
+    setTimeout(() => setSavedAsMock(false), 2000)
   }
 
   // Loading state
@@ -72,6 +104,15 @@ export function ResponseViewer({ tab }: Props) {
         </>}
         <span className="timing-label">Size:</span>
         <span className="timing-val">{formatSize(resp.size.body)}</span>
+        <span style={{ marginLeft: 'auto' }}>
+          <button
+            style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: savedAsMock ? 'var(--method-get)' : 'var(--text-2)', cursor: 'pointer' }}
+            onClick={saveAsMock}
+            title="Save request+response as mock route"
+          >
+            {savedAsMock ? 'Saved!' : 'Save as mock'}
+          </button>
+        </span>
       </div>
 
       <div className="panel-tabs">

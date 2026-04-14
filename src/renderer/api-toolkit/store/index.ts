@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   HttpRequest, HttpResponse, GrpcRequest, GrpcResponse, GrpcMessage, GrpcStatus,
   Collection, CollectionItem, RequestItem, Environment, HistoryEntry, KeyValue, HttpBody, AuthConfig, TlsConfig, ProtoDiscovery,
+  MockRoute, MockServerData,
 } from '../../../shared/api-toolkit-contracts'
 
 export type Protocol = 'http' | 'grpc'
@@ -76,7 +77,7 @@ interface AppState {
   environments: Environment[]
   activeEnvironmentId: string | null
   history: HistoryEntry[]
-  sidebarTab: 'collections' | 'history' | 'environments'
+  sidebarTab: 'collections' | 'history' | 'environments' | 'mock'
 
   // Tab actions
   openTab: (overrides?: Partial<Tab>) => void
@@ -108,7 +109,7 @@ interface AppState {
   setHistory: (h: HistoryEntry[]) => void
   addHistoryEntry: (entry: HistoryEntry) => void
   clearHistory: () => void
-  setSidebarTab: (t: 'collections' | 'history' | 'environments') => void
+  setSidebarTab: (t: 'collections' | 'history' | 'environments' | 'mock') => void
   setActiveEnvironment: (id: string | null) => void
 
   // Collection item CRUD
@@ -117,6 +118,18 @@ interface AppState {
   removeCollectionItem: (colId: string, itemId: string) => Promise<void>
   saveTabToCollection: (tabId: string) => Promise<void>
   importPostmanCollection: (jsonStr: string) => Promise<{ count: number }>
+
+  // Mock proxy server
+  mockData: MockServerData
+  mockRunning: boolean
+  mockActualPort: number | null
+  setMockData: (d: MockServerData) => void
+  setMockRunning: (r: boolean) => void
+  setMockActualPort: (p: number | null) => void
+  saveMockData: (d: MockServerData) => Promise<void>
+  startMock: () => Promise<void>
+  stopMock: () => Promise<void>
+  updateRouteHitCount: (routeId: string, hitCount: number) => void
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -127,6 +140,9 @@ export const useStore = create<AppState>((set, get) => ({
   activeEnvironmentId: null,
   history: [],
   sidebarTab: 'collections',
+  mockData: { port: 3001, routes: [] },
+  mockRunning: false,
+  mockActualPort: null,
 
   openTab: (overrides) => {
     const tab = newTab(overrides)
@@ -285,6 +301,37 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({ collections: [...s.collections, result.collection] }))
     return { count: result.count }
   },
+
+  setMockData: (mockData) => set({ mockData }),
+  setMockRunning: (mockRunning) => set({ mockRunning }),
+  setMockActualPort: (mockActualPort) => set({ mockActualPort }),
+
+  saveMockData: async (data) => {
+    await window.ananke.apiToolkit.mock.saveData(data)
+    set({ mockData: data })
+  },
+
+  startMock: async () => {
+    const { mockData } = get()
+    const result = await window.ananke.apiToolkit.mock.start(mockData.port, mockData.routes)
+    set({ mockRunning: true, mockActualPort: result.port })
+  },
+
+  stopMock: async () => {
+    await window.ananke.apiToolkit.mock.stop()
+    set({ mockRunning: false, mockActualPort: null })
+  },
+
+  updateRouteHitCount: (routeId, hitCount) =>
+    set((s) => {
+      const routes = s.mockData.routes.map((r) =>
+        r.id === routeId ? { ...r, hitCount } : r
+      )
+      const mockData = { ...s.mockData, routes }
+      // Persist updated hit counts to disk
+      window.ananke.apiToolkit.mock.saveData(mockData).catch(console.error)
+      return { mockData }
+    }),
 }))
 
 // Helper: get active tab

@@ -4,6 +4,7 @@ import type {
   HttpRequest, HttpResponse,
   GrpcRequest, GrpcResponse, GrpcMessage, GrpcStatus, ProtoDiscovery,
   Collection, CollectionItem, Environment, HistoryEntry,
+  MockRoute, MockServerData,
 } from '../shared/api-toolkit-contracts.js'
 
 const api = {
@@ -307,6 +308,21 @@ const api = {
         ipcRenderer.invoke('at:dialog:openFile'),
       saveFile: (content: string, defaultName: string): Promise<boolean> =>
         ipcRenderer.invoke('at:dialog:saveFile', content, defaultName),
+    },
+    mock: {
+      getData: (): Promise<MockServerData> =>
+        ipcRenderer.invoke('at:mock:getData'),
+      saveData: (data: MockServerData): Promise<void> =>
+        ipcRenderer.invoke('at:mock:saveData', data),
+      start: (port: number, routes: MockRoute[]): Promise<{ port: number }> =>
+        ipcRenderer.invoke('at:mock:start', port, routes),
+      stop: (): Promise<void> =>
+        ipcRenderer.invoke('at:mock:stop'),
+      onRouteHit: (cb: (routeId: string, hitCount: number) => void) => {
+        const fn = (_e: Electron.IpcRendererEvent, routeId: string, hitCount: number) => cb(routeId, hitCount)
+        ipcRenderer.on('at:mock:routeHit', fn)
+        return () => ipcRenderer.removeListener('at:mock:routeHit', fn)
+      },
     },
   },
 

@@ -19,11 +19,20 @@ export function App() {
     window.ananke.apiToolkit.storage.getCollections().then(setCollections).catch(console.error)
     window.ananke.apiToolkit.storage.getEnvironments().then(setEnvironments).catch(console.error)
     window.ananke.apiToolkit.storage.getHistory().then(setHistory).catch(console.error)
+    window.ananke.apiToolkit.mock.getData().then(useStore.getState().setMockData).catch(console.error)
 
     // Bootstrap active tab if none
     if (!activeTabId && tabs.length > 0) {
       setActiveTab(tabs[0].id)
     }
+  }, [])
+
+  // Wire up mock server hit events
+  useEffect(() => {
+    const off = window.ananke.apiToolkit.mock.onRouteHit((routeId, hitCount) => {
+      useStore.getState().updateRouteHitCount(routeId, hitCount)
+    })
+    return () => { off() }
   }, [])
 
   // Wire up gRPC stream IPC events

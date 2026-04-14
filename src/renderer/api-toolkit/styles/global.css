@@ -10,6 +10,7 @@
   --text-0: #e8e8f0;
   --text-1: #b0b0c8;
   --text-2: #7070a0;
+  --text-3: #404060;
   --text-accent: #818cf8;
 
   --method-get:    #22c55e;
@@ -124,6 +125,7 @@
 }
 .sidebar-tab {
   flex: 1;
+  min-width: 0;
   height: 16px;
   display: flex;
   align-items: center;
@@ -135,6 +137,10 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   transition: all 0.12s;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 0 2px;
 }
 .sidebar-tab:hover { color: var(--text-1); }
 .sidebar-tab.active { color: var(--text-accent); border-bottom: 2px solid var(--text-accent); }
@@ -187,13 +193,14 @@
   border-radius: 3px;
   flex-shrink: 0;
 }
-.method-GET    { color: var(--method-get);    }
-.method-POST   { color: var(--method-post);   }
-.method-PUT    { color: var(--method-put);    }
-.method-PATCH  { color: var(--method-patch);  }
-.method-DELETE { color: var(--method-delete); }
-.method-HEAD   { color: var(--method-head);   }
-.method-grpc   { color: var(--text-accent); }
+.method-GET     { color: var(--method-get);     }
+.method-POST    { color: var(--method-post);    }
+.method-PUT     { color: var(--method-put);     }
+.method-PATCH   { color: var(--method-patch);   }
+.method-DELETE  { color: var(--method-delete);  }
+.method-HEAD    { color: var(--method-head);    }
+.method-OPTIONS { color: var(--method-options); }
+.method-grpc    { color: var(--text-accent);    }
 
 /* ── Request editor ───────────────────────────────────────────────────────── */
 .request-editor {

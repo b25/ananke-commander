@@ -5,11 +5,13 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { readFileSync } from 'node:fs'
 import { IPC } from '../../shared/api-toolkit-contracts.js'
-import type { HttpRequest, GrpcRequest, Collection, CollectionItem, Environment, HistoryEntry } from '../../shared/api-toolkit-contracts.js'
+import type { HttpRequest, GrpcRequest, Collection, CollectionItem, Environment, HistoryEntry, MockRoute, MockServerData } from '../../shared/api-toolkit-contracts.js'
 import { sendHttp, cancelHttp } from './http-client.js'
 import { discoverProto, grpcUnary, grpcStream } from './grpc-engine.js'
 import * as storage from './storage.js'
 import { toCurl, fromCurl } from './curl-utils.js'
+import { mockServer } from './mockServer.js'
+import * as mockStorage from './mockStorage.js'
 
 let registered = false
 
@@ -152,5 +154,26 @@ export function registerApiToolkitHandlers(): void {
     const { writeFileSync } = await import('node:fs')
     writeFileSync(result.filePath, content, 'utf8')
     return true
+  })
+
+  // ─── Mock proxy server ─────────────────────────────────────────────────────
+
+  ipcMain.handle(IPC.MOCK_GET_DATA, () => mockStorage.readMockData())
+
+  ipcMain.handle(IPC.MOCK_SAVE_DATA, (_e, data: MockServerData) => {
+    mockStorage.writeMockData(data)
+    if (mockServer.isRunning()) mockServer.updateRoutes(data.routes)
+  })
+
+  ipcMain.handle(IPC.MOCK_START, async (_e, port: number, routes: MockRoute[]) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    const actual = await mockServer.start(port, routes, (routeId, hitCount) => {
+      win?.webContents.send(IPC.MOCK_ROUTE_HIT, routeId, hitCount)
+    })
+    return { port: actual }
+  })
+
+  ipcMain.handle(IPC.MOCK_STOP, async () => {
+    await mockServer.stop()
   })
 }
