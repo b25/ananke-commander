@@ -431,7 +431,7 @@ export function App() {
     const isActive = displayWs!.activePaneId === pane.id
     if (pane.type === 'file-browser') return <FileBrowserPane pane={pane} isActive={isActive} allPanes={displayWs!.panes} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'terminal') return <TerminalPane pane={pane} isActive={isActive} scrollback={snap!.settings.privacy.terminalHistoryMax} fontSize={snap!.settings.terminal?.fontSize ?? 10} fontFamily={snap!.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'browser') return <BrowserPlaceholderPane pane={pane} isActive={isActive} canvasOffset={displayWs!.canvasOffset} onClose={() => void closePane(pane.id)} onUpdate={(next) => void updatePane(pane.id, next)} />
+    if (pane.type === 'browser') return <BrowserPlaceholderPane pane={pane} isActive={isActive} isCollapsed={activeCollapsedIds.has(pane.id)} canvasOffset={displayWs!.canvasOffset} onClose={() => void closePane(pane.id)} onUpdate={(next) => void updatePane(pane.id, next)} />
     if (pane.type === 'radar') return <RadarPane pane={pane} isActive={isActive} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'gitui') return <GitUiPane pane={pane} isActive={isActive} fontSize={snap!.settings.terminal?.fontSize ?? 10} fontFamily={snap!.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onClose={() => void closePane(pane.id)} />
     if (pane.type === 'api-toolkit') return <ApiToolkitPane pane={pane} isActive={isActive} onClose={() => void closePane(pane.id)} />
@@ -554,7 +554,9 @@ export function App() {
 
   const activeCollapsedIds = new Set(ws?.screenCollapsed?.[activeScreen] ?? [])
   const collapsedPanes = displayWs ? displayWs.panes.filter(p => activeCollapsedIds.has(p.id)) : []
-  const displayWsForCanvas = displayWs ? { ...displayWs, panes: displayWs.panes.filter(p => !activeCollapsedIds.has(p.id)) } : displayWs
+  // Browser panes stay mounted even when collapsed so the WebContentsView is not destroyed.
+  // All other pane types are unmounted when collapsed (saves memory/CPU).
+  const displayWsForCanvas = displayWs ? { ...displayWs, panes: displayWs.panes.filter(p => !activeCollapsedIds.has(p.id) || p.type === 'browser') } : displayWs
 
   useEffect(() => {
     if (drawer === 'none') return

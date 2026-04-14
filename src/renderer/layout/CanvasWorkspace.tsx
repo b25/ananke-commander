@@ -92,6 +92,7 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
               key={pane.id}
               x={pane.x} y={pane.y} width={pane.width} height={pane.height}
               isActive={workspace.activePaneId === pane.id}
+              isCollapsed={collapsedIds.includes(pane.id)}
               onActivate={() => onActivate(pane.id)}
             >
               {renderPane(pane)}

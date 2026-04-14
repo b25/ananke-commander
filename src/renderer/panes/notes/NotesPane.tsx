@@ -23,7 +23,9 @@ function formatDate(ts: number): string {
 export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: Props) {
   const undoStack = useRef<string[]>([])
   const [localBody, setLocalBody] = useState(pane.body)
+  const [localTitle, setLocalTitle] = useState(pane.title)
   const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [view, setView] = useState<'editor' | 'list'>(pane.currentFile ? 'editor' : 'list')
   const [notesList, setNotesList] = useState<VaultNote[]>([])
   const [listFilter, setListFilter] = useState('')
@@ -31,7 +33,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   const [wsName, setWsName] = useState('')
   const [wsLabel, setWsLabel] = useState('')
 
-  useEffect(() => { setLocalBody(pane.body) }, [pane.id])
+  useEffect(() => { setLocalBody(pane.body); setLocalTitle(pane.title) }, [pane.id])
 
   // Load vault path and workspace name
   useEffect(() => {
@@ -130,7 +132,10 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   }
 
   useEffect(() => {
-    return () => { if (updateTimerRef.current) clearTimeout(updateTimerRef.current) }
+    return () => {
+      if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
+      if (titleTimerRef.current) clearTimeout(titleTimerRef.current)
+    }
   }, [])
 
   const filtered = listFilter.trim()
@@ -200,8 +205,13 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
         ) : (
           <div className="notes-editor">
             <input
-              value={pane.title}
-              onChange={(e) => onUpdate({ ...pane, title: e.target.value })}
+              value={localTitle}
+              onChange={(e) => {
+                const val = e.target.value
+                setLocalTitle(val)
+                if (titleTimerRef.current) clearTimeout(titleTimerRef.current)
+                titleTimerRef.current = setTimeout(() => { onUpdate({ ...pane, title: val }) }, 300)
+              }}
               placeholder="Title"
             />
             <textarea

@@ -7,12 +7,13 @@ import { BrowserMenu } from './BrowserMenu'
 type Props = {
   pane: BrowserPaneState
   isActive: boolean
+  isCollapsed?: boolean
   canvasOffset: { x: number; y: number }
   onClose: () => void
   onUpdate: (next: BrowserPaneState) => void
 }
 
-export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, onUpdate }: Props) {
+export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffset, onClose, onUpdate }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   type HistoryEntry = { url: string; timestamp: number }
   const [navHistory, setNavHistory] = useState<HistoryEntry[]>([])
@@ -69,6 +70,8 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
   }, [pane.id]) // Intentionally only on pane ID change / fresh component mount
 
   const nativeVisibleRef = useRef(true)
+  const isCollapsedRef = useRef(isCollapsed ?? false)
+  isCollapsedRef.current = isCollapsed ?? false
 
   useEffect(() => {
     const handler = (e: CustomEvent<boolean>) => {
@@ -79,9 +82,26 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     return () => window.removeEventListener('native-view-visibility', handler as EventListener)
   }, [])
 
+  // When collapse state changes, suspend or restore the native view explicitly.
+  // This replaces the unmount/remount lifecycle so the page is never reloaded.
+  useEffect(() => {
+    if (isCollapsed) {
+      void window.ananke.browser.suspend(pane.id)
+    } else {
+      syncBounds()
+    }
+  // syncBounds is redefined each render; capturing it via ref is intentional here.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCollapsed, pane.id])
+
   const syncBounds = () => {
     const el = hostRef.current
     if (!el) return
+    // When pane is collapsed the FloatingPane has display:none — native view must stay offscreen.
+    if (isCollapsedRef.current) {
+      void window.ananke.browser.suspend(pane.id)
+      return
+    }
     const r = el.getBoundingClientRect()
     
     // In Ananke, native WebContentsViews float above the Chromium compositor and ignore CSS `overflow: clip`.
@@ -130,10 +150,12 @@ export function BrowserPlaceholderPane({ pane, isActive, canvasOffset, onClose, 
     void window.ananke.browser.layout(pane.id, bounds)
   }
 
-  // Re-sync on mount, active change, pane move/resize, and canvas pan
+  // Re-sync on mount, active change, pane move/resize, canvas pan, and collapse state.
+  // useLayoutEffect fires synchronously before paint — ensures the native view is
+  // suspended before the browser composites the frame when collapsing.
   useLayoutEffect(() => {
     syncBounds()
-  }, [pane.id, isActive, pane.x, pane.y, pane.width, pane.height, canvasOffset.x, canvasOffset.y])
+  }, [pane.id, isActive, isCollapsed, pane.x, pane.y, pane.width, pane.height, canvasOffset.x, canvasOffset.y])
 
   useEffect(() => {
     const ro = new ResizeObserver(() => syncBounds())

@@ -209,6 +209,7 @@ export class StateStore {
 
   setActiveWorkspacePane(workspaceId: string, activePaneId: string | null): void {
     this.store.set('workspaces', this.store.get('workspaces').map((ws) => ws.id === workspaceId ? { ...ws, activePaneId } : ws))
+    this.scheduleTomlFlush()
   }
 
   pauseWatch(): void { this.tomlService.pause() }
@@ -242,7 +243,7 @@ export class StateStore {
     return ws
   }
 
-  setActiveWorkspace(id: string): void { this.store.set('activeWorkspaceId', id) }
+  setActiveWorkspace(id: string): void { this.store.set('activeWorkspaceId', id); this.scheduleTomlFlush() }
   getWorkspace(id: string): WorkspaceState | undefined { return this.store.get('workspaces').find((w) => w.id === id) }
 
   setCanvasOffset(workspaceId: string, x: number, y: number): void {
