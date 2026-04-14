@@ -70,7 +70,7 @@ function OneofGroup({ fields, value, onChange, depth }: {
     <div className="form-field">
       <div className="form-label" style={{ gap: 8 }}>
         <span>oneof</span>
-        <select className="select" value={selected} onChange={(e) => select(e.target.value)} style={{ fontSize: 11 }}>
+        <select className="select" value={selected} onChange={(e) => select(e.target.value)} style={{ fontSize: 10 }}>
           {fields.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}
         </select>
       </div>
@@ -225,7 +225,7 @@ function ScalarOrMessage({ field, value, onChange, depth }: {
       return (
         <textarea
           className="code-editor"
-          style={{ minHeight: 60, fontSize: 11 }}
+          style={{ minHeight: 60, fontSize: 10 }}
           value={typeof value === 'object' ? JSON.stringify(value, null, 2) : '{}'}
           onChange={(e) => { try { onChange(JSON.parse(e.target.value)) } catch { /* ignore */ } }}
         />
@@ -259,7 +259,7 @@ function ScalarOrMessage({ field, value, onChange, depth }: {
     return (
       <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <input type="checkbox" className="form-checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />
-        <span style={{ fontSize: 12, color: 'var(--text-1)' }}>{value ? 'true' : 'false'}</span>
+        <span style={{ fontSize: 10, color: 'var(--text-1)' }}>{value ? 'true' : 'false'}</span>
       </label>
     )
   }
@@ -315,11 +315,11 @@ function WktField({ wkt, value, onChange }: { wkt: WellKnownType; value: unknown
             onChange={(e) => onChange(`${e.target.value}s`)}
             style={{ flex: 1 }}
           />
-          <span style={{ color: 'var(--text-2)', fontSize: 12 }}>s</span>
+          <span style={{ color: 'var(--text-2)', fontSize: 10 }}>s</span>
         </div>
       )
     case 'Empty':
-      return <span style={{ color: 'var(--text-2)', fontSize: 11 }}>(empty)</span>
+      return <span style={{ color: 'var(--text-2)', fontSize: 10 }}>(empty)</span>
     case 'FieldMask':
       return (
         <input
@@ -334,7 +334,7 @@ function WktField({ wkt, value, onChange }: { wkt: WellKnownType; value: unknown
       return (
         <textarea
           className="code-editor"
-          style={{ minHeight: 60, fontSize: 11 }}
+          style={{ minHeight: 60, fontSize: 10 }}
           value={typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '')}
           onChange={(e) => { try { onChange(JSON.parse(e.target.value)) } catch { onChange(e.target.value) } }}
         />

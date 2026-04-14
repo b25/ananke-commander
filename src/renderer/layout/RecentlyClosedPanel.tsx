@@ -19,7 +19,7 @@ export function RecentlyClosedPanel({ snap, ws, onClose, onSnapshot }: Props) {
             style={{ marginBottom: 10, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}
           >
             <div className="muted">{e.snapshot.type}</div>
-            <div style={{ fontSize: 11 }}>{e.snapshot.title}</div>
+            <div style={{ fontSize: 10 }}>{e.snapshot.title}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <button
                 type="button"

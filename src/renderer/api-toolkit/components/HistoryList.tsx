@@ -31,7 +31,7 @@ export function HistoryList() {
             className="sidebar-action-btn"
             title="Clear history"
             onClick={() => { clearHistory(); window.ananke.apiToolkit.storage.clearHistory() }}
-            style={{ fontSize: 12 }}
+            style={{ fontSize: 10 }}
           >
             ✕
           </span>
@@ -39,7 +39,7 @@ export function HistoryList() {
       </div>
 
       {history.length === 0 && (
-        <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 12, textAlign: 'center' }}>
+        <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 10, textAlign: 'center' }}>
           No history yet.
         </div>
       )}

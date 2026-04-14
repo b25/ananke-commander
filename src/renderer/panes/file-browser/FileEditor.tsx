@@ -17,7 +17,7 @@ export function FileEditor({ path, text, readOnly, onSave, onClose }: FileEditor
         onClick={(e) => e.stopPropagation()}
         style={{ width: '70vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
       >
-        <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>{heading}</h2>
+        <h2 style={{ fontSize: 10, margin: '0 0 8px' }}>{heading}</h2>
         <textarea
           id="file-editor-textarea"
           defaultValue={text}
@@ -28,7 +28,7 @@ export function FileEditor({ path, text, readOnly, onSave, onClose }: FileEditor
             minHeight: 300,
             resize: 'vertical',
             fontFamily: 'ui-monospace, monospace',
-            fontSize: 12,
+            fontSize: 10,
             background: 'var(--bg)',
             color: 'var(--text)',
             border: '1px solid var(--border)',

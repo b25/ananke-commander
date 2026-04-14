@@ -101,11 +101,11 @@ export function RequestEditor({ tab }: Props) {
     return (
       <div className="request-editor" style={{ flex: '0 0 auto', maxHeight: '50%', overflow: 'hidden' }}>
         <div className="url-bar" style={{ paddingBottom: 4 }}>
-          <span className="method-badge method-grpc" style={{ fontSize: 12 }}>gRPC</span>
-          <span style={{ flex: 1, color: 'var(--text-2)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+          <span className="method-badge method-grpc" style={{ fontSize: 10 }}>gRPC</span>
+          <span style={{ flex: 1, color: 'var(--text-2)', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
             {tab.grpcRequest.endpoint || 'Configure endpoint below'}
           </span>
-          <span style={{ fontSize: 11, color: 'var(--text-2)' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-2)' }}>
             {tab.grpcRequest.serviceMethod || 'Select method'}
           </span>
           <button

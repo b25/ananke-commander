@@ -70,7 +70,7 @@ export function GitUiPane({ pane, isActive, fontSize, fontFamily, onClose }: Pro
         {errorMsg === 'notfound' && (
           <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', zIndex: 10, gap: 12 }}>
             <h3 style={{ margin: 0 }}>GitUI Not Found</h3>
-            <p style={{ margin: 0, opacity: 0.7, fontSize: 13 }}>The `gitui` binary was not found in PATH.</p>
+            <p style={{ margin: 0, opacity: 0.7, fontSize: 10 }}>The `gitui` binary was not found in PATH.</p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" className="primary" onClick={handleInstall}>Install via Homebrew</button>
               <button type="button" onClick={handleRetry}>Retry</button>
@@ -78,7 +78,7 @@ export function GitUiPane({ pane, isActive, fontSize, fontFamily, onClose }: Pro
           </div>
         )}
         {errorMsg === 'error' && (
-          <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', padding: '8px 12px', background: 'rgba(0,0,0,0.75)', color: 'var(--danger)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, zIndex: 10 }}>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', padding: '8px 12px', background: 'rgba(0,0,0,0.75)', color: 'var(--danger)', fontSize: 10, display: 'flex', alignItems: 'center', gap: 8, zIndex: 10 }}>
             <span>GitUI exited with an error. This directory may not be a git repository.</span>
             <button type="button" onClick={handleRetry} style={{ marginLeft: 'auto' }}>Retry</button>
           </div>

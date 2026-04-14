@@ -63,7 +63,7 @@ export function FileBrowserActions({
   }
 
   const Shortcut = ({ label }: { label: string }) => (
-    <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>{label}</span>
+    <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 10 }}>{label}</span>
   )
 
   const Sep = () => <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />

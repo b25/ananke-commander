@@ -658,14 +658,14 @@ export function App() {
           <PrivacySettings value={snap.settings.privacy} onChange={(privacy) => setSnap({ ...snap, settings: { ...snap.settings, privacy } })} onPurgeRecentlyClosed={() => void window.ananke.state.purgeRecentlyClosed().then(setSnap)} />
           <button type="button" className="primary" onClick={() => void window.ananke.state.set({ settings: snap.settings }).then(setSnap)}>Save settings</button>
           <hr style={{ margin: '12px 0', borderColor: 'var(--border)' }} />
-          <div style={{ fontSize: 12, marginBottom: 6, color: 'var(--muted)' }}>Workspace File (TOML)</div>
+          <div style={{ fontSize: 10, marginBottom: 6, color: 'var(--muted)' }}>Workspace File (TOML)</div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button type="button" className="primary" onClick={() => void openTomlEditor()}>Edit TOML</button>
             <button type="button" onClick={() => void window.ananke.config.openToml()}>Open in System Editor</button>
             <button type="button" onClick={() => void window.ananke.config.writeToml()}>Force Save</button>
           </div>
           <hr style={{ margin: '12px 0', borderColor: 'var(--border)' }} />
-          <div style={{ fontSize: 12, marginBottom: 6, color: 'var(--muted)' }}>Diagnostics</div>
+          <div style={{ fontSize: 10, marginBottom: 6, color: 'var(--muted)' }}>Diagnostics</div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button type="button" onClick={copyDebugInfo}>Copy Debug Info</button>
             <button type="button" onClick={() => void repairWorkspace()}>Repair Workspace</button>

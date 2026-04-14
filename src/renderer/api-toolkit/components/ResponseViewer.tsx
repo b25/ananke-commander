@@ -87,7 +87,7 @@ export function ResponseViewer({ tab }: Props) {
 
       {innerTab === 'headers' && (
         <div className="panel-body">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
             <tbody>
               {Object.entries(resp.headers).map(([k, v]) => (
                 <tr key={k} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -122,9 +122,9 @@ function GrpcResponseView({ tab }: { tab: Tab }) {
           <span className={`status-pill ${status.code === 0 ? 'status-2xx' : 'status-5xx'}`}>
             {status.codeName}
           </span>
-          {status.details && <span style={{ fontSize: 12, color: 'var(--text-1)' }}>{status.details}</span>}
+          {status.details && <span style={{ fontSize: 10, color: 'var(--text-1)' }}>{status.details}</span>}
           {tab.grpcStreamActive && (
-            <><div className="spinner" /><span style={{ fontSize: 12, color: 'var(--text-2)' }}>streaming</span></>
+            <><div className="spinner" /><span style={{ fontSize: 10, color: 'var(--text-2)' }}>streaming</span></>
           )}
         </div>
       )}
@@ -154,7 +154,7 @@ function GrpcResponseView({ tab }: { tab: Tab }) {
       )}
 
       {innerTab === 'status' && status && (
-        <div className="panel-body" style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+        <div className="panel-body" style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div><span style={{ color: 'var(--text-2)' }}>Code: </span>{status.code} ({status.codeName})</div>
             {status.details && <div><span style={{ color: 'var(--text-2)' }}>Details: </span>{status.details}</div>}
@@ -165,9 +165,9 @@ function GrpcResponseView({ tab }: { tab: Tab }) {
       {innerTab === 'trailers' && (
         <div className="panel-body">
           {Object.entries(resp?.trailers ?? {}).length === 0
-            ? <span style={{ color: 'var(--text-2)', fontSize: 12 }}>No trailers</span>
+            ? <span style={{ color: 'var(--text-2)', fontSize: 10 }}>No trailers</span>
             : Object.entries(resp?.trailers ?? {}).map(([k, v]) => (
-              <div key={k} style={{ fontFamily: 'var(--font-mono)', fontSize: 12, marginBottom: 4 }}>
+              <div key={k} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, marginBottom: 4 }}>
                 <span style={{ color: 'var(--text-accent)' }}>{k}</span>: {v}
               </div>
             ))
@@ -251,7 +251,7 @@ function TimingBar({ timings }: { timings: { total: number; ttfb?: number; downl
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {bars.map((b) => (
         <div key={b.label}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 10 }}>
             <span style={{ color: 'var(--text-2)' }}>{b.label}</span>
             <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-1)' }}>{b.ms}ms</span>
           </div>
@@ -260,7 +260,7 @@ function TimingBar({ timings }: { timings: { total: number; ttfb?: number; downl
           </div>
         </div>
       ))}
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginTop: 8 }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, marginTop: 8 }}>
         Total: <span style={{ color: 'var(--text-0)' }}>{timings.total}ms</span>
       </div>
     </div>

@@ -117,9 +117,9 @@ export function GrpcPanel({ tab }: Props) {
       {/* Proto source */}
       <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Proto source:</span>
+          <span style={{ fontSize: 10, color: 'var(--text-2)' }}>Proto source:</span>
           {(['text', 'file', 'reflection'] as SourceMode[]).map((m) => (
-            <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12, color: sourceMode === m ? 'var(--text-accent)' : 'var(--text-1)' }}>
+            <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 10, color: sourceMode === m ? 'var(--text-accent)' : 'var(--text-1)' }}>
               <input type="radio" value={m} checked={sourceMode === m} onChange={() => setSourceMode(m)} style={{ accentColor: 'var(--text-accent)' }} />
               {m === 'text' ? 'Paste text' : m === 'file' ? 'Upload files' : 'Server reflection'}
             </label>
@@ -129,7 +129,7 @@ export function GrpcPanel({ tab }: Props) {
         {sourceMode === 'text' && (
           <textarea
             className="code-editor"
-            style={{ minHeight: 80, fontSize: 11, marginBottom: 6 }}
+            style={{ minHeight: 80, fontSize: 10, marginBottom: 6 }}
             placeholder={'syntax = "proto3";\n\nmessage HelloRequest { string name = 1; }'}
             value={protoText}
             onChange={(e) => setProtoText(e.target.value)}
@@ -138,34 +138,34 @@ export function GrpcPanel({ tab }: Props) {
 
         {sourceMode === 'file' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button className="icon-btn" style={{ width: 'auto', padding: '0 10px', fontSize: 12 }} onClick={loadProtoFiles}>
+            <button className="icon-btn" style={{ width: 'auto', padding: '0 10px', fontSize: 10 }} onClick={loadProtoFiles}>
               Browse .proto files
             </button>
             {protoFiles.length > 0 && (
-              <span style={{ fontSize: 11, color: 'var(--text-2)' }}>{protoFiles.length} file(s) loaded</span>
+              <span style={{ fontSize: 10, color: 'var(--text-2)' }}>{protoFiles.length} file(s) loaded</span>
             )}
           </div>
         )}
 
         {sourceMode === 'reflection' && (
-          <p style={{ fontSize: 11, color: 'var(--text-2)' }}>
+          <p style={{ fontSize: 10, color: 'var(--text-2)' }}>
             Schema will be fetched from server reflection at <code>{req.endpoint}</code>
           </p>
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-          <button className="send-btn" style={{ fontSize: 12, padding: '3px 12px' }} onClick={discover} disabled={discovering}>
+          <button className="send-btn" style={{ fontSize: 10, padding: '3px 12px' }} onClick={discover} disabled={discovering}>
             {discovering ? 'Discovering…' : 'Discover services'}
           </button>
           {discovering && <div className="spinner" />}
-          {discoverError && <span style={{ color: 'var(--status-err)', fontSize: 11 }}>{discoverError}</span>}
+          {discoverError && <span style={{ color: 'var(--status-err)', fontSize: 10 }}>{discoverError}</span>}
         </div>
       </div>
 
       {/* Method selector */}
       {discovery && discovery.services.length > 0 && (
         <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Method:</span>
+          <span style={{ fontSize: 10, color: 'var(--text-2)' }}>Method:</span>
           <select
             className="grpc-method-select"
             value={req.serviceMethod}
@@ -258,12 +258,12 @@ function StreamSendBar({ tabId, reqSchema }: { tabId: string; reqSchema: Message
   return (
     <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Send message</span>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer', color: 'var(--text-2)' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-2)' }}>Send message</span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, cursor: 'pointer', color: 'var(--text-2)' }}>
           <input type="checkbox" checked={jsonMode} onChange={(e) => setJsonMode(e.target.checked)} />
           JSON
         </label>
-        <button className="send-btn" style={{ padding: '2px 12px', fontSize: 11 }} onClick={send}>Send</button>
+        <button className="send-btn" style={{ padding: '2px 12px', fontSize: 10 }} onClick={send}>Send</button>
       </div>
       {jsonMode ? (
         <textarea className="code-editor" style={{ minHeight: 60 }} value={json} onChange={(e) => setJson(e.target.value)} />
@@ -280,14 +280,14 @@ export function StreamLog({ messages }: { messages: GrpcMessage[] }) {
   return (
     <div className="stream-log">
       {messages.length === 0 && (
-        <div style={{ color: 'var(--text-2)', fontSize: 12, padding: '16px 0' }}>Waiting for messages…</div>
+        <div style={{ color: 'var(--text-2)', fontSize: 10, padding: '16px 0' }}>Waiting for messages…</div>
       )}
       {messages.map((msg, i) => (
         <div key={i} className={`stream-msg ${msg.direction}`}>
           <div className="stream-msg-meta">
             {msg.direction === 'recv' ? '↓ received' : '↑ sent'} · {new Date(msg.timestamp).toISOString().slice(11, 23)}
           </div>
-          <pre style={{ margin: 0, fontSize: 11 }}>{msg.json}</pre>
+          <pre style={{ margin: 0, fontSize: 10 }}>{msg.json}</pre>
         </div>
       ))}
     </div>

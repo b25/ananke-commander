@@ -123,7 +123,7 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
           <div className="layout-picker__popover term-history-popover" role="menu" style={{ minWidth: 280, maxHeight: 320, overflowY: 'auto' }}>
             <div className="browser-menu__section-label">Session History</div>
             {sessions.length === 0 && (
-              <div style={{ padding: '8px 10px', color: 'var(--muted)', fontSize: 11 }}>No saved sessions</div>
+              <div style={{ padding: '8px 10px', color: 'var(--muted)', fontSize: 10 }}>No saved sessions</div>
             )}
             {sessions.map(s => (
               <div key={s.id} className="term-history__item">

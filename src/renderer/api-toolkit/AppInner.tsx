@@ -143,7 +143,7 @@ export function ProtocolToggle() {
             borderRadius: 'var(--radius-sm)',
             color: activeTab.protocol === p ? 'var(--text-0)' : 'var(--text-2)',
             padding: '3px 10px',
-            fontSize: 12,
+            fontSize: 10,
             cursor: 'pointer',
             fontWeight: activeTab.protocol === p ? 600 : 400,
           }}
