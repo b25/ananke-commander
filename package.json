@@ -59,6 +59,7 @@
   "build": {
     "appId": "com.ananke.commander",
     "productName": "Ananke Commander",
+    "icon": "resources/icon.png",
     "directories": {
       "output": "release"
     },
@@ -67,9 +68,11 @@
       "package.json"
     ],
     "mac": {
+      "icon": "resources/icon.icns",
       "category": "public.app-category.developer-tools"
     },
     "win": {
+      "icon": "resources/icon.png",
       "target": "nsis"
     }
   }

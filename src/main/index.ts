@@ -560,6 +560,7 @@ async function createWindow(): Promise<void> {
     width: 1280,
     height: 840,
     title: 'Ananke Commander',
+    icon: join(app.getAppPath(), 'resources', 'icon.png'),
     webPreferences: {
       preload: preloadScriptPath(),
       sandbox: true,

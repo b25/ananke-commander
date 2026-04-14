@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0%" stop-color="#1a103a"/>
+      <stop offset="100%" stop-color="#05030f"/>
+    </radialGradient>
+    <linearGradient id="snakeGrad" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%"   stop-color="#c4b5fd"/>
+      <stop offset="40%"  stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#5b21b6"/>
+    </linearGradient>
+    <linearGradient id="headGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#ddd6fe"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <circle cx="512" cy="512" r="512" fill="url(#bg)"/>
+
+  <!-- Subtle glow ring behind snake -->
+  <circle cx="512" cy="512" r="310" fill="none" stroke="#7c3aed" stroke-width="110" opacity="0.15"/>
+
+  <!-- Snake body arc: from 15deg (811.4,592.2) clockwise 320deg to 335deg (793.0,381.0) -->
+  <path
+    d="M 811.4,592.2 A 310,310 0 1 1 793.0,381.0"
+    fill="none"
+    stroke="url(#snakeGrad)"
+    stroke-width="72"
+    stroke-linecap="round"
+  />
+
+  <!-- Scale highlights (inner edge shimmer) -->
+  <path
+    d="M 811.4,592.2 A 310,310 0 1 1 793.0,381.0"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="72"
+    stroke-linecap="round"
+    opacity="0.06"
+  />
+
+  <!-- Scale texture dashes -->
+  <path
+    d="M 800,580 A 310,310 0 1 1 800,388"
+    fill="none"
+    stroke="#e9d5ff"
+    stroke-width="3"
+    stroke-dasharray="16 30"
+    stroke-linecap="round"
+    opacity="0.22"
+  />
+
+  <!-- Snake head shape (tapered from body to snout) -->
+  <!-- upper body edge at 15deg + normal*36: (844.2,601.0) -->
+  <!-- lower body edge at 15deg - normal*36: (778.6,583.4) -->
+  <!-- snout tip: (834.7,505.3) -->
+  <path
+    d="M 778.6,583.4 Q 790,560 834.7,505.3 Q 862,550 844.2,601.0 Z"
+    fill="url(#headGrad)"
+  />
+
+  <!-- Mouth opening (darker slit between upper/lower jaw) -->
+  <path
+    d="M 834.7,505.3 Q 845,518 855,530"
+    fill="none"
+    stroke="#2d1b69"
+    stroke-width="5"
+    stroke-linecap="round"
+    opacity="0.8"
+  />
+
+  <!-- Eye -->
+  <circle cx="847" cy="545" r="12" fill="#0d0020"/>
+  <circle cx="847" cy="545" r="7"  fill="#e879f9"/>
+  <circle cx="843" cy="541" r="3"  fill="#ffffff" opacity="0.95"/>
+
+  <!-- Forked tongue -->
+  <line x1="834.7" y1="505.3" x2="848" y2="478"
+        stroke="#f472b6" stroke-width="5" stroke-linecap="round"/>
+  <line x1="848" y1="478" x2="860" y2="464"
+        stroke="#f472b6" stroke-width="4" stroke-linecap="round"/>
+  <line x1="848" y1="478" x2="835" y2="461"
+        stroke="#f472b6" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Tail tip (at 335deg: 793.0,381.0), tapering to a point -->
+  <!-- Tail normal at 335deg: (0.906, -0.423), body edges:
+       upper: (762.2, 395.4)   lower: (823.8, 366.6)
+       tip pointing outward: (814.2, 426.3) -->
+  <path
+    d="M 762.2,395.4 Q 793,405 814.2,426.3 Q 793,395 823.8,366.6 Z"
+    fill="#8b5cf6"
+    opacity="0.9"
+  />
+
+  <!-- Stars -->
+  <g opacity="0.4" fill="#a78bfa">
+    <circle cx="168" cy="195" r="3"/>
+    <circle cx="382" cy="148" r="2"/>
+    <circle cx="816" cy="158" r="2.5"/>
+    <circle cx="148" cy="488" r="2.5"/>
+    <circle cx="245" cy="618" r="2"/>
+    <circle cx="680" cy="866" r="2"/>
+    <circle cx="302" cy="848" r="2.5"/>
+    <circle cx="886" cy="692" r="2"/>
+    <circle cx="730" cy="192" r="2"/>
+    <circle cx="175" cy="330" r="2"/>
+  </g>
+</svg>
