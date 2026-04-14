@@ -64,6 +64,11 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const [inlinePrompt, setInlinePrompt] = useState<{ label: string; onSubmit: (value: string) => void } | null>(null)
   const [inlinePromptValue, setInlinePromptValue] = useState('')
 
+  // Hide WebContentsViews (OS-layer, above all CSS z-index) when a dialog is open
+  useEffect(() => {
+    window.dispatchEvent(new Event(inlinePrompt ? 'ananke:modal-open' : 'ananke:modal-close'))
+  }, [inlinePrompt])
+
   const showPrompt = (label: string, onSubmit: (value: string) => void) => {
     setInlinePromptValue('')
     setInlinePrompt({ label, onSubmit })

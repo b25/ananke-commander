@@ -293,133 +293,138 @@ export function FileList({
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
-      {/* Column headers */}
-      <div className="file-col-headers">
-        <span
-          className={`file-col-header file-col-header--name${sort.key === 'name' ? ' active' : ''}`}
-          onClick={() => toggleSort('name')}
-        >
-          Name{sortIndicator('name')}
-        </span>
-        <span
-          className={`file-col-header file-col-header--size${sort.key === 'size' ? ' active' : ''}`}
-          onClick={() => toggleSort('size')}
-        >
-          Size{sortIndicator('size')}
-        </span>
-        <span
-          className={`file-col-header file-col-header--date${sort.key === 'date' ? ' active' : ''}`}
-          onClick={() => toggleSort('date')}
-        >
-          Date{sortIndicator('date')}
-        </span>
-        <span
-          className={`file-col-header file-col-header--kind${sort.key === 'kind' ? ' active' : ''}`}
-          onClick={() => toggleSort('kind')}
-        >
-          Kind{sortIndicator('kind')}
-        </span>
-      </div>
+      {/* Horizontal scroll wrapper — prevents name column from shrinking on pane resize */}
+      <div className="file-list-hscroll">
+        <div className="file-list-inner">
+          {/* Column headers */}
+          <div className="file-col-headers">
+            <span
+              className={`file-col-header file-col-header--name${sort.key === 'name' ? ' active' : ''}`}
+              onClick={() => toggleSort('name')}
+            >
+              Name{sortIndicator('name')}
+            </span>
+            <span
+              className={`file-col-header file-col-header--size${sort.key === 'size' ? ' active' : ''}`}
+              onClick={() => toggleSort('size')}
+            >
+              Size{sortIndicator('size')}
+            </span>
+            <span
+              className={`file-col-header file-col-header--date${sort.key === 'date' ? ' active' : ''}`}
+              onClick={() => toggleSort('date')}
+            >
+              Date{sortIndicator('date')}
+            </span>
+            <span
+              className={`file-col-header file-col-header--kind${sort.key === 'kind' ? ' active' : ''}`}
+              onClick={() => toggleSort('kind')}
+            >
+              Kind{sortIndicator('kind')}
+            </span>
+          </div>
 
-      {/* Filter bar */}
-      {filterActive && (
-        <div className="file-filter-bar">
-          <input
-            ref={filterInputRef}
-            className="file-filter-input"
-            placeholder="Filter..."
-            value={filterText}
-            onChange={e => onFilterChange(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Escape') { e.stopPropagation(); onFilterClose() }
-              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.stopPropagation()
-              if (e.key === 'Enter') { e.stopPropagation(); wrapRef.current?.focus() }
-            }}
-          />
-          <span className="file-filter-count">{entries.length} match{entries.length !== 1 ? 'es' : ''}</span>
-          <button type="button" className="file-filter-close" onClick={onFilterClose} tabIndex={-1}>&times;</button>
-        </div>
-      )}
+          {/* Filter bar */}
+          {filterActive && (
+            <div className="file-filter-bar">
+              <input
+                ref={filterInputRef}
+                className="file-filter-input"
+                placeholder="Filter..."
+                value={filterText}
+                onChange={e => onFilterChange(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') { e.stopPropagation(); onFilterClose() }
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.stopPropagation()
+                  if (e.key === 'Enter') { e.stopPropagation(); wrapRef.current?.focus() }
+                }}
+              />
+              <span className="file-filter-count">{entries.length} match{entries.length !== 1 ? 'es' : ''}</span>
+              <button type="button" className="file-filter-close" onClick={onFilterClose} tabIndex={-1}>&times;</button>
+            </div>
+          )}
 
-      <div
-        ref={scrollRef}
-        style={{ overflow: 'auto', scrollbarGutter: 'stable', flex: 1, minHeight: 0 }}
-      >
-        <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative'
-          }}
-        >
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const entry = displayEntries[virtualRow.index]
-            const isSelected = selected.has(entry.path)
-            const isParent = entry.name === '..'
+          <div
+            ref={scrollRef}
+            style={{ overflowY: 'auto', overflowX: 'hidden', scrollbarGutter: 'stable', flex: 1, minHeight: 0 }}
+          >
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative'
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const entry = displayEntries[virtualRow.index]
+                const isSelected = selected.has(entry.path)
+                const isParent = entry.name === '..'
 
-            return (
-              <div
-                key={entry.path}
-                className={`file-row ${isSelected ? 'selected' : ''}`}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`
-                }}
-                onClick={(ev) => {
-                  if (isParent) return
-                  handleRowClick(entry, virtualRow.index, ev)
-                }}
-                onContextMenu={(e) => {
-                  if (isParent) return
-                  onContextMenu?.(e, entry)
-                }}
-                onDoubleClick={() => {
-                  if (isParent) {
-                    onPathChange(parentDir(path))
-                  } else {
-                    onActivate(entry)
-                  }
-                }}
-              >
-                {renaming && renaming.path === entry.path ? (
-                  <input
-                    className="rename-input"
-                    value={renaming.name}
-                    autoFocus
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => onRenameChange(e.target.value)}
-                    onBlur={onRenameCommit}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') { e.preventDefault(); onRenameCommit() }
-                      if (e.key === 'Escape') { e.preventDefault(); onRenameCancel() }
+                return (
+                  <div
+                    key={entry.path}
+                    className={`file-row ${isSelected ? 'selected' : ''}`}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`
                     }}
-                  />
-                ) : (
-                  <span className="name" title={entry.name}>
-                    {entry.isDirectory ? '\uD83D\uDCC1 ' : ''}
-                    {entry.name}
-                  </span>
-                )}
-                {!isParent && (
-                  <>
-                    <span className="muted file-col--size">
-                      {entry.isDirectory ? renderFolderSize(folderSizes[entry.path]) : formatSize(entry.size)}
-                    </span>
-                    <span className="muted file-col--date">
-                      {formatDate(entry.mtimeMs)}
-                    </span>
-                    <span className="muted file-col--kind">
-                      {entry.isDirectory ? '' : (entry.name.includes('.') ? entry.name.split('.').pop()!.toUpperCase() : '')}
-                    </span>
-                  </>
-                )}
-              </div>
-            )
-          })}
+                    onClick={(ev) => {
+                      if (isParent) return
+                      handleRowClick(entry, virtualRow.index, ev)
+                    }}
+                    onContextMenu={(e) => {
+                      if (isParent) return
+                      onContextMenu?.(e, entry)
+                    }}
+                    onDoubleClick={() => {
+                      if (isParent) {
+                        onPathChange(parentDir(path))
+                      } else {
+                        onActivate(entry)
+                      }
+                    }}
+                  >
+                    {renaming && renaming.path === entry.path ? (
+                      <input
+                        className="rename-input"
+                        value={renaming.name}
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => onRenameChange(e.target.value)}
+                        onBlur={onRenameCommit}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { e.preventDefault(); onRenameCommit() }
+                          if (e.key === 'Escape') { e.preventDefault(); onRenameCancel() }
+                        }}
+                      />
+                    ) : (
+                      <span className="name" title={entry.name}>
+                        {entry.isDirectory ? '\uD83D\uDCC1 ' : ''}
+                        {entry.name.length > 100 ? entry.name.slice(0, 97) + '…' : entry.name}
+                      </span>
+                    )}
+                    {!isParent && (
+                      <>
+                        <span className="muted file-col--size">
+                          {entry.isDirectory ? renderFolderSize(folderSizes[entry.path]) : formatSize(entry.size)}
+                        </span>
+                        <span className="muted file-col--date">
+                          {formatDate(entry.mtimeMs)}
+                        </span>
+                        <span className="muted file-col--kind">
+                          {entry.isDirectory ? '' : (entry.name.includes('.') ? entry.name.split('.').pop()!.toUpperCase() : '')}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>

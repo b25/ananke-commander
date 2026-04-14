@@ -162,9 +162,17 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
     const el = hostRef.current
     if (el) ro.observe(el)
     window.addEventListener('resize', syncBounds)
+    // Hide native view while any renderer modal is open (WebContentsViews paint
+    // above all CSS z-index; only moving them off-screen fixes the overlap).
+    const onModalOpen = () => void window.ananke.browser.suspend(pane.id)
+    const onModalClose = () => syncBounds()
+    window.addEventListener('ananke:modal-open', onModalOpen)
+    window.addEventListener('ananke:modal-close', onModalClose)
     return () => {
       ro.disconnect()
       window.removeEventListener('resize', syncBounds)
+      window.removeEventListener('ananke:modal-open', onModalOpen)
+      window.removeEventListener('ananke:modal-close', onModalClose)
       // Suspend (hide offscreen) instead of destroy — keeps the page alive
       // when pane is collapsed. Actual destroy happens via explicit close.
       void window.ananke.browser.suspend(pane.id)

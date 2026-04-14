@@ -251,6 +251,26 @@ select {
   outline-offset: -1px;
 }
 
+/* Horizontal scroll shell: clips vertically, allows horizontal overflow */
+.file-list-hscroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+}
+
+/* Inner content block with a min-width that keeps the name column from shrinking.
+   880px = 600px name + 248px metadata + 12px gaps + 16px row padding + 4px border area.
+   When the pane is narrower, the hscroll shell shows a horizontal scrollbar instead. */
+.file-list-inner {
+  min-width: 880px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .path-bar {
   font-size: var(--text-xs);
   padding: var(--space-xs) var(--space-gap);
@@ -295,6 +315,8 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  border-right: 1px solid var(--border);
+  padding-right: var(--space-xs);
 }
 
 .file-col-header--size,
@@ -478,8 +500,8 @@ select {
 .file-row .name {
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
+  border-right: 1px solid var(--border);
+  padding-right: var(--space-xs);
 }
 
 .muted {
