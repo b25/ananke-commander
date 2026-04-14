@@ -32,18 +32,36 @@ export function EnvEditor() {
   const { environments, activeEnvironmentId, setEnvironments, setActiveEnvironment } = useStore()
   const [editingId, setEditingId] = useState<string | null>(null)
 
+  // Inline prompt (window.prompt doesn't work in Electron's sandboxed renderer)
+  const [inlinePrompt, setInlinePrompt] = useState<{
+    label: string
+    onSubmit: (v: string) => void
+  } | null>(null)
+  const [promptValue, setPromptValue] = useState('')
+
+  function showPrompt(label: string, defaultValue: string, onSubmit: (v: string) => void) {
+    setPromptValue(defaultValue)
+    setInlinePrompt({ label, onSubmit })
+  }
+
+  function submitPrompt() {
+    const v = promptValue.trim()
+    if (v) inlinePrompt?.onSubmit(v)
+    setInlinePrompt(null)
+  }
+
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId) ?? null
   const editingEnv = environments.find((e) => e.id === editingId) ?? null
 
   function newEnv() {
-    const name = window.prompt('Environment name')?.trim()
-    if (!name) return
-    const env: Environment = { id: crypto.randomUUID(), name, variables: [], createdAt: Date.now(), updatedAt: Date.now() }
-    const next = [...environments, env]
-    setEnvironments(next)
-    window.ananke.apiToolkit.storage.saveEnvironment(env)
-    setActiveEnvironment(env.id)
-    setEditingId(env.id)
+    showPrompt('Environment name', '', (name) => {
+      const env: Environment = { id: crypto.randomUUID(), name, variables: [], createdAt: Date.now(), updatedAt: Date.now() }
+      const next = [...useStore.getState().environments, env]
+      setEnvironments(next)
+      window.ananke.apiToolkit.storage.saveEnvironment(env)
+      setActiveEnvironment(env.id)
+      setEditingId(env.id)
+    })
   }
 
   function saveEnv(env: Environment) {
@@ -84,6 +102,26 @@ export function EnvEditor() {
 
   return (
     <div className="sidebar-content">
+      {/* Inline prompt */}
+      {inlinePrompt && (
+        <div style={{ padding: '4px 8px', background: 'var(--bg-2)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 4, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-2)', flexShrink: 0 }}>{inlinePrompt.label}:</span>
+          <input
+            className="kv-input"
+            style={{ flex: 1 }}
+            value={promptValue}
+            onChange={(e) => setPromptValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitPrompt()
+              if (e.key === 'Escape') setInlinePrompt(null)
+            }}
+            autoFocus
+          />
+          <span className="sidebar-action-btn" onClick={submitPrompt} title="Confirm">✓</span>
+          <span className="sidebar-action-btn" onClick={() => setInlinePrompt(null)} title="Cancel">✕</span>
+        </div>
+      )}
+
       {/* Selector row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
         <select
@@ -99,7 +137,7 @@ export function EnvEditor() {
       </div>
 
       {/* Environment list */}
-      {environments.length === 0 && (
+      {environments.length === 0 && !inlinePrompt && (
         <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 10, textAlign: 'center' }}>
           No environments.<br />
           <span className="text-accent" style={{ cursor: 'pointer' }} onClick={newEnv}>Create one</span>

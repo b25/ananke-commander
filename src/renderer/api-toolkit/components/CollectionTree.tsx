@@ -65,6 +65,26 @@ export function CollectionTree() {
   const { collections, openTab, setActiveTab, addItemToCollection, updateCollectionItem, removeCollectionItem, importPostmanCollection } = useStore()
   const [ctx, setCtx] = useState<CtxMenu | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
+  const [notification, setNotification] = useState<string | null>(null)
+
+  // Inline prompt (window.prompt doesn't work in Electron's sandboxed renderer)
+  const [inlinePrompt, setInlinePrompt] = useState<{
+    label: string
+    onSubmit: (v: string) => void
+  } | null>(null)
+  const [promptValue, setPromptValue] = useState('')
+
+  function showPrompt(label: string, defaultValue: string, onSubmit: (v: string) => void) {
+    setPromptValue(defaultValue)
+    setInlinePrompt({ label, onSubmit })
+    setCtx(null)
+  }
+
+  function submitPrompt() {
+    const v = promptValue.trim()
+    if (v) inlinePrompt?.onSubmit(v)
+    setInlinePrompt(null)
+  }
 
   function openRequest(item: RequestItem, col: Collection) {
     openTab({
@@ -79,45 +99,46 @@ export function CollectionTree() {
   }
 
   function newCollection() {
-    const name = window.prompt('Collection name')?.trim()
-    if (!name) return
-    const col: Collection = {
-      id: crypto.randomUUID(),
-      name,
-      items: [],
-      variables: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-    useStore.getState().setCollections([...collections, col])
-    window.ananke.apiToolkit.storage.saveCollection(col)
+    showPrompt('Collection name', '', (name) => {
+      const col: Collection = {
+        id: crypto.randomUUID(),
+        name,
+        items: [],
+        variables: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+      useStore.getState().setCollections([...useStore.getState().collections, col])
+      window.ananke.apiToolkit.storage.saveCollection(col)
+    })
   }
 
-  async function addRequest(col: Collection) {
-    const name = window.prompt('Request name', 'New Request')?.trim()
-    if (!name) return
-    const item: RequestItem = {
-      type: 'request',
-      id: crypto.randomUUID(),
-      name,
-      protocol: 'http',
-      httpRequest: {
-        method: 'GET',
-        url: '',
-        params: [],
-        headers: [{ key: 'Accept', value: '*/*', enabled: true }],
-        body: { mode: 'none' },
-        auth: { type: 'none' },
-        timeout: 30000,
-      },
-    }
-    await addItemToCollection(col.id, item)
+  function addRequest(col: Collection) {
+    showPrompt('Request name', 'New Request', async (name) => {
+      const item: RequestItem = {
+        type: 'request',
+        id: crypto.randomUUID(),
+        name,
+        protocol: 'http',
+        httpRequest: {
+          method: 'GET',
+          url: '',
+          params: [],
+          headers: [{ key: 'Accept', value: '*/*', enabled: true }],
+          body: { mode: 'none' },
+          auth: { type: 'none' },
+          timeout: 30000,
+        },
+      }
+      await addItemToCollection(col.id, item)
+    })
   }
 
-  async function renameItem(col: Collection, item: CollectionItem) {
-    const name = window.prompt('New name', item.name)?.trim()
-    if (!name || name === item.name) return
-    await updateCollectionItem(col.id, item.id, { name } as Partial<CollectionItem>)
+  function renameItem(col: Collection, item: CollectionItem) {
+    showPrompt('Rename', item.name, async (name) => {
+      if (name === item.name) return
+      await updateCollectionItem(col.id, item.id, { name } as Partial<CollectionItem>)
+    })
   }
 
   async function deleteItem(col: Collection, item: CollectionItem) {
@@ -129,15 +150,16 @@ export function CollectionTree() {
   async function deleteCollection(col: Collection) {
     if (!window.confirm(`Delete collection "${col.name}"?`)) return
     await window.ananke.apiToolkit.storage.deleteCollection(col.id)
-    useStore.getState().setCollections(collections.filter((c) => c.id !== col.id))
+    useStore.getState().setCollections(useStore.getState().collections.filter((c) => c.id !== col.id))
   }
 
-  async function renameCollection(col: Collection) {
-    const name = window.prompt('New name', col.name)?.trim()
-    if (!name || name === col.name) return
-    const updated = { ...col, name, updatedAt: Date.now() }
-    await window.ananke.apiToolkit.storage.saveCollection(updated)
-    useStore.getState().setCollections(collections.map((c) => c.id === col.id ? updated : c))
+  function renameCollection(col: Collection) {
+    showPrompt('Rename collection', col.name, async (name) => {
+      if (name === col.name) return
+      const updated = { ...col, name, updatedAt: Date.now() }
+      await window.ananke.apiToolkit.storage.saveCollection(updated)
+      useStore.getState().setCollections(useStore.getState().collections.map((c) => c.id === col.id ? updated : c))
+    })
   }
 
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -148,13 +170,14 @@ export function CollectionTree() {
       const text = ev.target?.result as string
       try {
         const { count } = await importPostmanCollection(text)
-        window.alert(`Imported ${count} request${count !== 1 ? 's' : ''} successfully.`)
+        setNotification(`Imported ${count} request${count !== 1 ? 's' : ''}`)
+        setTimeout(() => setNotification(null), 3000)
       } catch (err) {
-        window.alert(`Import failed: ${String(err)}`)
+        setNotification(`Import failed: ${String(err)}`)
+        setTimeout(() => setNotification(null), 4000)
       }
     }
     reader.readAsText(file)
-    // Reset so same file can be re-imported
     e.target.value = ''
   }
 
@@ -168,6 +191,33 @@ export function CollectionTree() {
         style={{ display: 'none' }}
         onChange={handleImportFile}
       />
+
+      {/* Inline prompt */}
+      {inlinePrompt && (
+        <div style={{ padding: '4px 8px', background: 'var(--bg-2)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 4, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-2)', flexShrink: 0 }}>{inlinePrompt.label}:</span>
+          <input
+            className="kv-input"
+            style={{ flex: 1 }}
+            value={promptValue}
+            onChange={(e) => setPromptValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitPrompt()
+              if (e.key === 'Escape') setInlinePrompt(null)
+            }}
+            autoFocus
+          />
+          <span className="sidebar-action-btn" onClick={submitPrompt} title="Confirm">✓</span>
+          <span className="sidebar-action-btn" onClick={() => setInlinePrompt(null)} title="Cancel">✕</span>
+        </div>
+      )}
+
+      {/* Notification */}
+      {notification && (
+        <div style={{ padding: '4px 8px', background: 'var(--bg-2)', borderBottom: '1px solid var(--border)', fontSize: 10, color: 'var(--text-accent)' }}>
+          {notification}
+        </div>
+      )}
 
       <div className="sidebar-section-header">
         Collections
@@ -189,7 +239,7 @@ export function CollectionTree() {
         </div>
       </div>
 
-      {collections.length === 0 && (
+      {collections.length === 0 && !inlinePrompt && (
         <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 10, textAlign: 'center' }}>
           No collections yet.<br />
           <span className="text-accent" style={{ cursor: 'pointer' }} onClick={newCollection}>Create one</span>
@@ -211,7 +261,7 @@ export function CollectionTree() {
             <span
               className="sidebar-action-btn"
               title="Add request"
-              onClick={(e) => { e.stopPropagation(); void addRequest(col) }}
+              onClick={(e) => { e.stopPropagation(); addRequest(col) }}
             >
               +
             </span>
@@ -252,10 +302,10 @@ export function CollectionTree() {
         >
           {ctx.kind === 'collection' && (
             <>
-              <button className="ctx-menu__item" onClick={() => { void addRequest(ctx.col); setCtx(null) }}>
+              <button className="ctx-menu__item" onClick={() => { addRequest(ctx.col); setCtx(null) }}>
                 Add Request
               </button>
-              <button className="ctx-menu__item" onClick={() => { void renameCollection(ctx.col); setCtx(null) }}>
+              <button className="ctx-menu__item" onClick={() => { renameCollection(ctx.col); setCtx(null) }}>
                 Rename
               </button>
               <div className="ctx-menu__sep" />
@@ -271,7 +321,7 @@ export function CollectionTree() {
                   Open
                 </button>
               )}
-              <button className="ctx-menu__item" onClick={() => { void renameItem(ctx.col, ctx.item); setCtx(null) }}>
+              <button className="ctx-menu__item" onClick={() => { renameItem(ctx.col, ctx.item); setCtx(null) }}>
                 Rename
               </button>
               <div className="ctx-menu__sep" />

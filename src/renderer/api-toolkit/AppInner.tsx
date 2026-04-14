@@ -74,7 +74,7 @@ export function App() {
         {activeTab ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <RequestEditor tab={activeTab} />
-            <div style={{ flex: 1, overflow: 'hidden', borderTop: '1px solid var(--border)' }}>
+            <div style={{ flex: 1, overflow: 'hidden', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
               <ResponseViewer tab={activeTab} />
             </div>
           </div>

@@ -358,6 +358,7 @@
 /* ── Response viewer ──────────────────────────────────────────────────────── */
 .response-viewer {
   flex: 1;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -412,7 +413,7 @@
   color: var(--text-2);
   font-size: 10px;
 }
-.empty-state-icon { font-size: 24px; opacity: 0.3; }
+.empty-state-icon { font-size: 10px; opacity: 0.3; }
 
 /* ── gRPC panel ───────────────────────────────────────────────────────────── */
 .grpc-endpoint-bar {
