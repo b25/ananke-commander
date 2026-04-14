@@ -283,12 +283,20 @@ const api = {
         ipcRenderer.invoke('at:storage:deleteCollectionItem', colId, itemId),
       importCollection: (jsonStr: string): Promise<{ collection: Collection; count: number }> =>
         ipcRenderer.invoke('at:storage:importCollection', jsonStr),
+      exportCollection: (colId: string): Promise<string> =>
+        ipcRenderer.invoke('at:storage:exportCollection', colId),
       getEnvironments: (): Promise<Environment[]> => ipcRenderer.invoke('at:storage:getEnvironments'),
       saveEnvironment: (env: Environment): Promise<void> => ipcRenderer.invoke('at:storage:saveEnvironment', env),
       deleteEnvironment: (id: string): Promise<void> => ipcRenderer.invoke('at:storage:deleteEnvironment', id),
       getHistory: (): Promise<HistoryEntry[]> => ipcRenderer.invoke('at:storage:getHistory'),
       addHistory: (entry: HistoryEntry): Promise<void> => ipcRenderer.invoke('at:storage:addHistory', entry),
       clearHistory: (): Promise<void> => ipcRenderer.invoke('at:storage:clearHistory'),
+    },
+    curl: {
+      toCurl: (req: import('../shared/api-toolkit-contracts.js').HttpRequest): Promise<string> =>
+        ipcRenderer.invoke('at:util:curlTo', req),
+      fromCurl: (curlStr: string): Promise<import('../shared/api-toolkit-contracts.js').HttpRequest> =>
+        ipcRenderer.invoke('at:util:curlFrom', curlStr),
     },
     dialog: {
       openProto: (): Promise<Array<{ name: string; content: string; fullPath: string }> | null> =>

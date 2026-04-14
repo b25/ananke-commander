@@ -9,6 +9,7 @@ import type { HttpRequest, GrpcRequest, Collection, CollectionItem, Environment,
 import { sendHttp, cancelHttp } from './http-client.js'
 import { discoverProto, grpcUnary, grpcStream } from './grpc-engine.js'
 import * as storage from './storage.js'
+import { toCurl, fromCurl } from './curl-utils.js'
 
 let registered = false
 
@@ -73,6 +74,15 @@ export function registerApiToolkitHandlers(): void {
   ipcMain.handle(IPC.STORAGE_ADD_HISTORY, (_e, entry: HistoryEntry) => storage.addHistory(entry))
   ipcMain.handle(IPC.STORAGE_CLEAR_HISTORY, () => storage.clearHistory())
 
+  // ─── Export / import utilities ─────────────────────────────────────────────
+
+  ipcMain.handle(IPC.STORAGE_EXPORT_COLLECTION, (_e, colId: string) =>
+    storage.exportPostmanCollection(colId))
+  ipcMain.handle(IPC.UTIL_CURL_TO, (_e, req: import('../../shared/api-toolkit-contracts.js').HttpRequest) =>
+    toCurl(req))
+  ipcMain.handle(IPC.UTIL_CURL_FROM, (_e, curlStr: string) =>
+    fromCurl(curlStr))
+
   // ─── Dialogs ───────────────────────────────────────────────────────────────
 
   ipcMain.handle(IPC.DIALOG_OPEN_PROTO, async () => {
@@ -84,6 +94,14 @@ export function registerApiToolkitHandlers(): void {
       properties: ['openFile', 'multiSelections'],
     })
     if (result.canceled) return null
+    const MAX_PROTO_SIZE = 2 * 1024 * 1024 // 2 MB
+    const { statSync } = await import('node:fs')
+    for (const p of result.filePaths) {
+      const { size } = statSync(p)
+      if (size > MAX_PROTO_SIZE) {
+        throw new Error(`File "${p.split('/').pop()}" exceeds the 2 MB limit (${(size / 1024 / 1024).toFixed(1)} MB)`)
+      }
+    }
     return result.filePaths.map((p) => ({
       name: p.split('/').pop()!,
       content: readFileSync(p, 'utf8'),

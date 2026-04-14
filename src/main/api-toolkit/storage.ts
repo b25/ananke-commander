@@ -211,6 +211,59 @@ export function importPostmanCollection(jsonStr: string): { collection: Collecti
   return { collection: col, count }
 }
 
+// ─── Postman v2.1 export ─────────────────────────────────────────────────────
+
+function toPostmanItems(items: CollectionItem[]): unknown[] {
+  return items.map((item) => {
+    if (item.type === 'folder') {
+      return { name: item.name, item: toPostmanItems(item.items) }
+    }
+    const req = item.httpRequest
+    if (!req) return { name: item.name, request: { method: 'GET', url: { raw: '' } } }
+    const url: Record<string, unknown> = { raw: req.url }
+    const enabledParams = req.params.filter((p) => p.enabled && p.key)
+    if (enabledParams.length > 0) {
+      url.query = enabledParams.map((p) => ({ key: p.key, value: p.value }))
+    }
+    const auth: Record<string, unknown> = { type: req.auth.type }
+    if (req.auth.type === 'bearer') auth.bearer = [{ key: 'token', value: req.auth.token }]
+    if (req.auth.type === 'basic') auth.basic = [{ key: 'username', value: req.auth.username }, { key: 'password', value: req.auth.password }]
+    if (req.auth.type === 'apiKey') auth.apikey = [{ key: 'key', value: req.auth.key }, { key: 'value', value: req.auth.value }]
+    const body: Record<string, unknown> = {}
+    if (req.body.mode !== 'none') {
+      body.mode = req.body.mode === 'json' ? 'raw' : req.body.mode
+      if (req.body.mode === 'raw' || req.body.mode === 'json') body.raw = req.body.raw ?? ''
+      if (req.body.mode === 'form') body.formdata = (req.body.formFields ?? []).map((f) => ({ key: f.key, value: f.value }))
+      if (req.body.mode === 'urlencoded') body.urlencoded = (req.body.formFields ?? []).map((f) => ({ key: f.key, value: f.value }))
+    }
+    return {
+      name: item.name,
+      request: {
+        method: req.method,
+        url,
+        header: req.headers.filter((h) => h.enabled && h.key).map((h) => ({ key: h.key, value: h.value })),
+        auth: req.auth.type !== 'none' ? auth : undefined,
+        body: req.body.mode !== 'none' ? body : undefined,
+      },
+    }
+  })
+}
+
+export function exportPostmanCollection(collectionId: string): string {
+  const col = getCollections().find((c) => c.id === collectionId)
+  if (!col) throw new Error(`Collection ${collectionId} not found`)
+  const pm = {
+    info: {
+      name: col.name,
+      description: col.description ?? '',
+      schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+    },
+    item: toPostmanItems(col.items),
+    variable: col.variables.map((v) => ({ key: v.key, value: v.value })),
+  }
+  return JSON.stringify(pm, null, 2)
+}
+
 // ─── Environments ────────────────────────────────────────────────────────────
 
 export function getEnvironments(): Environment[] {

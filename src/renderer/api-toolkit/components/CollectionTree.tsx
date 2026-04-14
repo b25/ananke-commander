@@ -153,6 +153,20 @@ export function CollectionTree() {
     useStore.getState().setCollections(useStore.getState().collections.filter((c) => c.id !== col.id))
   }
 
+  async function exportCollection(col: Collection) {
+    try {
+      const json = await window.ananke.apiToolkit.storage.exportCollection(col.id)
+      const saved = await window.ananke.apiToolkit.dialog.saveFile(json, `${col.name}.postman_collection.json`)
+      if (saved) {
+        setNotification(`Exported "${col.name}"`)
+        setTimeout(() => setNotification(null), 3000)
+      }
+    } catch (err) {
+      setNotification(`Export failed: ${String(err)}`)
+      setTimeout(() => setNotification(null), 4000)
+    }
+  }
+
   function renameCollection(col: Collection) {
     showPrompt('Rename collection', col.name, async (name) => {
       if (name === col.name) return
@@ -307,6 +321,9 @@ export function CollectionTree() {
               </button>
               <button className="ctx-menu__item" onClick={() => { renameCollection(ctx.col); setCtx(null) }}>
                 Rename
+              </button>
+              <button className="ctx-menu__item" onClick={() => { void exportCollection(ctx.col); setCtx(null) }}>
+                Export as Postman…
               </button>
               <div className="ctx-menu__sep" />
               <button className="ctx-menu__item ctx-menu__item--danger" onClick={() => { void deleteCollection(ctx.col); setCtx(null) }}>

@@ -65,20 +65,19 @@ export function buildRootFromFiles(
 
   root.resolvePath = (_origin: string, target: string) => target
 
-  // Parse all supplied files into the root (ignore duplicates)
+  // Parse all supplied files; collect errors but don't throw until end
+  const parseErrors: string[] = []
   for (const file of files) {
     try {
       protobuf.parse(file.content, root, { keepCase: false })
-    } catch {
-      // ignore per-file parse errors; report will surface from entry file if needed
+    } catch (e) {
+      parseErrors.push(`${file.name}: ${String(e)}`)
     }
   }
 
-  // Re-parse entry file to surface any real errors
-  if (fileMap.has(entryFile)) {
-    try {
-      protobuf.parse(fileMap.get(entryFile)!, root, { keepCase: false })
-    } catch { /* already parsed above */ }
+  // If the entry file had an error, surface it to the caller
+  if (parseErrors.length > 0) {
+    throw new Error(`Proto parse errors:\n${parseErrors.join('\n')}`)
   }
 
   // Ensure WKTs are present

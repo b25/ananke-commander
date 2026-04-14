@@ -19,18 +19,25 @@ export function RequestEditor({ tab }: Props) {
   const [sending, setSending] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showSavePicker, setShowSavePicker] = useState(false)
+  const [showCurlImport, setShowCurlImport] = useState(false)
+  const [curlInput, setCurlInput] = useState('')
+  const [curlError, setCurlError] = useState<string | null>(null)
 
-  // Cmd+S / Ctrl+S to save
+  // Cmd+S / Ctrl+S to save; Cmd+Enter / Ctrl+Enter to send
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
         void handleSave()
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault()
+        if (tab.protocol === 'http' && !sending && req.url) void send()
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [tab.id, tab.collectionId])
+  }, [tab.id, tab.collectionId, tab.protocol, sending, req.url])
 
   async function handleSave() {
     if (saving) return
@@ -64,6 +71,25 @@ export function RequestEditor({ tab }: Props) {
 
   const enabledParams = req.params.filter((p) => p.enabled && p.key).length
   const enabledHeaders = req.headers.filter((h) => h.enabled && h.key).length
+
+  async function importCurl() {
+    setCurlError(null)
+    try {
+      const parsed = await window.ananke.apiToolkit.curl.fromCurl(curlInput)
+      updateTab(tab.id, { httpRequest: parsed, protocol: 'http', dirty: true })
+      setShowCurlImport(false)
+      setCurlInput('')
+    } catch (e) {
+      setCurlError(String(e))
+    }
+  }
+
+  async function exportCurl() {
+    try {
+      const curlStr = await window.ananke.apiToolkit.curl.toCurl(req)
+      await window.ananke.clipboard.writeText(curlStr)
+    } catch { /* ignore */ }
+  }
 
   async function send() {
     setSending(true)
@@ -164,6 +190,24 @@ export function RequestEditor({ tab }: Props) {
         }
         <button
           className="send-btn"
+          style={{ background: 'var(--bg-3)', color: 'var(--text-2)', border: '1px solid var(--border)', minWidth: 'unset', padding: '2px 8px' }}
+          onClick={() => setShowCurlImport((v) => !v)}
+          title="Import from cURL / export as cURL"
+        >
+          cURL
+        </button>
+        {req.url && (
+          <button
+            className="send-btn"
+            style={{ background: 'var(--bg-3)', color: 'var(--text-2)', border: '1px solid var(--border)', minWidth: 'unset', padding: '2px 8px' }}
+            onClick={() => void exportCurl()}
+            title="Copy as cURL to clipboard"
+          >
+            ⎘
+          </button>
+        )}
+        <button
+          className="send-btn"
           style={{ background: 'var(--bg-3)', color: tab.dirty ? 'var(--text-accent)' : 'var(--text-2)', border: '1px solid var(--border)', minWidth: 'unset', padding: '2px 8px' }}
           onClick={handleSave}
           disabled={saving || !tab.dirty}
@@ -195,6 +239,29 @@ export function RequestEditor({ tab }: Props) {
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* cURL import panel */}
+      {showCurlImport && (
+        <div style={{ padding: '6px 8px', background: 'var(--bg-1)', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <textarea
+            className="code-editor"
+            style={{ minHeight: 48, fontSize: 10 }}
+            placeholder="Paste curl command here…"
+            value={curlInput}
+            onChange={(e) => { setCurlInput(e.target.value); setCurlError(null) }}
+            autoFocus
+          />
+          {curlError && <span style={{ fontSize: 10, color: 'var(--status-err)' }}>{curlError}</span>}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button style={{ fontSize: 10, padding: '1px 10px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-0)', cursor: 'pointer' }} onClick={() => void importCurl()}>
+              Import
+            </button>
+            <button style={{ fontSize: 10, padding: '1px 10px', background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer' }} onClick={() => { setShowCurlImport(false); setCurlError(null) }}>
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 

@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useStore, useActiveTab } from './store'
 import type { Tab } from './store'
 import { Sidebar } from './components/Sidebar'
 import { RequestEditor } from './components/RequestEditor'
 import { ResponseViewer } from './components/ResponseViewer'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 export function App() {
   const { tabs, activeTabId, openTab, closeTab, setActiveTab, setCollections, setEnvironments, setHistory, addHistoryEntry } = useStore()
@@ -57,7 +58,9 @@ export function App() {
   return (
     <div className="app-root">
       {/* Sidebar */}
-      <Sidebar />
+      <ErrorBoundary label="Sidebar">
+        <Sidebar />
+      </ErrorBoundary>
 
       {/* Main area */}
       <div className="main-area">
@@ -70,20 +73,64 @@ export function App() {
           onNew={() => openTab()}
         />
 
-        {/* Request + response split */}
+        {/* Request + response split (resizable) */}
         {activeTab ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <RequestEditor tab={activeTab} />
-            <div style={{ flex: 1, overflow: 'hidden', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
-              <ResponseViewer tab={activeTab} />
-            </div>
-          </div>
+          <ErrorBoundary label="Request/Response">
+            <ResizableSplit tab={activeTab} />
+          </ErrorBoundary>
         ) : (
           <div className="empty-state">
             <div className="empty-state-icon">⚡</div>
             <span>Open a request or create a new one</span>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function ResizableSplit({ tab }: { tab: Tab }) {
+  const [requestPct, setRequestPct] = useState(45)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dragging = useRef(false)
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragging.current = true
+
+    function onMove(ev: MouseEvent) {
+      if (!dragging.current || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const pct = ((ev.clientY - rect.top) / rect.height) * 100
+      setRequestPct(Math.min(80, Math.max(15, pct)))
+    }
+
+    function onUp() {
+      dragging.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [])
+
+  return (
+    <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ height: `${requestPct}%`, overflow: 'hidden', flexShrink: 0 }}>
+        <ErrorBoundary label="Request Editor">
+          <RequestEditor tab={tab} />
+        </ErrorBoundary>
+      </div>
+      <div
+        style={{ height: 4, cursor: 'row-resize', background: 'var(--border)', flexShrink: 0, userSelect: 'none' }}
+        onMouseDown={onMouseDown}
+        title="Drag to resize"
+      />
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <ErrorBoundary label="Response Viewer">
+          <ResponseViewer tab={tab} />
+        </ErrorBoundary>
       </div>
     </div>
   )

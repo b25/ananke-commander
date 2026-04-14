@@ -253,6 +253,11 @@ export const IPC = {
   STORAGE_ADD_HISTORY: 'at:storage:addHistory',
   STORAGE_CLEAR_HISTORY: 'at:storage:clearHistory',
 
+  // Export / import utilities
+  STORAGE_EXPORT_COLLECTION: 'at:storage:exportCollection',
+  UTIL_CURL_FROM: 'at:util:curlFrom',
+  UTIL_CURL_TO: 'at:util:curlTo',
+
   // File dialogs
   DIALOG_OPEN_PROTO: 'at:dialog:openProto',
   DIALOG_OPEN_FILE: 'at:dialog:openFile',

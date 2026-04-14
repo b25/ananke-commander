@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useStore } from '../store'
 
 function relativeTime(ts: number): string {
@@ -10,6 +11,7 @@ function relativeTime(ts: number): string {
 
 export function HistoryList() {
   const { history, openTab, clearHistory } = useStore()
+  const [filter, setFilter] = useState('')
 
   function restore(entryIdx: number) {
     const entry = history[entryIdx]
@@ -22,6 +24,14 @@ export function HistoryList() {
     })
   }
 
+  const query = filter.trim().toLowerCase()
+  const filtered = query
+    ? history.filter((entry) => {
+        const url = entry.protocol === 'http' ? entry.httpRequest?.url ?? '' : entry.grpcRequest?.serviceMethod ?? ''
+        return url.toLowerCase().includes(query) || (entry.httpRequest?.method ?? 'grpc').toLowerCase().includes(query)
+      })
+    : history
+
   return (
     <div className="sidebar-content">
       <div className="sidebar-section-header">
@@ -30,7 +40,7 @@ export function HistoryList() {
           <span
             className="sidebar-action-btn"
             title="Clear history"
-            onClick={() => { clearHistory(); window.ananke.apiToolkit.storage.clearHistory() }}
+            onClick={() => { clearHistory(); void window.ananke.apiToolkit.storage.clearHistory() }}
             style={{ fontSize: 10 }}
           >
             ✕
@@ -38,13 +48,26 @@ export function HistoryList() {
         )}
       </div>
 
-      {history.length === 0 && (
-        <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 10, textAlign: 'center' }}>
-          No history yet.
+      {history.length > 0 && (
+        <div style={{ padding: '4px 8px' }}>
+          <input
+            className="kv-input"
+            style={{ width: '100%', fontSize: 10 }}
+            placeholder="Filter history…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
         </div>
       )}
 
-      {history.map((entry, i) => {
+      {filtered.length === 0 && (
+        <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 10, textAlign: 'center' }}>
+          {history.length === 0 ? 'No history yet.' : 'No matches.'}
+        </div>
+      )}
+
+      {filtered.map((entry) => {
+        const idx = history.indexOf(entry)
         const method = entry.protocol === 'http' ? entry.httpRequest?.method : 'gRPC'
         const url = entry.protocol === 'http'
           ? entry.httpRequest?.url ?? ''
@@ -52,7 +75,7 @@ export function HistoryList() {
         const statusCode = entry.httpResponse?.status
 
         return (
-          <div className="history-entry" key={entry.id} onClick={() => restore(i)}>
+          <div className="history-entry" key={entry.id} onClick={() => restore(idx)}>
             <span className={`method-badge method-${method ?? 'GET'}`}>{method}</span>
             <span className="history-url">{url || '—'}</span>
             {statusCode && (

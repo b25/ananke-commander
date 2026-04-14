@@ -112,7 +112,42 @@ export function GrpcPanel({ tab }: Props) {
           <option value="tls">TLS</option>
           <option value="mtls">mTLS</option>
         </select>
+        <input
+          type="number"
+          className="kv-input"
+          style={{ width: 72, fontSize: 10 }}
+          placeholder="Deadline ms"
+          title="Deadline (ms, 0 = none)"
+          value={req.deadline ?? 0}
+          min={0}
+          onChange={(e) => {
+            const val = parseInt(e.target.value, 10)
+            updateTab(tab.id, { grpcRequest: { ...req, deadline: isNaN(val) ? 0 : val }, dirty: true })
+          }}
+        />
       </div>
+
+      {/* TLS cert paths (shown when tls or mtls) */}
+      {req.tls.mode !== 'none' && (
+        <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <TlsCertRow label="CA cert" value={req.tls.caCert ?? ''} onChange={(v) => setGrpcTls(tab.id, { ...req.tls, caCert: v })} />
+          {req.tls.mode === 'mtls' && (
+            <>
+              <TlsCertRow label="Client cert" value={req.tls.clientCert ?? ''} onChange={(v) => setGrpcTls(tab.id, { ...req.tls, clientCert: v })} />
+              <TlsCertRow label="Client key" value={req.tls.clientKey ?? ''} onChange={(v) => setGrpcTls(tab.id, { ...req.tls, clientKey: v })} />
+            </>
+          )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text-2)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={req.tls.insecure ?? false}
+              onChange={(e) => setGrpcTls(tab.id, { ...req.tls, insecure: e.target.checked })}
+              style={{ accentColor: 'var(--text-accent)' }}
+            />
+            Skip certificate verification
+          </label>
+        </div>
+      )}
 
       {/* Proto source */}
       <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
@@ -272,6 +307,33 @@ function StreamSendBar({ tabId, reqSchema }: { tabId: string; reqSchema: Message
       ) : (
         <textarea className="code-editor" style={{ minHeight: 60 }} value={json} onChange={(e) => setJson(e.target.value)} />
       )}
+    </div>
+  )
+}
+
+function TlsCertRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  async function browse() {
+    const content = await window.ananke.apiToolkit.dialog.openFile()
+    if (content !== null) onChange(content)
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ fontSize: 10, color: 'var(--text-2)', width: 72, flexShrink: 0 }}>{label}</span>
+      <input
+        className="kv-input"
+        style={{ flex: 1, fontSize: 10 }}
+        placeholder={`Paste PEM or browse…`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        className="icon-btn"
+        style={{ width: 'auto', padding: '0 8px', fontSize: 10, flexShrink: 0 }}
+        title={`Browse for ${label} file`}
+        onClick={() => void browse()}
+      >
+        Browse
+      </button>
     </div>
   )
 }

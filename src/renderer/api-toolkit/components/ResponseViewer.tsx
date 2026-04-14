@@ -8,6 +8,14 @@ interface Props {
 
 export function ResponseViewer({ tab }: Props) {
   const [innerTab, setInnerTab] = useState<'body' | 'headers' | 'timing'>('body')
+  const [rawMode, setRawMode] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  function copyBody(body: string) {
+    window.ananke.clipboard.writeText(body)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
 
   // Loading state
   if (tab.loading && !tab.grpcStreamActive) {
@@ -77,11 +85,32 @@ export function ResponseViewer({ tab }: Props) {
             {t === 'headers' && <span className="panel-tab-count">{Object.keys(resp.headers).length}</span>}
           </div>
         ))}
+        {innerTab === 'body' && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, paddingRight: 6 }}>
+            <button
+              style={{ fontSize: 10, padding: '1px 8px', background: rawMode ? 'var(--bg-4)' : 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-1)', cursor: 'pointer' }}
+              onClick={() => setRawMode((m) => !m)}
+              title="Toggle raw / pretty view"
+            >
+              {rawMode ? 'Pretty' : 'Raw'}
+            </button>
+            <button
+              style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: copied ? 'var(--method-get)' : 'var(--text-1)', cursor: 'pointer' }}
+              onClick={() => copyBody(resp.body)}
+              title="Copy response body"
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        )}
       </div>
 
       {innerTab === 'body' && (
         <div className="response-body">
-          <PrettyBody body={resp.body} contentType={resp.headers['content-type'] ?? ''} />
+          {rawMode
+            ? <pre style={{ margin: 0, fontSize: 10, fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{resp.body}</pre>
+            : <PrettyBody body={resp.body} contentType={resp.headers['content-type'] ?? ''} />
+          }
         </div>
       )}
 
