@@ -129,7 +129,7 @@ function ResizableSplit({ tab }: { tab: Tab }) {
       />
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <ErrorBoundary label="Response Viewer">
-          <ResponseViewer tab={tab} />
+          <ResponseViewer key={tab.id} tab={tab} />
         </ErrorBoundary>
       </div>
     </div>

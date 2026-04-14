@@ -39,12 +39,21 @@ export function GrpcPanel({ tab }: Props) {
   const isStreaming = selectedMethod ? (selectedMethod.clientStreaming || selectedMethod.serverStreaming) : false
   const active = tab.grpcStreamActive
 
-  // Sync JSON when form changes
+  // Cancel any live stream when the component unmounts (tab closed while streaming)
+  useEffect(() => {
+    return () => {
+      if (tab.grpcStreamActive) {
+        window.ananke.apiToolkit.grpc.streamCancel(tab.id)
+      }
+    }
+  }, [tab.id])
+
+  // Sync JSON when form changes (only while in form mode)
   useEffect(() => {
     if (!jsonMode) {
       setGrpcMessageJson(tab.id, JSON.stringify(formValue, null, 2))
     }
-  }, [formValue, jsonMode, tab.id])
+  }, [formValue, jsonMode, tab.id, setGrpcMessageJson])
 
   async function discover() {
     setDiscoverError(null)
