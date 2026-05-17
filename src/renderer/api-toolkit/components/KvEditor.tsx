@@ -43,10 +43,10 @@ export function KvEditor({ rows, onChange, keyPlaceholder = 'Key', valuePlacehol
             placeholder={valuePlaceholder}
             onChange={(e) => update(i, { value: e.target.value })}
           />
-          <span className="kv-del" onClick={() => remove(i)}>×</span>
+          <button type="button" className="kv-del" aria-label={`Remove row ${i + 1}`} onClick={() => remove(i)}>×</button>
         </div>
       ))}
-      <span className="kv-add-btn" onClick={add}>+ Add row</span>
+      <button type="button" className="kv-add-btn" onClick={add}>+ Add row</button>
     </div>
   )
 }

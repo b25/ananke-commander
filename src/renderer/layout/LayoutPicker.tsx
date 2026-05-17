@@ -13,7 +13,6 @@ const ITEM_COUNT = LAYOUTS.length + 1
 
 export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Props) {
   const [open, setOpen] = useState(false)
-  const [focusIdx, setFocusIdx] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -21,7 +20,6 @@ export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Pro
   useEffect(() => {
     if (!open) return
     // Focus first item when popover opens
-    setFocusIdx(0)
     const btns = popoverRef.current?.querySelectorAll<HTMLButtonElement>('button')
     btns?.[0]?.focus()
 
@@ -30,16 +28,18 @@ export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Pro
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { setOpen(false); return }
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End') {
         e.preventDefault()
-        setFocusIdx(prev => {
-          const next = e.key === 'ArrowDown'
-            ? (prev + 1) % ITEM_COUNT
-            : (prev - 1 + ITEM_COUNT) % ITEM_COUNT
-          const btns = popoverRef.current?.querySelectorAll<HTMLButtonElement>('button')
-          btns?.[next]?.focus()
-          return next
-        })
+        const btns = Array.from(popoverRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+        if (btns.length === 0) return
+        const current = btns.findIndex((b) => b === document.activeElement)
+        if (current < 0) return
+        let next = current
+        if (e.key === 'ArrowDown') next = (current + 1) % ITEM_COUNT
+        if (e.key === 'ArrowUp') next = (current - 1 + ITEM_COUNT) % ITEM_COUNT
+        if (e.key === 'Home') next = 0
+        if (e.key === 'End') next = ITEM_COUNT - 1
+        btns[next]?.focus()
       }
     }
     document.addEventListener('pointerdown', onPointer)
@@ -68,8 +68,10 @@ export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Pro
         type="button"
         className={`layout-picker__trigger${open ? ' open' : ''}`}
         title={`Layout: ${activeLayout.label} (click to change)`}
-        aria-haspopup="listbox"
+        aria-label="Select screen layout"
+        aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls="layout-picker-menu"
         onClick={() => setOpen(o => !o)}
       >
         <LayoutThumb slots={activeLayout.slots} width={36} height={26} />
@@ -77,11 +79,12 @@ export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Pro
       </button>
 
       {open && (
-        <div className="layout-picker__popover" ref={popoverRef} role="listbox" aria-label="Layout options">
+        <div id="layout-picker-menu" className="layout-picker__popover" ref={popoverRef} role="menu" aria-label="Layout options">
           <button
             type="button"
             className="layout-picker__option layout-picker__autofit"
             onClick={autoFit}
+            role="menuitem"
           >
             <span className="layout-picker__autofit-icon">⊞</span>
             <span className="layout-picker__label">Auto-fit</span>
@@ -91,8 +94,8 @@ export function LayoutPicker({ activeLayoutId, screenPanesCount, onSelect }: Pro
             <button
               key={layout.id}
               type="button"
-              role="option"
-              aria-selected={layout.id === activeLayoutId}
+              role="menuitemradio"
+              aria-checked={layout.id === activeLayoutId}
               className={`layout-picker__option${layout.id === activeLayoutId ? ' active' : ''}`}
               onClick={() => pick(layout)}
             >

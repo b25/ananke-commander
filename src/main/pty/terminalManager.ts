@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import pty from 'node-pty'
 import { homedir } from 'node:os'
 
@@ -77,8 +77,12 @@ export class TerminalManager {
 
   spawn(paneId: string, cols: number, rows: number, cwd?: string, cmd?: string, argsOverride?: string[]): void {
     this.dispose(paneId)
-    const shell = cmd || defaultShell()
-    const args = argsOverride || (process.platform !== 'win32' && !cmd ? ['--login'] : [])
+    const packagedAllow = new Set(['gitui', 'lazygit'])
+    const useCustom = Boolean(cmd && (!app.isPackaged || packagedAllow.has(cmd)))
+    const shell = useCustom ? (cmd ?? defaultShell()) : defaultShell()
+    const args = useCustom
+      ? (argsOverride ?? [])
+      : (process.platform !== 'win32' ? ['--login'] : [])
     // Validate cwd: must be absolute path that exists, else fall back to home
     let safeCwd = homedir()
     if (cwd && cwd.startsWith('/')) {

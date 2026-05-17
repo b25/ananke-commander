@@ -147,10 +147,10 @@ function RepeatedField({ field, value, onChange, depth }: {
             <div style={{ flex: 1 }}>
               <ScalarOrMessage field={field} value={item} onChange={(v) => update(i, v)} depth={depth} />
             </div>
-            <button className="remove-item-btn" onClick={() => remove(i)}>−</button>
+            <button type="button" className="remove-item-btn" onClick={() => remove(i)}>−</button>
           </div>
         ))}
-        <button className="add-item-btn" onClick={add}>+ Add item</button>
+        <button type="button" className="add-item-btn" onClick={add}>+ Add item</button>
       </div>
     </div>
   )
@@ -199,10 +199,10 @@ function MapField({ field, value, onChange }: {
           <div className="kv-row" key={i}>
             <input className="kv-input" value={k} placeholder="key" onChange={(e) => updateKey(k, e.target.value)} />
             <input className="kv-input" value={String(v ?? '')} placeholder="value" onChange={(e) => updateVal(k, e.target.value)} />
-            <span className="kv-del" onClick={() => remove(k)}>×</span>
+            <button type="button" className="kv-del" aria-label={`Remove map entry ${k || 'empty key'}`} onClick={() => remove(k)}>×</button>
           </div>
         ))}
-        <span className="kv-add-btn" onClick={add}>+ Add entry</span>
+        <button type="button" className="kv-add-btn" onClick={add}>+ Add entry</button>
       </div>
     </div>
   )

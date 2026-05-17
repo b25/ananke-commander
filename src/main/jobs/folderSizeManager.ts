@@ -65,9 +65,17 @@ export class FolderSizeManager {
   }
 
   cancel(requestId: string): void {
-    if (!this.activeRequests.has(requestId)) return
+    const dirPath = this.activeRequests.get(requestId)
+    if (!dirPath) return
     this.activeRequests.delete(requestId)
     this.worker?.postMessage({ type: 'cancel', requestId })
+    if (!this.win.isDestroyed()) {
+      this.win.webContents.send('fs:folderSize:error', {
+        requestId,
+        dirPath,
+        message: 'Cancelled'
+      })
+    }
   }
 
   cancelAll(): void {

@@ -28,7 +28,7 @@ export function RadarPane({ pane, isActive, onUpdate, onClose }: Props) {
     setData(partial)
   }, [])
 
-  const { loading, error, progress } = useRadarData(pane.rootPath, handleUpdate)
+  const { loading, error, progress, truncated } = useRadarData(pane.rootPath, handleUpdate)
 
   // Reset data when rootPath changes
   useEffect(() => {
@@ -112,6 +112,21 @@ export function RadarPane({ pane, isActive, onUpdate, onClose }: Props) {
         ))}
         {data && <span className="radar-total-size"> — {formatBytes(data.size)}</span>}
       </div>
+      {truncated?.truncated && (
+        <div
+          role="status"
+          style={{
+            padding: '4px 8px',
+            fontSize: '11px',
+            color: 'var(--warning, #e8a838)',
+            background: 'rgba(232, 168, 56, 0.08)',
+            borderBottom: '1px solid var(--border)',
+            flexShrink: 0
+          }}
+        >
+          Large directory: showing 500 of {truncated.total} entries at this level. Drill into folders for detail.
+        </div>
+      )}
       <div
         ref={containerRef}
         style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}

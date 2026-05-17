@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Tab } from '../store'
 import { useStore } from '../store'
 import type { MockRoute } from '../../../shared/api-toolkit-contracts'
@@ -147,12 +148,11 @@ export function ResponseViewer({ tab }: Props) {
       </div>
 
       {innerTab === 'body' && (
-        <div className="response-body">
+        <ResponseBodyViewport>
           {rawMode
-            ? <pre style={{ margin: 0, fontSize: 10, fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{resp.body}</pre>
-            : <PrettyBody body={resp.body} contentType={resp.headers['content-type'] ?? ''} />
-          }
-        </div>
+            ? <RawBody body={resp.body} />
+            : <PrettyBody body={resp.body} contentType={resp.headers['content-type'] ?? ''} />}
+        </ResponseBodyViewport>
       )}
 
       {innerTab === 'headers' && (
@@ -248,7 +248,39 @@ function GrpcResponseView({ tab }: { tab: Tab }) {
   )
 }
 
+const RAW_BODY_DISPLAY_MAX = 512_000
+
+function ResponseBodyViewport({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="response-body response-body--scroll"
+      style={{ overflow: 'auto', flex: 1, minHeight: 0, contain: 'content' }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function RawBody({ body }: { body: string }) {
+  const truncated = body.length > RAW_BODY_DISPLAY_MAX
+  const display = truncated
+    ? `${body.slice(0, RAW_BODY_DISPLAY_MAX)}\n\n… ${formatSize(body.length - RAW_BODY_DISPLAY_MAX)} omitted — use Copy for full body`
+    : body
+  return (
+    <pre style={{ margin: 0, fontSize: 10, fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+      {display}
+    </pre>
+  )
+}
+
 function PrettyBody({ body, contentType }: { body: string; contentType: string }) {
+  if (body.length > 200_000) {
+    return (
+      <div style={{ color: 'var(--text-2)', fontSize: 10 }}>
+        Pretty view disabled for large payloads ({formatSize(body.length)}). Use Raw mode to inspect full content.
+      </div>
+    )
+  }
   const isJson = contentType.includes('json') || (body.trimStart().startsWith('{') || body.trimStart().startsWith('['))
 
   if (isJson) {
@@ -263,48 +295,237 @@ function PrettyBody({ body, contentType }: { body: string; contentType: string }
   return <>{body}</>
 }
 
+const JSON_PAGE_SIZE = 40
+const JSON_VIRTUAL_THRESHOLD = 48
+
+function JsonCollapsible({ label, depth, children }: { label: string; depth: number; children: ReactNode }) {
+  const [open, setOpen] = useState(depth < 2)
+  return (
+    <span>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          border: 'none',
+          background: 'transparent',
+          color: 'var(--text-2)',
+          cursor: 'pointer',
+          padding: 0,
+          fontFamily: 'inherit',
+          fontSize: 'inherit',
+          marginRight: 4
+        }}
+      >
+        {open ? '▼' : '▶'} {label}
+      </button>
+      {open ? children : null}
+    </span>
+  )
+}
+
+function JsonPagedList({
+  items,
+  depth,
+  hiddenByCap,
+  renderItem
+}: {
+  items: unknown[]
+  depth: number
+  hiddenByCap: number
+  renderItem: (item: unknown, index: number) => ReactNode
+}) {
+  if (items.length >= JSON_VIRTUAL_THRESHOLD) {
+    return (
+      <VirtualJsonArrayList
+        items={items}
+        depth={depth}
+        hiddenByCap={hiddenByCap}
+        renderItem={renderItem}
+      />
+    )
+  }
+
+  return (
+    <JsonPagedListSimple
+      items={items}
+      depth={depth}
+      hiddenByCap={hiddenByCap}
+      renderItem={renderItem}
+    />
+  )
+}
+
+function JsonPagedListSimple({
+  items,
+  depth,
+  hiddenByCap,
+  renderItem
+}: {
+  items: unknown[]
+  depth: number
+  hiddenByCap: number
+  renderItem: (item: unknown, index: number) => ReactNode
+}) {
+  const [shown, setShown] = useState(JSON_PAGE_SIZE)
+  const display = items.slice(0, shown)
+  const remaining = items.length - display.length + hiddenByCap
+
+  return (
+    <>
+      {display.map((item, i) => renderItem(item, i))}
+      {remaining > 0 && (
+        <span>
+          {'  '.repeat(depth + 1)}
+          <button
+            type="button"
+            onClick={() => setShown((n) => n + JSON_PAGE_SIZE)}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--text-accent)',
+              cursor: 'pointer',
+              fontSize: 'inherit',
+              padding: 0
+            }}
+          >
+            Show {Math.min(JSON_PAGE_SIZE, remaining)} more…
+          </button>
+          {'\n'}
+        </span>
+      )}
+    </>
+  )
+}
+
+function VirtualJsonArrayList({
+  items,
+  depth,
+  hiddenByCap,
+  renderItem
+}: {
+  items: unknown[]
+  depth: number
+  hiddenByCap: number
+  renderItem: (item: unknown, index: number) => ReactNode
+}) {
+  const parentRef = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 18,
+    overscan: 12
+  })
+
+  return (
+    <span style={{ display: 'block' }}>
+      <div
+        ref={parentRef}
+        style={{ maxHeight: 360, overflow: 'auto', display: 'block' }}
+      >
+        <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+          {virtualizer.getVirtualItems().map((vi) => (
+            <div
+              key={vi.key}
+              data-index={vi.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${vi.start}px)`
+              }}
+            >
+              {renderItem(items[vi.index], vi.index)}
+            </div>
+          ))}
+        </div>
+      </div>
+      {hiddenByCap > 0 && (
+        <span>
+          {'  '.repeat(depth + 1)}
+          <span style={{ color: 'var(--text-2)' }}>… {hiddenByCap} items omitted (cap)</span>
+          {'\n'}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function JsonTree({ value, depth = 0 }: { value: unknown; depth?: number }) {
+  const MAX_DEPTH = 8
+  const MAX_ITEMS_PER_NODE = 100
+
   if (typeof value === 'string') return <span className="json-string">"{value}"</span>
   if (typeof value === 'number') return <span className="json-number">{value}</span>
   if (typeof value === 'boolean') return <span className="json-bool">{String(value)}</span>
   if (value === null) return <span className="json-null">null</span>
+  if (depth >= MAX_DEPTH) return <span style={{ color: 'var(--text-2)' }}>...</span>
 
   if (Array.isArray(value)) {
     if (value.length === 0) return <span>[]</span>
+    const visibleItems = value.slice(0, MAX_ITEMS_PER_NODE)
+    const hiddenCount = value.length - visibleItems.length
     return (
-      <span>
-        {'[\n'}
-        {value.map((v, i) => (
-          <span key={i}>
-            {'  '.repeat(depth + 1)}
-            <JsonTree value={v} depth={depth + 1} />
-            {i < value.length - 1 ? ',' : ''}
-            {'\n'}
-          </span>
-        ))}
-        {'  '.repeat(depth)}{']'}
-      </span>
+      <JsonCollapsible label={`[${value.length}]`} depth={depth}>
+        <span>
+          {'[\n'}
+          <JsonPagedList
+            items={visibleItems}
+            depth={depth}
+            hiddenByCap={hiddenCount}
+            renderItem={(v, i) => (
+              <span key={i}>
+                {'  '.repeat(depth + 1)}
+                <JsonTree value={v} depth={depth + 1} />
+                {i < visibleItems.length - 1 || hiddenCount > 0 ? ',' : ''}
+                {'\n'}
+              </span>
+            )}
+          />
+          {hiddenCount > 0 && (
+            <span>
+              {'  '.repeat(depth + 1)}
+              <span style={{ color: 'var(--text-2)' }}>… {hiddenCount} items omitted (cap {MAX_ITEMS_PER_NODE})</span>
+              {'\n'}
+            </span>
+          )}
+          {'  '.repeat(depth)}{']'}
+        </span>
+      </JsonCollapsible>
     )
   }
 
   if (typeof value === 'object' && value !== null) {
     const entries = Object.entries(value)
     if (entries.length === 0) return <span>{'{}'}</span>
+    const visibleEntries = entries.slice(0, MAX_ITEMS_PER_NODE)
+    const hiddenCount = entries.length - visibleEntries.length
     return (
-      <span>
-        {'{\n'}
-        {entries.map(([k, v], i) => (
-          <span key={k}>
-            {'  '.repeat(depth + 1)}
-            <span className="json-key">"{k}"</span>
-            {': '}
-            <JsonTree value={v} depth={depth + 1} />
-            {i < entries.length - 1 ? ',' : ''}
-            {'\n'}
-          </span>
-        ))}
-        {'  '.repeat(depth)}{'}'}
-      </span>
+      <JsonCollapsible label={`{${entries.length}}`} depth={depth}>
+        <span>
+          {'{\n'}
+          {visibleEntries.map(([k, v], i) => (
+            <span key={k}>
+              {'  '.repeat(depth + 1)}
+              <span className="json-key">"{k}"</span>
+              {': '}
+              <JsonTree value={v} depth={depth + 1} />
+              {i < visibleEntries.length - 1 || hiddenCount > 0 ? ',' : ''}
+              {'\n'}
+            </span>
+          ))}
+          {hiddenCount > 0 && (
+            <span>
+              {'  '.repeat(depth + 1)}
+              <span style={{ color: 'var(--text-2)' }}>... {hiddenCount} more fields</span>
+              {'\n'}
+            </span>
+          )}
+          {'  '.repeat(depth)}{'}'}
+        </span>
+      </JsonCollapsible>
     )
   }
 

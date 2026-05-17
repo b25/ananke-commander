@@ -5,13 +5,16 @@ interface Props {
   height: number
   isActive: boolean
   isCollapsed?: boolean
+  ariaLabel?: string
   onActivate: () => void
   children: React.ReactNode
 }
 
-export function FloatingPane({ x, y, width, height, isActive, isCollapsed, onActivate, children }: Props) {
+export function FloatingPane({ x, y, width, height, isActive, isCollapsed, ariaLabel, onActivate, children }: Props) {
   return (
     <div
+      role="group"
+      aria-label={ariaLabel}
       className={`floating-pane${isActive ? ' active' : ''}`}
       style={{ position: 'absolute', left: x, top: y, width, height, zIndex: isActive ? 10 : 1, display: isCollapsed ? 'none' : undefined }}
       onMouseDown={isCollapsed ? undefined : onActivate}

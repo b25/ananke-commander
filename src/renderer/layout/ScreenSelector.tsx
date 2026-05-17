@@ -38,7 +38,7 @@ export function ScreenSelector({ canvasOffset, viewportW, viewportH, screenLayou
   return (
     <div
       className="screen-selector"
-      role="group"
+      role="radiogroup"
       aria-label="Screen selector (Alt+Arrow to switch)"
       onKeyDown={(e) => {
         const map: Record<string, number> = {
@@ -57,17 +57,19 @@ export function ScreenSelector({ canvasOffset, viewportW, viewportH, screenLayou
           const layoutId = screenLayouts[idx] ?? bestLayout(panesPerScreen[idx] ?? 0).id
           const layout = LAYOUTS.find(l => l.id === layoutId) ?? LAYOUTS[0]
           return (
-            <div
+            <button
               key={idx}
-              role="button"
+              type="button"
+              role="radio"
+              aria-checked={isActive}
               tabIndex={isActive ? 0 : -1}
-              className={`screen-selector__cell${isActive ? ' active' : ''}`}
+              className={`screen-selector__cell screen-selector__cell-btn${isActive ? ' active' : ''}`}
               title={`Screen ${idx + 1}: ${layout.label}`}
+              aria-label={`Switch to screen ${idx + 1} (${layout.label})`}
               onClick={() => goTo(idx)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goTo(idx) } }}
             >
               <LayoutThumb slots={layout.slots} width={CELL_W - 4} height={CELL_H - 4} invert={isActive} />
-            </div>
+            </button>
           )
         })}
       </div>

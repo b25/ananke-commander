@@ -16,12 +16,20 @@ export interface ObsidianSettings {
 export interface TerminalSettings {
   fontSize: number
   fontFamily: string
+  /** xterm scrollback lines (separate from persisted session history cap). */
+  scrollback: number
+}
+
+export interface BrowserSettings {
+  /** Extra hostnames allowed for embedded browser navigation (one per line in UI). */
+  extraAllowedHosts: string[]
 }
 
 export interface AppSettings {
   privacy: PrivacySettings
   obsidian: ObsidianSettings
   terminal: TerminalSettings
+  browser: BrowserSettings
 }
 
 export interface PaneStateBase {
@@ -127,10 +135,15 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   privateMode: false
 }
 
+export const DEFAULT_BROWSER: BrowserSettings = {
+  extraAllowedHosts: []
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   privacy: DEFAULT_PRIVACY,
   obsidian: { vaultPath: '', subfolder: 'ananke-commander-notes' },
-  terminal: { fontSize: 10, fontFamily: 'ui-monospace, monospace' }
+  terminal: { fontSize: 10, fontFamily: 'ui-monospace, monospace', scrollback: 10_000 },
+  browser: DEFAULT_BROWSER
 }
 
 export interface ListDirEntry {

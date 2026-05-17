@@ -24,6 +24,8 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   const undoStack = useRef<string[]>([])
   const [localBody, setLocalBody] = useState(pane.body)
   const [localTitle, setLocalTitle] = useState(pane.title)
+  const lastPaneBodyRef = useRef(pane.body)
+  const lastPaneTitleRef = useRef(pane.title)
   const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [view, setView] = useState<'editor' | 'list'>(pane.currentFile ? 'editor' : 'list')
@@ -33,7 +35,28 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   const [wsName, setWsName] = useState('')
   const [wsLabel, setWsLabel] = useState('')
 
-  useEffect(() => { setLocalBody(pane.body); setLocalTitle(pane.title) }, [pane.id])
+  useEffect(() => {
+    setLocalBody(pane.body)
+    setLocalTitle(pane.title)
+    lastPaneBodyRef.current = pane.body
+    lastPaneTitleRef.current = pane.title
+  }, [pane.id])
+
+  useEffect(() => {
+    const paneBodyChanged = pane.body !== lastPaneBodyRef.current
+    if (paneBodyChanged && pane.body !== localBody) {
+      setLocalBody(pane.body)
+    }
+    lastPaneBodyRef.current = pane.body
+  }, [pane.body, localBody])
+
+  useEffect(() => {
+    const paneTitleChanged = pane.title !== lastPaneTitleRef.current
+    if (paneTitleChanged && pane.title !== localTitle) {
+      setLocalTitle(pane.title)
+    }
+    lastPaneTitleRef.current = pane.title
+  }, [pane.title, localTitle])
 
   // Load vault path and workspace name
   useEffect(() => {
@@ -91,7 +114,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
       alert('Set Obsidian vault path in Settings first.')
       return
     }
-    const title = pane.title || 'Untitled'
+    const title = localTitle.trim() || 'Untitled'
     const safeTitle = title.replace(/[/\\:*?"<>|]/g, '-')
     const filename = pane.currentFile || `${safeTitle}.md`
     const date = new Date().toISOString()
@@ -122,8 +145,9 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
 
   const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value
+    const prev = localBody
+    if (val !== prev) undoStack.current.push(prev)
     setLocalBody(val)
-    undoStack.current.push(pane.body)
     if (undoStack.current.length > Math.max(1, notesUndoMax)) undoStack.current.shift()
     if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
     updateTimerRef.current = setTimeout(() => {
@@ -147,10 +171,10 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
       <PaneHeader title={pane.title} paneType="notes" onClose={onClose} />
       <div className="pane-body notes-pane-body">
         <div className="notes-toolbar">
-          <button type="button" className="notes-toolbar__btn" title="Notes list" onClick={() => { setView('list'); void refreshList() }}>
+          <button type="button" className="notes-toolbar__btn" title="Notes list" aria-label="Notes list" onClick={() => { setView('list'); void refreshList() }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           </button>
-          <button type="button" className="notes-toolbar__btn" title="New note" onClick={newNote}>
+          <button type="button" className="notes-toolbar__btn" title="New note" aria-label="New note" onClick={newNote}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
           <div className="notes-toolbar__spacer" />
@@ -163,7 +187,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
               <button type="button" className="notes-toolbar__btn" title="Export as file" onClick={async () => {
-                const p = await window.ananke.dialog.saveFile(`${pane.title || 'note'}.md`)
+                const p = await window.ananke.dialog.saveFile(`${localTitle.trim() || 'note'}.md`)
                 if (p) await window.ananke.fs.writeUtf8(p, localBody)
               }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -223,6 +247,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
                   e.preventDefault()
                   if (undoStack.current.length > 0) {
                     const prev = undoStack.current.pop()!
+                    setLocalBody(prev)
                     void onUpdate({ ...pane, body: prev })
                   }
                 }

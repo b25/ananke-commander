@@ -15,6 +15,22 @@ import * as mockStorage from './mockStorage.js'
 
 let registered = false
 
+const mockHitBatch = new Map<string, number>()
+let mockHitFlushTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleMockRouteHit(win: BrowserWindow | undefined, routeId: string, hitCount: number): void {
+  mockHitBatch.set(routeId, hitCount)
+  if (mockHitFlushTimer) return
+  mockHitFlushTimer = setTimeout(() => {
+    mockHitFlushTimer = null
+    const batch = new Map(mockHitBatch)
+    mockHitBatch.clear()
+    for (const [id, count] of batch) {
+      win?.webContents.send(IPC.MOCK_ROUTE_HIT, id, count)
+    }
+  }, 100)
+}
+
 export function registerApiToolkitHandlers(): void {
   if (registered) return
   registered = true
@@ -168,7 +184,7 @@ export function registerApiToolkitHandlers(): void {
   ipcMain.handle(IPC.MOCK_START, async (_e, port: number, routes: MockRoute[]) => {
     const win = BrowserWindow.getAllWindows()[0]
     const actual = await mockServer.start(port, routes, (routeId, hitCount) => {
-      win?.webContents.send(IPC.MOCK_ROUTE_HIT, routeId, hitCount)
+      scheduleMockRouteHit(win, routeId, hitCount)
     })
     return { port: actual }
   })

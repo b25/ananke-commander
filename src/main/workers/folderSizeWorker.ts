@@ -1,27 +1,29 @@
-import { readdir, stat } from 'node:fs/promises'
+import { readdir, lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parentPort } from 'node:worker_threads'
 import type { FolderSizeRequest } from '../../shared/contracts.js'
 
 const cancelled = new Map<string, boolean>()
+const MAX_DEPTH = 32
 
 async function walkAndSum(
   dirPath: string,
   requestId: string,
+  depth: number,
   onProgress: (partialSize: number, filesScanned: number) => void
 ): Promise<number> {
   let totalSize = 0
   let filesScanned = 0
   let lastProgressTime = Date.now()
 
-  async function walk(dir: string): Promise<void> {
+  async function walk(dir: string, currentDepth: number): Promise<void> {
     if (cancelled.get(requestId)) return
+    if (currentDepth > MAX_DEPTH) return
 
     let entries
     try {
       entries = await readdir(dir, { withFileTypes: true })
     } catch {
-      // Skip directories we cannot read (permission errors)
       return
     }
 
@@ -30,11 +32,13 @@ async function walkAndSum(
 
       const fullPath = join(dir, entry.name)
 
-      if (entry.isDirectory()) {
-        await walk(fullPath)
-      } else {
-        try {
-          const st = await stat(fullPath)
+      try {
+        const st = await lstat(fullPath)
+        if (st.isSymbolicLink()) continue
+
+        if (st.isDirectory()) {
+          await walk(fullPath, currentDepth + 1)
+        } else if (st.isFile()) {
           totalSize += st.size
           filesScanned += 1
 
@@ -43,19 +47,18 @@ async function walkAndSum(
             lastProgressTime = now
             onProgress(totalSize, filesScanned)
           }
-        } catch {
-          // Skip files we cannot stat (permission errors, broken symlinks)
         }
+      } catch {
+        // skip inaccessible
       }
     }
   }
 
-  await walk(dirPath)
+  await walk(dirPath, depth)
   return totalSize
 }
 
 parentPort?.on('message', async (msg: FolderSizeRequest & { type?: string }) => {
-  // Handle cancel messages
   if (msg.type === 'cancel') {
     cancelled.set(msg.requestId, true)
     return
@@ -65,7 +68,7 @@ parentPort?.on('message', async (msg: FolderSizeRequest & { type?: string }) => 
   cancelled.set(requestId, false)
 
   try {
-    const totalSize = await walkAndSum(dirPath, requestId, (partialSize, filesScanned) => {
+    const totalSize = await walkAndSum(dirPath, requestId, 0, (partialSize, filesScanned) => {
       if (cancelled.get(requestId)) return
       parentPort?.postMessage({
         type: 'progress',

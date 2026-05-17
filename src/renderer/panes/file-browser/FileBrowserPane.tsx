@@ -9,6 +9,9 @@ import { ArchiveDialog } from './ArchiveDialog'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { FileBrowserActions } from './FileBrowserActions'
 import { FindBar } from './FindBar'
+import { applyFilterAndSort, togglePaths } from './fileBrowserUtils'
+import { useFileBrowserNavigation } from './useFileBrowserNavigation'
+import { shouldShellHandleShortcut } from '../../lib/keyboardShortcuts'
 
 type FindState = {
   active: boolean
@@ -47,7 +50,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     text: string
     readOnly: boolean
   } | null>(null)
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string; side: 'left' | 'right' } | null>(null)
   const [showHidden, setShowHidden] = useState(false)
   const [leftSort, setLeftSort] = useState<SortState>({ key: 'name', dir: 'asc' })
   const [rightSort, setRightSort] = useState<SortState>({ key: 'name', dir: 'asc' })
@@ -73,15 +76,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     setInlinePromptValue('')
     setInlinePrompt({ label, onSubmit })
   }
-  // Track folder name to auto-select after navigating up
-  const [leftFocusName, setLeftFocusName] = useState<string | null>(null)
-  const [rightFocusName, setRightFocusName] = useState<string | null>(null)
-  // Path history for Alt+Left/Right back/forward
-  const leftHistoryBack = useRef<string[]>([])
-  const leftHistoryFwd = useRef<string[]>([])
-  const rightHistoryBack = useRef<string[]>([])
-  const rightHistoryFwd = useRef<string[]>([])
-  const skipHistoryPush = useRef(false)
+  const { navigateTo, historyBack, historyForward, leftFocusName, rightFocusName } = useFileBrowserNavigation(pane, onUpdate)
 
   const leftSel = new Set(pane.leftSelection)
   const rightSel = new Set(pane.rightSelection)
@@ -123,29 +118,6 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     }
   }, [pane.focusedSide, pane.leftPath, pane.rightPath, refreshDir])
 
-  // Hidden file filter + text filter + sort
-  function applyFilterAndSort(entries: ListDirEntry[], hidden: boolean, filterActive: boolean, filterText: string, sort: SortState): ListDirEntry[] {
-    let result = hidden ? entries : entries.filter(e => !e.name.startsWith('.'))
-    if (filterActive && filterText) {
-      const lower = filterText.toLowerCase()
-      result = result.filter(e => e.name.toLowerCase().includes(lower))
-    }
-    result = [...result].sort((a, b) => {
-      // Directories always first
-      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
-      let cmp = 0
-      if (sort.key === 'name') cmp = a.name.localeCompare(b.name)
-      else if (sort.key === 'size') cmp = a.size - b.size
-      else if (sort.key === 'date') cmp = a.mtimeMs - b.mtimeMs
-      else if (sort.key === 'kind') {
-        const extA = a.name.includes('.') ? a.name.slice(a.name.lastIndexOf('.')) : ''
-        const extB = b.name.includes('.') ? b.name.slice(b.name.lastIndexOf('.')) : ''
-        cmp = extA.localeCompare(extB)
-      }
-      return sort.dir === 'asc' ? cmp : -cmp
-    })
-    return result
-  }
   const runFind = async (side: 'left' | 'right', findState: FindState) => {
     const setFind = side === 'left' ? setLeftFind : setRightFind
     const root = side === 'left' ? pane.leftPath : pane.rightPath
@@ -167,32 +139,6 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
 
   // Safe file extensions that don't need open confirmation
   const SAFE_EXTS = new Set(['.txt','.md','.pdf','.jpg','.jpeg','.png','.gif','.svg','.webp','.bmp','.html','.htm','.css','.json','.xml','.csv','.log','.toml','.yaml','.yml'])
-
-  const navigateTo = useCallback((side: 'left' | 'right', newPath: string) => {
-    const oldPath = side === 'left' ? pane.leftPath : pane.rightPath
-    if (oldPath === newPath) return
-    // Push to history
-    if (!skipHistoryPush.current) {
-      const back = side === 'left' ? leftHistoryBack : rightHistoryBack
-      const fwd = side === 'left' ? leftHistoryFwd : rightHistoryFwd
-      back.current.push(oldPath)
-      if (back.current.length > 50) back.current.shift()
-      fwd.current = []
-    }
-    skipHistoryPush.current = false
-    // Only set focusName when navigating UP (so cursor lands on the folder we came from)
-    const normOld = oldPath.replace(/[/\\]+$/, '')
-    const normNew = newPath.replace(/[/\\]+$/, '')
-    const goingUp = normOld.startsWith(normNew) && normOld !== normNew
-    const focusName = goingUp ? normOld.split(/[/\\]/).pop() ?? null : null
-    if (side === 'left') {
-      setLeftFocusName(focusName)
-      onUpdate({ ...pane, focusedSide: 'left', leftPath: newPath })
-    } else {
-      setRightFocusName(focusName)
-      onUpdate({ ...pane, focusedSide: 'right', rightPath: newPath })
-    }
-  }, [pane, onUpdate])
 
   const activateEntry = useCallback(
     async (side: 'left' | 'right', entry: ListDirEntry) => {
@@ -249,19 +195,21 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   }, [pane, onUpdate, refreshBoth, selectedPaths])
 
   const onFileContextMenu = useCallback(
-    (e: React.MouseEvent, entry: ListDirEntry) => {
+    (side: 'left' | 'right', e: React.MouseEvent, entry: ListDirEntry) => {
       e.preventDefault()
-      const side = pane.focusedSide
       const sel = side === 'left' ? pane.leftSelection : pane.rightSelection
       if (!sel.includes(entry.path)) {
         onUpdate({
           ...pane,
+          focusedSide: side,
           ...(side === 'left'
             ? { leftSelection: [entry.path] }
             : { rightSelection: [entry.path] })
         })
+      } else {
+        onUpdate({ ...pane, focusedSide: side })
       }
-      setCtxMenu({ x: e.clientX, y: e.clientY, path: entry.path })
+      setCtxMenu({ x: e.clientX, y: e.clientY, path: entry.path, side })
     },
     [pane, onUpdate]
   )
@@ -283,6 +231,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   useEffect(() => {
     if (!isActive) return
     const onKey = (e: KeyboardEvent) => {
+      if (!shouldShellHandleShortcut(e)) return
       if (e.key === 'F3') {
         e.preventDefault()
         void openEditor(true)
@@ -346,14 +295,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       // Alt+Left: navigate back in history
       if (e.altKey && e.key === 'ArrowLeft') {
         e.preventDefault()
-        const back = pane.focusedSide === 'left' ? leftHistoryBack : rightHistoryBack
-        const fwd = pane.focusedSide === 'left' ? leftHistoryFwd : rightHistoryFwd
-        if (back.current.length > 0) {
-          const prev = back.current.pop()!
-          fwd.current.push(activePath)
-          skipHistoryPush.current = true
-          navigateTo(pane.focusedSide, prev)
-        }
+        historyBack(pane.focusedSide, activePath)
       }
       // Alt+F7: create new file
       if (e.altKey && e.key === 'F7') {
@@ -367,14 +309,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       // Alt+Right: navigate forward in history
       if (e.altKey && e.key === 'ArrowRight') {
         e.preventDefault()
-        const back = pane.focusedSide === 'left' ? leftHistoryBack : rightHistoryBack
-        const fwd = pane.focusedSide === 'left' ? leftHistoryFwd : rightHistoryFwd
-        if (fwd.current.length > 0) {
-          const next = fwd.current.pop()!
-          back.current.push(activePath)
-          skipHistoryPush.current = true
-          navigateTo(pane.focusedSide, next)
-        }
+        historyForward(pane.focusedSide, activePath)
       }
       // Ctrl+F: open find bar for focused panel
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -385,7 +320,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isActive, selectedPaths, doDelete, openEditor, activePath, refreshActive, pane, leftEntries, rightEntries, onUpdate, navigateTo])
+  }, [isActive, selectedPaths, doDelete, openEditor, activePath, refreshActive, pane, leftEntries, rightEntries, onUpdate, navigateTo, historyBack, historyForward])
 
   useEffect(() => {
     if (!isActive) return
@@ -499,21 +434,24 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const suggestedArchive = joinPath(activePath, 'archive.zip')
 
   const ctxItems: ContextMenuItem[] = ctxMenu
-    ? [
+    ? (() => {
+        const ctxSide = ctxMenu.side
+        const ctxEntries = ctxSide === 'left' ? leftEntries : rightEntries
+        const ctxActivePath = ctxSide === 'left' ? pane.leftPath : pane.rightPath
+        const ctxSelection = ctxSide === 'left' ? [...pane.leftSelection] : [...pane.rightSelection]
+        return [
         {
           label: 'Open', shortcut: 'Enter', onClick: () => {
-            const entries = pane.focusedSide === 'left' ? leftEntries : rightEntries
-            const entry = entries.find((e) => e.path === ctxMenu.path)
-            if (entry) void activateEntry(pane.focusedSide, entry)
+            const entry = ctxEntries.find((e) => e.path === ctxMenu.path)
+            if (entry) void activateEntry(ctxSide, entry)
           }
         },
         { label: 'Read', shortcut: 'F3', onClick: () => void openEditor(true) },
         { label: 'Edit', shortcut: 'F4', onClick: () => void openEditor(false) },
         {
           label: 'Rename', shortcut: 'F2', onClick: () => {
-            const entries = pane.focusedSide === 'left' ? leftEntries : rightEntries
-            const entry = entries.find(en => en.path === ctxMenu.path)
-            if (entry) setRenaming({ path: entry.path, side: pane.focusedSide, name: entry.name })
+            const entry = ctxEntries.find(en => en.path === ctxMenu.path)
+            if (entry) setRenaming({ path: entry.path, side: ctxSide, name: entry.name })
           }
         },
         { label: 'Copy Path', onClick: () => void window.ananke.clipboard.writeText(ctxMenu.path) },
@@ -525,7 +463,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         {
           label: 'New File', shortcut: 'Alt+F7', onClick: () => {
             showPrompt('New file name:', (name) => {
-              void window.ananke.fs.createFile(joinPath(activePath, name))
+              void window.ananke.fs.createFile(joinPath(ctxActivePath, name))
                 .then(() => refreshActive())
                 .catch((err: Error) => alert(err.message))
             })
@@ -533,17 +471,15 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         },
         {
           label: 'New Terminal Here', onClick: () => {
-            const entries = pane.focusedSide === 'left' ? leftEntries : rightEntries
-            const sel = entries.find(e => e.path === ctxMenu.path)
-            const dir = sel?.isDirectory ? sel.path : activePath
+            const sel = ctxEntries.find(e => e.path === ctxMenu.path)
+            const dir = sel?.isDirectory ? sel.path : ctxActivePath
             window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'terminal', cwd: dir } }))
           }
         },
         {
           label: 'New GitUI Here', onClick: () => {
-            const entries = pane.focusedSide === 'left' ? leftEntries : rightEntries
-            const sel = entries.find(e => e.path === ctxMenu.path)
-            const dir = sel?.isDirectory ? sel.path : activePath
+            const sel = ctxEntries.find(e => e.path === ctxMenu.path)
+            const dir = sel?.isDirectory ? sel.path : ctxActivePath
             window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'gitui', cwd: dir } }))
           }
         },
@@ -557,12 +493,20 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         { label: '', separator: true, onClick: () => {} },
         {
           label: 'Delete', shortcut: 'F8', danger: true, onClick: () => {
-            if (!selectedPaths.length) return
-            if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
-            void doDelete()
+            if (!ctxSelection.length) return
+            if (!confirm(`Delete ${ctxSelection.length} item(s)?`)) return
+            void (async () => {
+              await window.ananke.fs.quickOp('delete', '', ctxSelection)
+              refreshBoth()
+              onUpdate({
+                ...pane,
+                ...(ctxSide === 'left' ? { leftSelection: [] } : { rightSelection: [] })
+              })
+            })()
           }
         },
       ]
+      })()
     : []
 
   const renderPathBar = (side: 'left' | 'right') => {
@@ -699,18 +643,18 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 onRenameCancel={() => setRenaming(null)}
                 onPathChange={(p) => navigateTo('left', p)}
                 onSelect={(paths, add) => {
-                  const next = add ? new Set([...pane.leftSelection, ...paths]) : new Set(paths)
+                  const next = togglePaths(pane.leftSelection, paths, add)
                   onUpdate({
                     ...pane,
                     focusedSide: 'left',
-                    leftSelection: [...next]
+                    leftSelection: next
                   })
                 }}
                 onActivate={(entry) => {
                   if (leftFind.active) setLeftFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
                   void activateEntry('left', entry)
                 }}
-                onContextMenu={onFileContextMenu}
+                onContextMenu={(e, entry) => onFileContextMenu('left', e, entry)}
               />
             </div>
             <div className="file-list-panel">
@@ -746,18 +690,18 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 onRenameCancel={() => setRenaming(null)}
                 onPathChange={(p) => navigateTo('right', p)}
                 onSelect={(paths, add) => {
-                  const next = add ? new Set([...pane.rightSelection, ...paths]) : new Set(paths)
+                  const next = togglePaths(pane.rightSelection, paths, add)
                   onUpdate({
                     ...pane,
                     focusedSide: 'right',
-                    rightSelection: [...next]
+                    rightSelection: next
                   })
                 }}
                 onActivate={(entry) => {
                   if (rightFind.active) setRightFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
                   void activateEntry('right', entry)
                 }}
-                onContextMenu={onFileContextMenu}
+                onContextMenu={(e, entry) => onFileContextMenu('right', e, entry)}
               />
             </div>
           </div>
@@ -821,6 +765,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       {archiveOpen && createPortal(
         <ArchiveDialog
           suggestedPackPath={suggestedArchive}
+          defaultUnpackDir={activePath}
           onClose={() => setArchiveOpen(false)}
           onPack={async (format, outFile) => {
             const sources = selectedPaths.length ? selectedPaths : [activePath]

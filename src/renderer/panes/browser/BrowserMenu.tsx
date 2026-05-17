@@ -66,13 +66,17 @@ export function BrowserMenu({ paneId, onFindToggle, onClipToVault }: Props) {
         className={`browser-toolbar__btn${open ? ' open' : ''}${harRecording ? ' browser-menu__recording' : ''}`}
         onClick={() => setOpen(!open)}
         title="Browser menu"
+        aria-label="Browser menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls="browser-pane-menu"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
         </svg>
       </button>
       {open && (
-        <div className="layout-picker__popover browser-menu__popover" role="menu">
+        <div id="browser-pane-menu" className="layout-picker__popover browser-menu__popover" role="menu" aria-label="Browser tools">
           {/* HAR section */}
           <div className="browser-menu__section-label">Network Capture (HAR)</div>
           <button type="button" className="browser-menu__item" role="menuitem" onClick={() => void toggleHar()}>
@@ -111,13 +115,13 @@ export function BrowserMenu({ paneId, onFindToggle, onClipToVault }: Props) {
           {/* Zoom section */}
           <div className="browser-menu__section-label">Zoom</div>
           <div className="browser-menu__zoom-row">
-            <button type="button" className="browser-menu__zoom-btn" onClick={() => void window.ananke.browser.setZoom(paneId, -0.1)} title="Zoom out">
+            <button type="button" className="browser-menu__zoom-btn" onClick={() => void window.ananke.browser.setZoom(paneId, -0.1)} title="Zoom out" aria-label="Zoom out">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
-            <button type="button" className="browser-menu__zoom-btn" onClick={() => void window.ananke.browser.resetZoom(paneId)} title="Reset zoom">
+            <button type="button" className="browser-menu__zoom-btn" onClick={() => void window.ananke.browser.resetZoom(paneId)} title="Reset zoom" aria-label="Reset zoom">
               100%
             </button>
-            <button type="button" className="browser-menu__zoom-btn" onClick={() => void window.ananke.browser.setZoom(paneId, 0.1)} title="Zoom in">
+            <button type="button" className="browser-menu__zoom-btn" onClick={() => void window.ananke.browser.setZoom(paneId, 0.1)} title="Zoom in" aria-label="Zoom in">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
           </div>

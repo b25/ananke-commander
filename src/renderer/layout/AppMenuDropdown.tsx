@@ -11,6 +11,7 @@ interface Props {
 export function AppMenuDropdown({ diagOpen, drawer, onToggleDiag, onToggleRecent, onToggleSettings }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const firstItemRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -29,6 +30,11 @@ export function AppMenuDropdown({ diagOpen, drawer, onToggleDiag, onToggleRecent
   }, [open])
 
   useEffect(() => {
+    if (!open) return
+    firstItemRef.current?.focus()
+  }, [open])
+
+  useEffect(() => {
     window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: !open }))
     return () => {
       window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: true }))
@@ -42,13 +48,18 @@ export function AppMenuDropdown({ diagOpen, drawer, onToggleDiag, onToggleRecent
         className={`layout-picker__trigger btn-thin${open ? ' open' : ''}`}
         onClick={() => setOpen(o => !o)}
         title="App Menu"
+        aria-label="Open app menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls="app-menu-dropdown"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
       </button>
 
       {open && (
-        <div className="layout-picker__popover" role="menu" style={{ right: 0, left: 'auto' }}>
+        <div id="app-menu-dropdown" className="layout-picker__popover" role="menu" aria-label="Application menu" style={{ right: 0, left: 'auto' }}>
           <button
+            ref={firstItemRef}
             type="button"
             className="layout-picker__option"
             onClick={() => { onToggleDiag(); setOpen(false) }}

@@ -6,6 +6,20 @@ import type {
 } from '../../../shared/api-toolkit-contracts'
 
 export type Protocol = 'http' | 'grpc'
+let mockPersistTimer: ReturnType<typeof setTimeout> | null = null
+let pendingMockPersist: MockServerData | null = null
+
+function scheduleMockPersist(data: MockServerData): void {
+  pendingMockPersist = data
+  if (mockPersistTimer) clearTimeout(mockPersistTimer)
+  mockPersistTimer = setTimeout(() => {
+    const toPersist = pendingMockPersist
+    pendingMockPersist = null
+    mockPersistTimer = null
+    if (!toPersist) return
+    window.ananke.apiToolkit.mock.saveData(toPersist).catch(console.error)
+  }, 300)
+}
 
 export interface Tab {
   id: string
@@ -328,8 +342,7 @@ export const useStore = create<AppState>((set, get) => ({
         r.id === routeId ? { ...r, hitCount } : r
       )
       const mockData = { ...s.mockData, routes }
-      // Persist updated hit counts to disk
-      window.ananke.apiToolkit.mock.saveData(mockData).catch(console.error)
+      scheduleMockPersist(mockData)
       return { mockData }
     }),
 }))

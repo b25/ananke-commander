@@ -47,7 +47,7 @@ export function TaskbarStrip({ panes, activePaneId, collapsedIds, onRestore, onA
   const collapsedSet = new Set(collapsedIds)
 
   return (
-    <div className="collapsed-strip">
+    <div className="collapsed-strip" role="toolbar" aria-label="Pane strip">
       {panes.map((pane) => {
         const isCollapsed = collapsedSet.has(pane.id)
         const isActive = activePaneId === pane.id && !isCollapsed
@@ -57,22 +57,28 @@ export function TaskbarStrip({ panes, activePaneId, collapsedIds, onRestore, onA
         if (isActive) pillClass += ' is-active'
 
         const subtitle = paneSubtitle(pane)
+        const actionLabel = isCollapsed ? 'Restore' : 'Activate'
 
         return (
-          <div
-            key={pane.id}
-            className={pillClass}
-            title={`${pane.title}${subtitle ? ' — ' + subtitle : ''}`}
-            onClick={() => isCollapsed ? onRestore(pane.id) : onActivate(pane.id)}
-          >
-            <span className="collapsed-pill__icon">{PANE_ICONS[pane.type] ?? '▪'}</span>
-            <span className="collapsed-pill__title">{subtitle || pane.title}</span>
+          <div key={pane.id} className={pillClass} title={`${pane.title}${subtitle ? ' — ' + subtitle : ''}`}>
+            <button
+              type="button"
+              className="collapsed-pill__main"
+              aria-label={`${actionLabel} pane ${pane.title}`}
+              onClick={() => (isCollapsed ? onRestore(pane.id) : onActivate(pane.id))}
+            >
+              <span className="collapsed-pill__icon" aria-hidden>{PANE_ICONS[pane.type] ?? '▪'}</span>
+              <span className="collapsed-pill__title">{subtitle || pane.title}</span>
+            </button>
             <button
               type="button"
               className="collapsed-pill__close"
               title="Close"
-              onClick={(e) => { e.stopPropagation(); onClose(pane.id) }}
-            >✕</button>
+              aria-label={`Close ${pane.title} pane`}
+              onClick={() => onClose(pane.id)}
+            >
+              ✕
+            </button>
           </div>
         )
       })}

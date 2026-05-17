@@ -1,4 +1,5 @@
 import type { PaneState } from '../../shared/contracts'
+import { paneOnScreen } from './screenIndex'
 
 export interface LayoutSlot {
   xFrac: number  // 0–1 within screen (left edge)
@@ -172,8 +173,8 @@ export function applyLayout(
   vpW: number,
   vpH: number
 ): PaneState[] {
-  const onScreen  = allPanes.filter(p => Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow)
-  const offScreen = allPanes.filter(p => Math.floor(p.xPct) !== screenCol || Math.floor(p.yPct) !== screenRow)
+  const onScreen = allPanes.filter((p) => paneOnScreen(p, screenCol, screenRow))
+  const offScreen = allPanes.filter((p) => !paneOnScreen(p, screenCol, screenRow))
 
   // Sort spatially (top-to-bottom, left-to-right) so slot assignment is
   // visually predictable regardless of workspace insertion order.

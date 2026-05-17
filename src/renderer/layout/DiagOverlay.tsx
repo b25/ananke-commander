@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { PaneState, WorkspaceState } from '../../shared/contracts'
+import { paneFractionalOffsets, paneOnScreen, paneScreenIndex } from '../lib/screenIndex'
 
 interface Props {
   ws: WorkspaceState
@@ -23,21 +24,29 @@ export function DiagOverlay({ ws, vpW, vpH, activeScreen, screenCol, screenRow, 
       window.dispatchEvent(new CustomEvent('native-view-visibility', { detail: true }))
     }
   }, [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
   const canvasW = vpW * 2
   const canvasH = vpH * 2
   const ox = ws.canvasOffset.x
   const oy = ws.canvasOffset.y
 
-  const onScreen = ws.panes.filter(
-    p => Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow
-  )
+  const onScreen = ws.panes.filter((p) => paneOnScreen(p, screenCol, screenRow))
   const collapsedIds = new Set(ws.screenCollapsed?.[activeScreen] ?? [])
   const visibleOnScreen = onScreen.filter(p => !collapsedIds.has(p.id))
   const collapsedOnScreen = onScreen.filter(p => collapsedIds.has(p.id))
 
   const row = (p: PaneState) => {
-    const xFrac = p.xPct - Math.floor(p.xPct)
-    const yFrac = p.yPct - Math.floor(p.yPct)
+    const { xFrac, yFrac } = paneFractionalOffsets(p)
     const px = fmtPx(p.xPct * vpW)
     const py = fmtPx(p.yPct * vpH)
     const pw = fmtPx(p.wPct * vpW)
@@ -59,9 +68,10 @@ export function DiagOverlay({ ws, vpW, vpH, activeScreen, screenCol, screenRow, 
   }
 
   return (
-    <div className="diag-overlay">
-      <button 
-        type="button" 
+    <div className="diag-overlay" role="dialog" aria-modal="true" aria-label="Layout diagnostics">
+      <button
+        type="button"
+        aria-label="Close diagnostics"
         onClick={onClose} 
         style={{ 
           position: 'absolute', 
@@ -105,7 +115,7 @@ export function DiagOverlay({ ws, vpW, vpH, activeScreen, screenCol, screenRow, 
         </div>
       )}
 
-      {ws.panes.filter(p => Math.floor(p.xPct) !== screenCol || Math.floor(p.yPct) !== screenRow).length > 0 && (
+      {ws.panes.filter((p) => !paneOnScreen(p, screenCol, screenRow)).length > 0 && (
         <div className="diag-section">
           <div className="diag-header">Other screens</div>
           <table className="diag-table diag-panes">
@@ -118,7 +128,7 @@ export function DiagOverlay({ ws, vpW, vpH, activeScreen, screenCol, screenRow, 
             </thead>
             <tbody>
               {ws.panes
-                .filter(p => Math.floor(p.xPct) !== screenCol || Math.floor(p.yPct) !== screenRow)
+                .filter((p) => !paneOnScreen(p, screenCol, screenRow))
                 .map(p => (
                   <tr key={p.id}>
                     <td className="diag-id">{shortId(p.id)}</td>
@@ -127,7 +137,7 @@ export function DiagOverlay({ ws, vpW, vpH, activeScreen, screenCol, screenRow, 
                     <td className="diag-num">{fmt2(p.yPct)}</td>
                     <td className="diag-num">{fmt2(p.wPct)}</td>
                     <td className="diag-num">{fmt2(p.hPct)}</td>
-                    <td className="diag-px">s{Math.floor(p.yPct) * 2 + Math.floor(p.xPct)}</td>
+                    <td className="diag-px">s{paneScreenIndex(p)}</td>
                   </tr>
                 ))}
             </tbody>

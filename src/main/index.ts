@@ -14,13 +14,17 @@ import { FolderSizeManager } from './jobs/folderSizeManager.js'
 import { TerminalManager } from './pty/terminalManager.js'
 import { BrowserPaneManager } from './browser/browserPaneManager.js'
 import { TerminalSessionStore } from './pty/terminalSessionStore.js'
-import { isNavigationAllowed } from './security/browserSecurity.js'
+import { isExternalUrlAllowed } from './security/browserSecurity.js'
+import { syncBrowserGuestHostsFromSettings } from './security/syncGuestHosts.js'
+import { assertMaxBytes, IPC_LIMITS } from './ipc/ipcLimits.js'
 import * as archive from './archive/archiveService.js'
 import { saveMarkdownToVault, listVaultNotes, readVaultNote, deleteVaultNote } from './notes/notesService.js'
 import type { AppStateSnapshot, PaneState, TerminalSessionMeta } from '../shared/contracts.js'
 import { randomUUID } from 'node:crypto'
 import { installAppMenu } from './menu.js'
 import { registerApiToolkitHandlers } from './api-toolkit/ipcHandlers.js'
+import { registerBrowserIpcHandlers } from './ipc/registerBrowserIpc.js'
+import { registerFsIpcHandlers } from './ipc/registerFsIpc.js'
 
 registerPrivilegedAppScheme()
 
@@ -87,24 +91,6 @@ function focusedOrMain(): BrowserWindow | null {
   return BrowserWindow.getFocusedWindow() ?? mainWindow
 }
 
-function globToRegex(pattern: string): RegExp {
-  // Escape regex special chars except glob ones (* ? { } ,)
-  let p = pattern.replace(/[.+^$()|[\]\\]/g, '\\$&')
-  // {a,b,c} → (?:a|b|c)
-  p = p.replace(/\{([^}]+)\}/g, (_, inner: string) =>
-    `(?:${inner.split(',').map((s: string) => s.trim()).join('|')})`
-  )
-  // ** → placeholder first to avoid the single-* step clobbering it
-  p = p.replace(/\*\*\/?/g, '\x00')
-  // * → match any char except path separator
-  p = p.replace(/\*/g, '[^\\/]*')
-  // ? → match any single char except path separator
-  p = p.replace(/\?/g, '[^\\/]')
-  // restore ** placeholder as match-anything (including separators)
-  p = p.replace(/\x00/g, '.*')
-  return new RegExp(`^${p}$`, 'i')
-}
-
 function registerIpcHandlers(): void {
   if (ipcRegistered) return
   ipcRegistered = true
@@ -114,14 +100,22 @@ function registerIpcHandlers(): void {
   )
 
   ipcMain.handle('clipboard:writeText', (_e, text: string) => {
+    assertMaxBytes('clipboard:writeText', text, IPC_LIMITS.clipboardText)
     clipboard.writeText(text)
   })
 
   ipcMain.handle('state:get', (): AppStateSnapshot => stateStore!.getSnapshot())
 
   ipcMain.handle('state:set', (_e, patch: Partial<AppStateSnapshot>) => {
+    const estimate = JSON.stringify(patch).length
+    if (estimate > IPC_LIMITS.stateSetJsonEstimate) {
+      throw new Error(`state:set patch too large (${estimate} bytes)`)
+    }
     stateStore!.setSnapshot(patch)
     stateStore!.applyRecentlyClosedRetention()
+    if (patch.settings !== undefined) {
+      syncBrowserGuestHostsFromSettings(stateStore!.getSnapshot().settings)
+    }
     return stateStore!.getSnapshot()
   })
 
@@ -194,228 +188,31 @@ function registerIpcHandlers(): void {
     return stateStore!.getSnapshot()
   })
 
-  ipcMain.handle('fs:readUtf8', async (_e, filePath: string) => {
-    const abs = resolve(filePath)
-    return readFile(abs, 'utf8')
+  registerFsIpcHandlers({
+    getFileJobs,
+    getFolderSizeMgr,
+    getTerminals
   })
 
-  ipcMain.handle('fs:writeUtf8', async (_e, filePath: string, text: string) => {
-    await mkdir(dirname(filePath), { recursive: true })
-    await writeFile(filePath, text, 'utf8')
-  })
-
-  ipcMain.handle('fs:listDir', async (_e, dirPath: string) => {
-    const abs = resolve(dirPath)
-    const entries = await readdir(abs, { withFileTypes: true })
-    const results = await Promise.allSettled(
-      entries.map(async (e) => {
-        const p = join(abs, e.name)
-        const st = await stat(p)
-        return {
-          name: e.name,
-          path: p,
-          isDirectory: e.isDirectory(),
-          size: st.size,
-          mtimeMs: st.mtimeMs
-        }
-      })
-    )
-    const out = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
-    out.sort((a, b) => {
-      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
-      return a.name.localeCompare(b.name)
-    })
-    return out
-  })
-
-  ipcMain.handle(
-    'fs:quickOp',
-    async (_e, op: 'mkdir' | 'delete', target: string, paths?: string[]) => {
-      if (op === 'mkdir') {
-        await mkdir(target, { recursive: true })
-        return
-      }
-      if (paths?.length) {
-        for (const p of paths) await rm(resolve(p), { recursive: true, force: true })
-      }
-    }
-  )
-
-  ipcMain.handle('fs:chmod', async (_e, filePath: string, mode: string) => {
-    const { chmod } = await import('node:fs/promises')
-    await chmod(resolve(filePath), parseInt(mode, 8))
-  })
-
-  ipcMain.handle('fs:createFile', async (_e, filePath: string) => {
-    const { writeFile } = await import('node:fs/promises')
-    await writeFile(resolve(filePath), '', { flag: 'wx' }) // wx = fail if exists
-  })
-
-  ipcMain.handle('fs:findFiles', async (_e, root: string, pattern: string, recursive: boolean) => {
-    const abs = resolve(root)
-    const regex = globToRegex(pattern || '*')
-    const matchRelPath = pattern.includes('/') || pattern.includes('\\') || pattern.includes('**')
-    const results: { name: string; path: string; isDirectory: boolean; size: number; mtimeMs: number }[] = []
-
-    const collect = async (dir: string): Promise<void> => {
-      if (results.length >= 5000) return
-      let entries: import('node:fs').Dirent[]
-      try {
-        entries = await readdir(dir, { withFileTypes: true })
-      } catch {
-        return
-      }
-      for (const entry of entries) {
-        if (results.length >= 5000) break
-        const p = join(dir, entry.name)
-        const isDir = entry.isDirectory()
-        const testStr = matchRelPath ? p.slice(abs.length + 1) : entry.name
-        if (regex.test(testStr)) {
-          try {
-            const st = await stat(p)
-            results.push({ name: entry.name, path: p, isDirectory: isDir, size: st.size, mtimeMs: st.mtimeMs })
-          } catch { /* skip inaccessible */ }
-        }
-        if (isDir && recursive) await collect(p)
-      }
-    }
-
-    await collect(abs)
-    return results
-  })
-
-  ipcMain.handle(
-    'fileJob:start',
-    (_e, kind: 'copy' | 'move' | 'delete', sources: string[], destDir?: string) => {
-      if (kind === 'delete') {
-        return getFileJobs().runJob('delete', sources.map((s) => resolve(s)))
-      }
-      if (!destDir) throw new Error('destDir required')
-      return getFileJobs().runJob(kind, sources.map((s) => resolve(s)), resolve(destDir))
-    }
-  )
-
-  ipcMain.handle('fileJob:cancel', () => {
-    getFileJobs().cancel()
-  })
-
-  ipcMain.handle('fs:startFolderSize', (_e, dirPath: string) => {
-    return getFolderSizeMgr().start(resolve(dirPath))
-  })
-
-  ipcMain.handle('fs:cancelFolderSize', (_e, requestId: string) => {
-    getFolderSizeMgr().cancel(requestId)
-  })
-
-  ipcMain.handle('pty:spawn', (_e, paneId: string, cols: number, rows: number, cwd?: string, cmd?: string, args?: string[]) => {
-    getTerminals().spawn(paneId, cols, rows, cwd, cmd, args)
-  })
-
-  ipcMain.handle('pty:write', (_e, paneId: string, data: string) => {
-    getTerminals().write(paneId, data)
-  })
-
-  ipcMain.handle('pty:resize', (_e, paneId: string, cols: number, rows: number) => {
-    getTerminals().resize(paneId, cols, rows)
-  })
-
-  ipcMain.handle('pty:dispose', (_e, paneId: string) => {
-    getTerminals().dispose(paneId)
-  })
-
-  ipcMain.handle(
-    'browser:layout',
-    (_e, paneId: string, bounds: Electron.Rectangle) => {
-      getBrowserPanes().layout(paneId, bounds)
-    }
-  )
-
-  ipcMain.handle('browser:navigate', (_e, paneId: string, url: string) => {
-    getBrowserPanes().navigate(paneId, url)
-  })
-
-  ipcMain.handle('browser:goBack', (_e, paneId: string) => {
-    getBrowserPanes().goBack(paneId)
-  })
-
-  ipcMain.handle('browser:goForward', (_e, paneId: string) => {
-    getBrowserPanes().goForward(paneId)
-  })
-
-  ipcMain.handle('browser:stop', (_e, paneId: string) => {
-    getBrowserPanes().stop(paneId)
-  })
-
-  ipcMain.handle('browser:getHistory', (_e, paneId: string) => {
-    return getBrowserPanes().getHistory(paneId)
-  })
-
-  ipcMain.handle('browser:clearHistory', (_e, paneId: string) => {
-    getBrowserPanes().clearHistory(paneId)
-  })
-
-  ipcMain.handle('browser:suspend', (_e, paneId: string) => {
-    getBrowserPanes().suspend(paneId)
-  })
-
-  ipcMain.handle('browser:destroy', (_e, paneId: string) => {
-    getBrowserPanes().destroy(paneId)
-  })
-
-  ipcMain.handle('browser:reload', (_e, paneId: string) => {
-    getBrowserPanes().reload(paneId)
-  })
-
-  ipcMain.handle('browser:harStart', (_e, paneId: string) => {
-    getBrowserPanes().harStart(paneId)
-  })
-
-  ipcMain.handle('browser:harStop', (_e, paneId: string) => {
-    getBrowserPanes().harStop(paneId)
-  })
-
-  ipcMain.handle('browser:harGetData', (_e, paneId: string) => {
-    return getBrowserPanes().harGetData(paneId)
-  })
-
-  ipcMain.handle('browser:harIsRecording', (_e, paneId: string) => {
-    return getBrowserPanes().harIsRecording(paneId)
-  })
-
-  ipcMain.handle('browser:harGetEntryCount', (_e, paneId: string) => {
-    return getBrowserPanes().harGetEntryCount(paneId)
-  })
-
-  ipcMain.handle('browser:openDevTools', (_e, paneId: string) => {
-    getBrowserPanes().openDevTools(paneId)
-  })
-
-  ipcMain.handle('browser:setZoom', (_e, paneId: string, delta: number) => {
-    return getBrowserPanes().setZoom(paneId, delta)
-  })
-
-  ipcMain.handle('browser:resetZoom', (_e, paneId: string) => {
-    getBrowserPanes().resetZoom(paneId)
-  })
-
-  ipcMain.handle('browser:findInPage', (_e, paneId: string, text: string, forward: boolean) => {
-    getBrowserPanes().findInPage(paneId, text, forward)
-  })
-
-  ipcMain.handle('browser:stopFindInPage', (_e, paneId: string) => {
-    getBrowserPanes().stopFindInPage(paneId)
-  })
-
-  ipcMain.handle('browser:getPageInfo', async (_e, paneId: string) => {
-    return getBrowserPanes().getPageInfo(paneId)
+  registerBrowserIpcHandlers({
+    getBrowserPanes,
+    isPackaged: app.isPackaged
   })
 
   ipcMain.handle('shell:openExternal', async (_e, url: string) => {
-    if (isNavigationAllowed(url)) await shell.openExternal(url)
+    if (isExternalUrlAllowed(url)) await shell.openExternal(url)
   })
 
   ipcMain.handle('shell:openPath', async (_e, filePath: string) => {
+    if (!filePath || filePath.includes('\0')) throw new Error('Invalid path')
     const abs = normalize(resolve(filePath))
+    try {
+      const st = await stat(abs)
+      if (!st.isFile() && !st.isDirectory()) throw new Error('Not a file or directory')
+    } catch (e) {
+      if (e instanceof Error && e.message === 'Not a file or directory') throw e
+      throw new Error('Path does not exist')
+    }
     return shell.openPath(abs)
   })
 
@@ -454,6 +251,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle(
     'notes:saveVault',
     async (_e, vaultPath: string, subfolder: string, filename: string, body: string) => {
+      assertMaxBytes('notes:saveVault', body, IPC_LIMITS.notesBody)
       return saveMarkdownToVault(vaultPath, subfolder, filename, body)
     }
   )
@@ -507,11 +305,6 @@ function registerIpcHandlers(): void {
     stateStore!.deleteWorkspace(wsId)
     stateStore!.flushToml()
     return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('fs:rename', async (_e, oldPath: string, newPath: string) => {
-    const { rename } = await import('node:fs/promises')
-    await rename(oldPath, newPath)
   })
 
   ipcMain.handle('config:getTomlPath', () => stateStore!.getTomlPath())
@@ -574,6 +367,7 @@ async function createWindow(): Promise<void> {
 
   stateStore = new StateStore()
   stateStore.setMainWindow(win)
+  syncBrowserGuestHostsFromSettings(stateStore.getSnapshot().settings)
 
   registerIpcHandlers()
 

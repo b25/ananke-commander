@@ -3,6 +3,7 @@ import Store from 'electron-store'
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { TerminalSessionMeta } from '../../shared/contracts.js'
+import { assertValidSessionId } from './sessionId.js'
 
 interface HistoryData {
   sessions: TerminalSessionMeta[]
@@ -21,6 +22,7 @@ export class TerminalSessionStore {
   }
 
   async save(meta: TerminalSessionMeta, text: string, maxSessions: number): Promise<void> {
+    assertValidSessionId(meta.id)
     await mkdir(this.sessionsDir, { recursive: true })
     await writeFile(join(this.sessionsDir, `${meta.id}.txt`), text, 'utf8')
     const sessions = this.store.get('sessions', [])
@@ -37,6 +39,7 @@ export class TerminalSessionStore {
   }
 
   async read(id: string): Promise<string | null> {
+    assertValidSessionId(id)
     try {
       return await readFile(join(this.sessionsDir, `${id}.txt`), 'utf8')
     } catch {
@@ -45,6 +48,7 @@ export class TerminalSessionStore {
   }
 
   async delete(id: string): Promise<void> {
+    assertValidSessionId(id)
     const sessions = this.store.get('sessions', [])
     this.store.set('sessions', sessions.filter(s => s.id !== id))
     try { await unlink(join(this.sessionsDir, `${id}.txt`)) } catch { /* ignore */ }

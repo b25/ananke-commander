@@ -32,7 +32,7 @@ export function PrivacySettings({ value, onChange, onPurgeRecentlyClosed }: Prop
   return (
     <>
       <p className="muted">Retention limits (saved with Settings)</p>
-      {numField('Terminal scrollback lines', value.terminalHistoryMax, (n) =>
+      {numField('Terminal session history (saved on quit)', value.terminalHistoryMax, (n) =>
         onChange({ ...value, terminalHistoryMax: n })
       )}
       {numField('Browser recent URLs', value.browserHistoryMax, (n) =>

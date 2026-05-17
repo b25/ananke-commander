@@ -23,7 +23,7 @@ function VariableRow({
         onChange={(e) => onChange({ value: e.target.value })}
       />
       <input className="kv-check" type="checkbox" checked={v.isSecret} onChange={(e) => onChange({ isSecret: e.target.checked })} title="Secret" />
-      <span className="kv-del" onClick={onDelete}>×</span>
+      <button type="button" className="kv-del" aria-label="Delete variable" onClick={onDelete}>×</button>
     </div>
   )
 }
@@ -117,8 +117,8 @@ export function EnvEditor() {
             }}
             autoFocus
           />
-          <span className="sidebar-action-btn" onClick={submitPrompt} title="Confirm">✓</span>
-          <span className="sidebar-action-btn" onClick={() => setInlinePrompt(null)} title="Cancel">✕</span>
+          <button type="button" className="sidebar-action-btn" onClick={submitPrompt} title="Confirm" aria-label="Confirm">✓</button>
+          <button type="button" className="sidebar-action-btn" onClick={() => setInlinePrompt(null)} title="Cancel" aria-label="Cancel">✕</button>
         </div>
       )}
 
@@ -133,14 +133,14 @@ export function EnvEditor() {
           <option value="">No environment</option>
           {environments.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
-        <span className="sidebar-action-btn" title="New environment" onClick={newEnv}>+</span>
+        <button type="button" className="sidebar-action-btn" title="New environment" aria-label="New environment" onClick={newEnv}>+</button>
       </div>
 
       {/* Environment list */}
       {environments.length === 0 && !inlinePrompt && (
         <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 10, textAlign: 'center' }}>
           No environments.<br />
-          <span className="text-accent" style={{ cursor: 'pointer' }} onClick={newEnv}>Create one</span>
+          <button type="button" className="text-accent" style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }} onClick={newEnv}>Create one</button>
         </div>
       )}
 
@@ -150,10 +150,20 @@ export function EnvEditor() {
             className="sidebar-section-header"
             style={{ fontSize: 10, color: env.id === activeEnvironmentId ? 'var(--text-accent)' : 'var(--text-1)', cursor: 'pointer' }}
             onClick={() => setEditingId(editingId === env.id ? null : env.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setEditingId(editingId === env.id ? null : env.id)
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-expanded={editingId === env.id}
+            aria-label={`Toggle environment ${env.name}`}
           >
             <span style={{ flex: 1 }}>{env.name}{env.id === activeEnvironmentId ? ' ✓' : ''}</span>
-            <span className="sidebar-action-btn" title="Set active" onClick={(e) => { e.stopPropagation(); setActiveEnvironment(env.id) }}>▶</span>
-            <span className="sidebar-action-btn" title="Delete" onClick={(e) => { e.stopPropagation(); deleteEnv(env.id) }}>×</span>
+            <button type="button" className="sidebar-action-btn" title="Set active" aria-label={`Set ${env.name} active`} onClick={(e) => { e.stopPropagation(); setActiveEnvironment(env.id) }}>▶</button>
+            <button type="button" className="sidebar-action-btn" title="Delete" aria-label={`Delete ${env.name}`} onClick={(e) => { e.stopPropagation(); deleteEnv(env.id) }}>×</button>
           </div>
           {editingId === env.id && (
             <div style={{ padding: '6px 8px' }}>
@@ -167,7 +177,7 @@ export function EnvEditor() {
                   />
                 ))}
               </div>
-              <div className="kv-add-btn" onClick={() => addVar(env)}>+ Add variable</div>
+              <button type="button" className="kv-add-btn" onClick={() => addVar(env)}>+ Add variable</button>
             </div>
           )}
         </div>

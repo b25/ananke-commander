@@ -7,7 +7,7 @@ Workspace-oriented **Electron** desktop shell: multiple workspaces, tiled panes,
 - **Workspaces** — rail switcher; pane layout persisted in `electron-store`.
 - **File browser** — two lists per pane, path bar, **double-click** or **Enter** (single selection, focused list) to open a **folder** or launch a **file** with the OS default app; **F5** copy / **F6** move (to another file-browser pane in the workspace), **F8** delete; background **worker** jobs with progress and **Cancel**; **Arc** for archives.
 - **Terminal** — `node-pty` in main, **xterm.js** + optional WebGL in the shell; scrollback size follows **Settings → Terminal scrollback lines**.
-- **Browser** — `WebContentsView`, isolated session, allowlisted navigation (`example.com`, `localhost`, …); recent URL list capped by **Settings → Browser recent URLs**.
+- **Browser** — `WebContentsView`, isolated session; **http(s) navigation is allowlisted** to `localhost`, `127.0.0.1`, `::1`, `example.com`, and `www.example.com` (see `src/main/security/browserSecurity.ts`). Only `about:blank` is allowed for `about:`; `data:` and other schemes are blocked. Recent URL list is capped by **Settings → Browser recent URLs**.
 - **Notes** — edit Markdown, copy, export to file, **Save to vault** (vault path + subfolder in Settings).
 - **Privacy** — private mode (skip recently-closed recording), retention fields, purge recently closed; settings persisted when you click **Save settings**.
 
@@ -42,6 +42,7 @@ Then run Electron against `out/` the way you normally launch the app (e.g. from 
 | `npm run build:app` | Build main, preload, and renderer into `out/` |
 | `npm run build` | `build:app` then **electron-builder** → installers under `release/` |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run test` | Node **22+**; runs `node --experimental-strip-types` tests for browser policy and `app://` path containment |
 
 ### macOS packaging without signing
 

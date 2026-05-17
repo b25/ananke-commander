@@ -151,6 +151,12 @@ export function FileList({
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (displayEntries.length === 0) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'PageDown' || e.key === 'PageUp' || e.key === 'Home' || e.key === 'End') {
+        e.preventDefault()
+      }
+      return
+    }
     const cursorIdx = getCursorIdx()
 
     switch (e.key) {
@@ -291,6 +297,9 @@ export function FileList({
       ref={wrapRef}
       className={`file-list-wrap ${focused ? 'focused' : ''}`}
       tabIndex={0}
+      role="listbox"
+      aria-label={`Files in ${path}`}
+      aria-multiselectable="true"
       onKeyDown={onKeyDown}
     >
       {/* Horizontal scroll wrapper — prevents name column from shrinking on pane resize */}
@@ -364,6 +373,8 @@ export function FileList({
                   <div
                     key={entry.path}
                     className={`file-row ${isSelected ? 'selected' : ''}`}
+                    role="option"
+                    aria-selected={isSelected}
                     style={{
                       position: 'absolute',
                       top: 0,

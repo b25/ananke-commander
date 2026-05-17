@@ -23,6 +23,24 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
   const [findText, setFindText] = useState('')
   const findRef = useRef<HTMLInputElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
+  const focusBeforeFindRef = useRef<HTMLElement | null>(null)
+
+  const closeFind = () => {
+    setFindOpen(false)
+    void window.ananke.browser.stopFindInPage(pane.id)
+    const restore = focusBeforeFindRef.current
+    focusBeforeFindRef.current = null
+    if (restore?.isConnected) restore.focus()
+    else urlRef.current?.focus()
+  }
+
+  const openFind = () => {
+    focusBeforeFindRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    setFindOpen(true)
+    setTimeout(() => findRef.current?.focus(), 50)
+  }
 
   // Keep a ref to the latest pane so IPC callbacks never use stale closures
   const paneRef = useRef(pane)
@@ -270,17 +288,17 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
       <div className="pane-body browser-pane-body">
         <div className="browser-toolbar">
           <div className="browser-toolbar__nav">
-            <button type="button" className="browser-toolbar__btn" onClick={() => window.ananke.browser.goBack(pane.id)} title="Back">
+            <button type="button" className="browser-toolbar__btn" onClick={() => window.ananke.browser.goBack(pane.id)} title="Back" aria-label="Back">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
             </button>
-            <button type="button" className="browser-toolbar__btn" onClick={() => window.ananke.browser.goForward(pane.id)} title="Forward">
+            <button type="button" className="browser-toolbar__btn" onClick={() => window.ananke.browser.goForward(pane.id)} title="Forward" aria-label="Forward">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </button>
             {loading
-              ? <button type="button" className="browser-toolbar__btn" onClick={() => window.ananke.browser.stop(pane.id)} title="Stop loading">
+              ? <button type="button" className="browser-toolbar__btn" onClick={() => window.ananke.browser.stop(pane.id)} title="Stop loading" aria-label="Stop loading">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
-              : <button type="button" className="browser-toolbar__btn" onClick={() => void window.ananke.browser.reload(pane.id)} title="Reload">
+              : <button type="button" className="browser-toolbar__btn" onClick={() => void window.ananke.browser.reload(pane.id)} title="Reload" aria-label="Reload">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
                 </button>
             }
@@ -301,15 +319,15 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
               placeholder="Enter URL or search..."
               spellCheck={false}
             />
-            <button type="submit" className="browser-toolbar__btn" title="Go">
+            <button type="submit" className="browser-toolbar__btn" title="Go" aria-label="Go">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </button>
           </form>
-          <button type="button" className="browser-toolbar__btn" title="Open in system browser"
+          <button type="button" className="browser-toolbar__btn" title="Open in system browser" aria-label="Open in system browser"
             onClick={() => void window.ananke.shell.openExternal(pane.url)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
-          <BrowserMenu paneId={pane.id} onFindToggle={() => { setFindOpen(v => !v); setTimeout(() => findRef.current?.focus(), 50) }} onClipToVault={() => void clipPageToVault(pane.id)} />
+          <BrowserMenu paneId={pane.id} onFindToggle={() => (findOpen ? closeFind() : openFind())} onClipToVault={() => void clipPageToVault(pane.id)} />
         </div>
         {findOpen && (
           <div className="browser-find-bar">
@@ -324,17 +342,17 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
                 }}
                 placeholder="Find in page..."
                 onKeyDown={(e) => {
-                  if (e.key === 'Escape') { setFindOpen(false); void window.ananke.browser.stopFindInPage(pane.id) }
+                  if (e.key === 'Escape') { e.preventDefault(); closeFind() }
                   if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); void window.ananke.browser.findInPage(pane.id, findText, false) }
                 }}
               />
-              <button type="button" className="browser-toolbar__btn" title="Previous" onClick={() => void window.ananke.browser.findInPage(pane.id, findText, false)}>
+              <button type="button" className="browser-toolbar__btn" title="Previous" aria-label="Find previous" onClick={() => void window.ananke.browser.findInPage(pane.id, findText, false)}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
               </button>
-              <button type="button" className="browser-toolbar__btn" title="Next" onClick={() => void window.ananke.browser.findInPage(pane.id, findText, true)}>
+              <button type="button" className="browser-toolbar__btn" title="Next" aria-label="Find next" onClick={() => void window.ananke.browser.findInPage(pane.id, findText, true)}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
               </button>
-              <button type="button" className="browser-toolbar__btn" title="Close find" onClick={() => { setFindOpen(false); void window.ananke.browser.stopFindInPage(pane.id) }}>
+              <button type="button" className="browser-toolbar__btn" title="Close find" aria-label="Close find in page" onClick={closeFind}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
             </form>

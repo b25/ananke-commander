@@ -1,6 +1,6 @@
-import { BrowserWindow, Menu, MenuItem, WebContentsView, clipboard, shell } from 'electron'
+import { BrowserWindow, Menu, MenuItem, WebContentsView, app, clipboard, shell } from 'electron'
 import Store from 'electron-store'
-import { attachGuestWebContentsGuards, hardenGuestSession, isNavigationAllowed } from '../security/browserSecurity.js'
+import { attachGuestWebContentsGuards, hardenGuestSession, isExternalUrlAllowed, isNavigationAllowed } from '../security/browserSecurity.js'
 import { HarCapture } from './harCapture.js'
 
 export type HistoryEntry = { url: string; timestamp: number }
@@ -227,7 +227,7 @@ export class BrowserPaneManager {
         label: `Search Google for "${params.selectionText.slice(0, 30)}${params.selectionText.length > 30 ? '...' : ''}"`,
         click: () => {
           const url = 'https://www.google.com/search?q=' + encodeURIComponent(params.selectionText)
-          void wc.loadURL(url)
+          if (isExternalUrlAllowed(url)) void shell.openExternal(url)
         }
       }))
       menu.append(new MenuItem({ type: 'separator' }))
@@ -237,7 +237,7 @@ export class BrowserPaneManager {
     if (params.linkURL) {
       menu.append(new MenuItem({
         label: 'Open Link in System Browser',
-        click: () => { if (isNavigationAllowed(params.linkURL)) void shell.openExternal(params.linkURL) }
+        click: () => { if (isExternalUrlAllowed(params.linkURL)) void shell.openExternal(params.linkURL) }
       }))
       menu.append(new MenuItem({
         label: 'Copy Link Address',
@@ -271,11 +271,12 @@ export class BrowserPaneManager {
     }))
     menu.append(new MenuItem({ type: 'separator' }))
 
-    // DevTools
-    menu.append(new MenuItem({
-      label: 'Inspect Element',
-      click: () => { wc.inspectElement(params.x, params.y) }
-    }))
+    if (!app.isPackaged) {
+      menu.append(new MenuItem({
+        label: 'Inspect Element',
+        click: () => { wc.inspectElement(params.x, params.y) }
+      }))
+    }
 
     menu.popup()
   }
@@ -288,7 +289,7 @@ export class BrowserPaneManager {
       wc.executeJavaScript('document.title').catch(() => ''),
       wc.executeJavaScript('window.location.href').catch(() => ''),
       wc.executeJavaScript('window.getSelection().toString()').catch(() => ''),
-      wc.executeJavaScript('document.body.innerText.slice(0, 50000)').catch(() => '')
+      wc.executeJavaScript('document.body.innerText.slice(0, 8192)').catch(() => '')
     ])
     return { title, url, selectedText, bodyText }
   }

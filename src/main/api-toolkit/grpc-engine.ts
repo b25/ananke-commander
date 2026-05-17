@@ -6,9 +6,9 @@
  */
 
 import * as grpc from '@grpc/grpc-js'
-import * as protoLoader from '@grpc/proto-loader'
 import * as protobuf from 'protobufjs'
 import { GrpcReflection } from 'grpc-js-reflection-client'
+import { createHash } from 'node:crypto'
 import type { GrpcRequest, GrpcResponse, GrpcMessage, GrpcStatus, TlsConfig, ProtoDiscovery, ProtoSource } from '../../shared/api-toolkit-contracts.js'
 import {
   buildRootFromText,
@@ -26,20 +26,41 @@ const STATUS_NAMES: Record<number, string> = {
   14: 'UNAVAILABLE', 15: 'DATA_LOSS', 16: 'UNAUTHENTICATED',
 }
 
-// Root cache: keyed by a stable hash of proto source
+const ROOT_CACHE_MAX = 32
 const rootCache = new Map<string, protobuf.Root>()
 
 function sourceKey(req: GrpcRequest): string {
   const s = req.protoSource
-  if (s.type === 'file') return `file:${s.entryFile}:${s.files.map((f) => f.name).join(',')}:${req.endpoint}`
+  if (s.type === 'file') {
+    const digest = createHash('sha256')
+    digest.update(s.entryFile)
+    for (const f of s.files) {
+      digest.update(f.name)
+      digest.update('\x00')
+      digest.update(f.content)
+      digest.update('\x00')
+    }
+    return `file:${req.endpoint}:${digest.digest('hex')}`
+  }
   if (s.type === 'reflection') return `reflection:${req.endpoint}`
-  if (s.type === 'text') return `text:${s.content.slice(0, 64)}`
+  if (s.type === 'text') return `text:${createHash('sha256').update(s.content).digest('hex')}`
   return 'unknown'
 }
 
-async function getRoot(req: GrpcRequest): Promise<protobuf.Root> {
-  const key = sourceKey(req)
-  if (rootCache.has(key)) return rootCache.get(key)!
+function setRootCache(key: string, root: protobuf.Root): void {
+  while (rootCache.size >= ROOT_CACHE_MAX) {
+    const first = rootCache.keys().next().value
+    if (!first) break
+    rootCache.delete(first)
+  }
+  rootCache.set(key, root)
+}
+
+async function getRoot(req: GrpcRequest, bustCache = false): Promise<protobuf.Root> {
+  const key = bustCache && req.protoSource.type === 'reflection'
+    ? `reflection:${req.endpoint}:${Date.now()}`
+    : sourceKey(req)
+  if (!bustCache && rootCache.has(key)) return rootCache.get(key)!
 
   let root: protobuf.Root
 
@@ -49,7 +70,6 @@ async function getRoot(req: GrpcRequest): Promise<protobuf.Root> {
   } else if (src.type === 'file') {
     root = buildRootFromFiles(src.files, src.entryFile)
   } else {
-    // server reflection — list all services, fetch Descriptor for each, merge roots
     const creds = buildCredentials(req.tls)
     const reflectionClient = new GrpcReflection(req.endpoint, creds)
     const serviceNames = await reflectionClient.listServices()
@@ -57,7 +77,6 @@ async function getRoot(req: GrpcRequest): Promise<protobuf.Root> {
     for (const svc of serviceNames) {
       try {
         const descriptor = await reflectionClient.getDescriptorBySymbol(svc)
-        // grpc-js-reflection-client bundles protobufjs@7; cast to our @8 Root (structurally compatible at runtime)
         roots.push(descriptor.getProtobufJsRoot() as unknown as protobuf.Root)
       } catch { /* skip unavailable service */ }
     }
@@ -65,7 +84,7 @@ async function getRoot(req: GrpcRequest): Promise<protobuf.Root> {
     root.resolveAll()
   }
 
-  rootCache.set(key, root)
+  setRootCache(key, root)
   return root
 }
 
@@ -74,7 +93,7 @@ function mergeRoots(roots: protobuf.Root[]): protobuf.Root {
   const base = roots[0]
   for (const other of roots.slice(1)) {
     for (const nested of other.nestedArray) {
-      try { base.add(nested) } catch { /* duplicate — already present */ }
+      try { base.add(nested) } catch { /* duplicate */ }
     }
   }
   return base
@@ -94,9 +113,7 @@ function buildCredentials(tls: TlsConfig): grpc.ChannelCredentials {
   const keyBuffer = tls.clientKey ? Buffer.from(tls.clientKey) : null
 
   return grpc.credentials.createSsl(caBuffer, keyBuffer, certBuffer, {
-    checkServerIdentity: tls.insecure
-      ? () => undefined
-      : undefined,
+    rejectUnauthorized: !tls.insecure,
   })
 }
 
@@ -106,7 +123,11 @@ function buildMetadata(kvs: GrpcRequest['metadata']): grpc.Metadata {
     if (kv.enabled && kv.key.trim()) {
       const k = kv.key.trim().toLowerCase()
       if (k.endsWith('-bin')) {
-        meta.add(k, Buffer.from(kv.value, 'base64'))
+        try {
+          meta.add(k, Buffer.from(kv.value, 'base64'))
+        } catch {
+          throw new Error(`Invalid base64 for metadata ${k}`)
+        }
       } else {
         meta.add(k, kv.value)
       }
@@ -130,7 +151,6 @@ function grpcStatusCode(code: grpc.status): GrpcStatus {
 function parseServiceMethod(serviceMethod: string): [string, string] {
   const parts = serviceMethod.split('/')
   if (parts.length === 2) return [parts[0], parts[1]]
-  // handle pkg.Service/Method
   const last = parts[parts.length - 1]
   const svc = parts.slice(0, -1).join('.')
   return [svc, last]
@@ -150,59 +170,56 @@ function resolveTypes(root: protobuf.Root, serviceMethod: string): { reqType: st
   }
 }
 
-// ─── Discover ─────────────────────────────────────────────────────────────────
-
 export async function discoverProto(req: GrpcRequest): Promise<ProtoDiscovery> {
-  const root = await getRoot(req)
+  const root = await getRoot(req, true)
   return discoverServices(root)
 }
-
-// ─── Unary call ───────────────────────────────────────────────────────────────
 
 export async function grpcUnary(req: GrpcRequest): Promise<GrpcResponse> {
   const start = Date.now()
   const root = await getRoot(req)
   const { reqType, respType } = resolveTypes(root, req.serviceMethod)
+  const [, methodName] = parseServiceMethod(req.serviceMethod)
+  const reqBytes = jsonToMessage(root, reqType, JSON.parse(req.messageJson))
 
-  const [svcName, methodName] = parseServiceMethod(req.serviceMethod)
   const creds = buildCredentials(req.tls)
   const client = new grpc.Client(req.endpoint, creds)
-
-  const reqBytes = jsonToMessage(root, reqType, JSON.parse(req.messageJson))
 
   const deadline = req.deadline && req.deadline > 0
     ? new Date(Date.now() + req.deadline)
     : undefined
 
-  return new Promise<GrpcResponse>((resolve, reject) => {
-    const call = (client as unknown as Record<string, (...args: unknown[]) => grpc.ClientUnaryCall>)[methodName](
-      reqBytes,
-      buildMetadata(req.metadata),
-      deadline ? { deadline } : {},
-      (err: grpc.ServiceError | null, response: Uint8Array, trailer: grpc.Metadata) => {
-        const status: GrpcStatus = err
-          ? { code: err.code ?? grpc.status.UNKNOWN, codeName: STATUS_NAMES[err.code ?? 2] ?? 'UNKNOWN', details: err.details ?? err.message }
-          : grpcStatusCode(grpc.status.OK)
+  try {
+    return await new Promise<GrpcResponse>((resolve, reject) => {
+      const call = (client as unknown as Record<string, (...args: unknown[]) => grpc.ClientUnaryCall>)[methodName](
+        reqBytes,
+        buildMetadata(req.metadata),
+        deadline ? { deadline } : {},
+        (err: grpc.ServiceError | null, response: Uint8Array, trailer: grpc.Metadata) => {
+          const status: GrpcStatus = err
+            ? { code: err.code ?? grpc.status.UNKNOWN, codeName: STATUS_NAMES[err.code ?? 2] ?? 'UNKNOWN', details: err.details ?? err.message }
+            : grpcStatusCode(grpc.status.OK)
 
-        const messages: GrpcMessage[] = []
-        if (response) {
-          messages.push({ json: JSON.stringify(messageToJson(root, respType, response), null, 2), timestamp: Date.now(), direction: 'recv' })
+          const messages: GrpcMessage[] = []
+          if (response) {
+            messages.push({ json: JSON.stringify(messageToJson(root, respType, response), null, 2), timestamp: Date.now(), direction: 'recv' })
+          }
+
+          resolve({
+            messages,
+            status,
+            metadata: {},
+            trailers: trailer ? metadataToRecord(trailer) : {},
+            timings: { total: Date.now() - start },
+          })
         }
-
-        resolve({
-          messages,
-          status,
-          metadata: {},
-          trailers: trailer ? metadataToRecord(trailer) : {},
-          timings: { total: Date.now() - start },
-        })
-      }
-    )
-    void call
-  }).finally(() => client.close())
+      )
+      void call
+    })
+  } finally {
+    client.close()
+  }
 }
-
-// ─── Streaming ────────────────────────────────────────────────────────────────
 
 export interface StreamCallbacks {
   onMessage: (msg: GrpcMessage) => void
@@ -230,6 +247,14 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
 
   const callOpts = deadline ? { deadline } : {}
 
+  let ended = false
+  const finish = (status: GrpcStatus, trailers: Record<string, string>) => {
+    if (ended) return
+    ended = true
+    callbacks.onEnd(status, trailers)
+    client.close()
+  }
+
   function handleRecvStream(stream: grpc.ClientReadableStream<Uint8Array>): void {
     stream.on('data', (chunk: Uint8Array) => {
       try {
@@ -240,26 +265,24 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
       }
     })
     stream.on('error', (e: grpc.ServiceError) => {
-      callbacks.onEnd({ code: e.code ?? 2, codeName: STATUS_NAMES[e.code ?? 2] ?? 'UNKNOWN', details: e.details }, {})
+      finish({ code: e.code ?? 2, codeName: STATUS_NAMES[e.code ?? 2] ?? 'UNKNOWN', details: e.details ?? '' }, {})
     })
     stream.on('status', (s: grpc.StatusObject) => {
-      callbacks.onEnd({ code: s.code, codeName: STATUS_NAMES[s.code] ?? 'UNKNOWN', details: s.details }, metadataToRecord(s.metadata))
+      finish({ code: s.code, codeName: STATUS_NAMES[s.code] ?? 'UNKNOWN', details: s.details }, metadataToRecord(s.metadata))
     })
   }
 
   if (!clientStream && serverStream) {
-    // server stream
     const reqBytes = jsonToMessage(root, reqType, JSON.parse(req.messageJson))
     const call = (client as unknown as Record<string, (...args: unknown[]) => grpc.ClientReadableStream<Uint8Array>>)[methodName](reqBytes, meta, callOpts)
     handleRecvStream(call)
     return {
       sendMessage: () => { /* no-op */ },
-      cancel: () => { call.cancel(); client.close() },
+      cancel: () => { call.cancel(); if (!ended) { ended = true; client.close() } },
     }
   }
 
   if (clientStream && !serverStream) {
-    // client stream
     const call = (client as unknown as Record<string, (...args: unknown[]) => grpc.ClientWritableStream<Uint8Array>>)[methodName](
       meta,
       callOpts,
@@ -270,8 +293,7 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
         if (resp) {
           callbacks.onMessage({ json: JSON.stringify(messageToJson(root, respType, resp), null, 2), timestamp: Date.now(), direction: 'recv' })
         }
-        callbacks.onEnd(status, trailer ? metadataToRecord(trailer) : {})
-        client.close()
+        finish(status, trailer ? metadataToRecord(trailer) : {})
       }
     )
     return {
@@ -279,11 +301,10 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
         const bytes = jsonToMessage(root, reqType, JSON.parse(jsonStr))
         call.write(bytes)
       },
-      cancel: () => { call.cancel(); client.close() },
+      cancel: () => { call.cancel(); if (!ended) { ended = true; client.close() } },
     }
   }
 
-  // bidi stream
   const call = (client as unknown as Record<string, (...args: unknown[]) => grpc.ClientDuplexStream<Uint8Array, Uint8Array>>)[methodName](meta, callOpts)
   handleRecvStream(call as unknown as grpc.ClientReadableStream<Uint8Array>)
   return {
@@ -291,6 +312,6 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
       const bytes = jsonToMessage(root, reqType, JSON.parse(jsonStr))
       call.write(bytes)
     },
-    cancel: () => { call.cancel(); client.close() },
+    cancel: () => { call.cancel(); if (!ended) { ended = true; client.close() } },
   }
 }

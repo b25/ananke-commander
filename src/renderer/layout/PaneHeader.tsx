@@ -28,9 +28,9 @@ export function PaneHeader({ title, onClose, needsAttention, actions, paneType }
         </span>
       )}
       <span className="title">{title}</span>
-      {needsAttention && <span className="pane-attention-dot" aria-label="needs attention" />}
+      {needsAttention && <span className="pane-attention-dot" role="status" aria-label="needs attention" />}
       {actions}
-      <button type="button" className="pane-close-btn" onClick={onClose} title="Close pane">
+      <button type="button" className="pane-close-btn" onClick={onClose} title="Close pane" aria-label={`Close ${title} pane`}>
         ×
       </button>
     </div>

@@ -38,7 +38,11 @@ interface PendingRequest {
   url: string
   headers: Array<{ name: string; value: string }>
   postData?: string
+  entryIndex: number
 }
+
+const MAX_HAR_ENTRIES = 1000
+const MAX_PENDING_REQUESTS = 2000
 
 export class HarCapture {
   private entries: HarEntry[] = []
@@ -123,12 +127,18 @@ export class HarCapture {
         }
         timestamp: number
       }
+      if (this.pending.size >= MAX_PENDING_REQUESTS) {
+        const oldest = this.pending.keys().next().value
+        if (oldest) this.pending.delete(oldest)
+      }
+      // Placeholder until responseReceived assigns entryIndex
       this.pending.set(req.requestId, {
         startTime: Date.now(),
         method: req.request.method,
         url: req.request.url,
         headers: Object.entries(req.request.headers).map(([name, value]) => ({ name, value })),
-        postData: req.request.postData
+        postData: req.request.postData,
+        entryIndex: -1
       })
     }
 
@@ -189,7 +199,29 @@ export class HarCapture {
       }
 
       this.entries.push(entry)
-      this.pending.delete(resp.requestId)
+      if (this.entries.length > MAX_HAR_ENTRIES) {
+        this.entries.splice(0, this.entries.length - MAX_HAR_ENTRIES)
+      }
+      pendingReq.entryIndex = this.entries.length - 1
+    }
+
+    if (method === 'Network.loadingFinished') {
+      const fin = params as { requestId: string; encodedDataLength?: number }
+      const pendingReq = this.pending.get(fin.requestId)
+      if (!pendingReq || pendingReq.entryIndex < 0) {
+        this.pending.delete(fin.requestId)
+        return
+      }
+      const entry = this.entries[pendingReq.entryIndex]
+      if (entry) {
+        const size = fin.encodedDataLength ?? 0
+        entry.response.content.size = size
+        entry.response.bodySize = size
+        const total = Date.now() - pendingReq.startTime
+        entry.timings.receive = Math.max(0, total - entry.timings.wait)
+        entry.time = total
+      }
+      this.pending.delete(fin.requestId)
     }
   }
 }

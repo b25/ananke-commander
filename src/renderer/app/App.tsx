@@ -9,43 +9,26 @@ import { AppMenuDropdown } from '../layout/AppMenuDropdown'
 import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { TomlEditorModal } from '../layout/TomlEditorModal'
 import { DiagOverlay } from '../layout/DiagOverlay'
-import { FileBrowserPane } from '../panes/file-browser/FileBrowserPane'
-import { GitUiPane } from '../panes/gitui/GitUiPane'
-import { ApiToolkitPane } from '../panes/api-toolkit/ApiToolkitPane'
-import { TerminalPane } from '../panes/terminal/TerminalPane'
-import { BrowserPlaceholderPane } from '../panes/browser/BrowserPlaceholderPane'
-import { NotesPane } from '../panes/notes/NotesPane'
-import { RadarPane } from '../panes/radar/RadarPane'
 import { NotesSettings } from '../settings/NotesSettings'
+import { BrowserSettings } from '../settings/BrowserSettings'
 import { PrivacySettings } from '../settings/PrivacySettings'
 import { LAYOUTS, LAYOUT_SLOTS, applyLayout, bestLayout, nextProgressionLayout, fittingLayout } from '../lib/layouts'
+import { useWorkspaceStability } from './useWorkspaceStability'
+import { usePaneRenderer } from './usePaneRenderer'
+import { shouldShellHandleShortcut } from '../lib/keyboardShortcuts'
+import { applyFractions } from '../lib/paneGeometry'
+import {
+  offsetToScreenIndex,
+  paneCol,
+  paneFractionalOffsets,
+  paneOnScreen,
+  paneRow,
+  paneScreenIndex,
+  screenIndexToColRow
+} from '../lib/screenIndex'
 
-const MIN_W = 300
-const MIN_H = 200
 const MAX_WINDOWS_PER_WORKSPACE = 36
 const MAX_PANES_PER_SCREEN = 9  // 9-grid is the maximum layout
-
-function applyFractions(panes: PaneState[], vpW: number, vpH: number): PaneState[] {
-  return panes.map((p) => {
-    const pxLeft = Math.round(p.xPct * vpW)
-    const pxTop = Math.round(p.yPct * vpH)
-    const pxRight = Math.round((p.xPct + p.wPct) * vpW)
-    const pxBottom = Math.round((p.yPct + p.hPct) * vpH)
-    return { 
-      ...p, 
-      x: pxLeft, 
-      y: pxTop, 
-      width: Math.max(MIN_W, pxRight - pxLeft), 
-      height: Math.max(MIN_H, pxBottom - pxTop) 
-    }
-  })
-}
-
-function screenIndex(canvasOffset: { x: number; y: number }, vpW: number, vpH: number): number {
-  const col = Math.round(canvasOffset.x / (vpW || 1))
-  const row = Math.round(canvasOffset.y / (vpH || 1))
-  return row * 2 + col
-}
 
 export function App() {
   const [snap, setSnap] = useState<AppStateSnapshot | null>(null)
@@ -99,8 +82,9 @@ export function App() {
     prevDrawer.current = drawer
   }, [drawer, snap])
 
-  let ws = snap?.workspaces.find((w) => w.id === snap.activeWorkspaceId)
-  if (snap && !ws && snap.workspaces.length > 0) { ws = snap.workspaces[0]; void window.ananke.state.setActiveWorkspace(ws.id) }
+  const activeWorkspaceId = snap?.activeWorkspaceId ?? null
+  let ws = snap?.workspaces.find((w) => w.id === activeWorkspaceId)
+  if (snap && !ws && snap.workspaces.length > 0) ws = snap.workspaces[0]
 
   const vpW = viewportSize?.w ?? 0
   const vpH = viewportSize?.h ?? 0
@@ -109,77 +93,23 @@ export function App() {
     [ws, vpW, vpH]
   )
 
-  const activeScreen = ws ? screenIndex(ws.canvasOffset, vpW, vpH) : 0
-  const screenCol = activeScreen % 2
-  const screenRow = Math.floor(activeScreen / 2)
-  const screenPanesCount = ws ? ws.panes.filter(p => Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow).length : 0
+  const activeScreen = ws ? offsetToScreenIndex(ws.canvasOffset, vpW, vpH) : 0
+  const activeCollapsedIds = useMemo(() => new Set(ws?.screenCollapsed?.[activeScreen] ?? []), [ws, activeScreen])
+  const { col: screenCol, row: screenRow } = screenIndexToColRow(activeScreen)
+  const screenPanesCount = ws ? ws.panes.filter((p) => paneOnScreen(p, screenCol, screenRow)).length : 0
   const activeLayoutId = ws?.screenLayouts?.[activeScreen] ?? bestLayout(screenPanesCount).id
 
   const panesPerScreen = useMemo((): Record<number, number> => {
     if (!ws) return {}
     const counts: Record<number, number> = {}
     for (const p of ws.panes) {
-      const col = Math.floor(p.xPct)
-      const row = Math.floor(p.yPct)
-      const idx = row * 2 + col
+      const idx = paneScreenIndex(p)
       counts[idx] = (counts[idx] ?? 0) + 1
     }
     return counts
   }, [ws])
 
-  // Auto-prune: delete ALL collapsed panes on workspace load so each screen
-  // has exactly the number of panes its layout requires, and downgrade
-  // layouts to match actual pane counts.
-  const pruneRan = useRef<string | null>(null)
-  useEffect(() => {
-    if (!ws || pruneRan.current === ws.id) return
-    // Detect if any screen has collapsed panes or mismatched layout
-    let needsFix = false
-    const allCollapsedIds = new Set(Object.values(ws.screenCollapsed ?? {}).flat())
-    if (allCollapsedIds.size > 0) needsFix = true
-    if (!needsFix) {
-      for (const screenIdx of [0, 1, 2, 3] as const) {
-        const col = screenIdx % 2, row = Math.floor(screenIdx / 2)
-        const onScreen = ws.panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row).length
-        const layoutId = ws.screenLayouts?.[screenIdx] ?? 'full'
-        const slots = LAYOUT_SLOTS[layoutId] ?? 1
-        if (onScreen > 0 && onScreen < slots) { needsFix = true; break }
-      }
-    }
-    if (!needsFix) { pruneRan.current = ws.id; return }
-    pruneRan.current = ws.id
-    void (async () => {
-      let panes = ws.panes.filter(p => !allCollapsedIds.has(p.id))
-      for (const screenIdx of [0, 1, 2, 3] as const) {
-        const col = screenIdx % 2, row = Math.floor(screenIdx / 2)
-        const onScreen = panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row)
-        if (onScreen.length === 0) continue
-        // Pick layout that fits the actual pane count
-        const layout = bestLayout(onScreen.length)
-        panes = applyLayout(panes, layout, col, row, vpW, vpH)
-        await window.ananke.state.setScreenCollapsed(ws.id, screenIdx, [])
-        await window.ananke.state.setScreenLayout(ws.id, screenIdx, layout.id)
-        await window.ananke.state.setIntentLayout(ws.id, screenIdx, layout.id)
-      }
-      setSnap(await window.ananke.state.replacePanes(ws.id, panes, ws.activePaneId))
-    })()
-  }, [ws, vpW, vpH])
-
-  // Sanitize canvas offset on workspace load/switch: snap any fractional or
-  // misaligned offset (e.g. from ResizeObserver floating-point drift or direct
-  // store writes) to the nearest valid screen-grid position.
-  const canvasSnapRan = useRef<Set<string>>(new Set())
-  useEffect(() => {
-    if (!ws || !vpW || !vpH) return
-    const key = `${ws.id}:${ws.canvasOffset.x}:${ws.canvasOffset.y}:${vpW}:${vpH}`
-    if (canvasSnapRan.current.has(key)) return
-    canvasSnapRan.current.add(key)
-    const snappedX = Math.max(0, Math.min(vpW, Math.round(ws.canvasOffset.x / vpW) * vpW))
-    const snappedY = Math.max(0, Math.min(vpH, Math.round(ws.canvasOffset.y / vpH) * vpH))
-    if (snappedX !== ws.canvasOffset.x || snappedY !== ws.canvasOffset.y) {
-      void window.ananke.state.setCanvasOffset(ws.id, snappedX, snappedY).then(setSnap)
-    }
-  }, [ws, vpW, vpH])
+  useWorkspaceStability({ snap, setSnap, ws, vpW, vpH })
 
   const setActivePane = useCallback(async (id: string) => {
     if (!ws) return; setSnap(await window.ananke.state.setActivePane(ws.id, id))
@@ -208,7 +138,7 @@ export function App() {
     const currentCollapsedIds = ws.screenCollapsed?.[activeScreen] ?? []
     const currentCollapsedSet = new Set(currentCollapsedIds)
     const visibleOnScreen = ws.panes.filter(
-      p => Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow && !currentCollapsedSet.has(p.id)
+      (p) => paneOnScreen(p, screenCol, screenRow) && !currentCollapsedSet.has(p.id)
     )
     const newSlots = layout.slots.length
     let newCollapsedIds: string[]
@@ -257,7 +187,7 @@ export function App() {
     const panesOnScrn = (idx: number): number => {
       const col = idx % 2, row = Math.floor(idx / 2)
       const collapsedSet = new Set(ws.screenCollapsed?.[idx] ?? [])
-      return ws.panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && !collapsedSet.has(p.id)).length
+      return ws.panes.filter(p => paneOnScreen(p, col, row) && !collapsedSet.has(p.id)).length
     }
     const slotsOnScrn = (idx: number): number => LAYOUT_SLOTS[ws.screenLayouts?.[idx] ?? ''] ?? 1
 
@@ -314,7 +244,7 @@ export function App() {
     const panesForLayout = newPanes.filter(q => !collapsedSet.has(q.id))
     const collapsedPanes = newPanes.filter(q => collapsedSet.has(q.id))
     
-    const layout = LAYOUTS.find(l => l.id === tLayoutId) ?? bestLayout(panesForLayout.filter(q => Math.floor(q.xPct) === tCol && Math.floor(q.yPct) === tRow).length)
+    const layout = LAYOUTS.find(l => l.id === tLayoutId) ?? bestLayout(panesForLayout.filter(q => paneOnScreen(q, tCol, tRow)).length)
     const arranged = applyLayout(panesForLayout, layout, tCol, tRow, vpW, vpH)
     
     // Recombine arranged (visible) panes with untouched collapsed ones
@@ -343,7 +273,7 @@ export function App() {
     for (const screenIdx of [0, 1, 2, 3] as const) {
       const col = screenIdx % 2
       const row = Math.floor(screenIdx / 2)
-      const hasPanes = newPanes.some(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row)
+      const hasPanes = newPanes.some(p => paneOnScreen(p, col, row))
       if (!hasPanes) continue
       const intent  = ws.intentLayouts?.[screenIdx] ?? ws.screenLayouts?.[screenIdx] ?? 'full'
       const current = ws.screenLayouts?.[screenIdx] ?? 'full'
@@ -356,7 +286,7 @@ export function App() {
         const existingCollapsed = ws.screenCollapsed?.[screenIdx] ?? []
         const existingCollapsedSet = new Set(existingCollapsed)
         const visibleOnScreen = newPanes.filter(
-          p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && !existingCollapsedSet.has(p.id)
+          p => paneOnScreen(p, col, row) && !existingCollapsedSet.has(p.id)
         )
         let newCollapsed = existingCollapsed
         if (layout.slots.length < visibleOnScreen.length) {
@@ -375,8 +305,8 @@ export function App() {
         collapsedChanges[screenIdx] = newCollapsed
 
         const newCollapsedSet = new Set(newCollapsed)
-        const toArrange  = newPanes.filter(p => !(Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && (newCollapsedSet.has(p.id) || smartPruned.has(p.id))))
-        const toCollapse = newPanes.filter(p =>   Math.floor(p.xPct) === col && Math.floor(p.yPct) === row && newCollapsedSet.has(p.id))
+        const toArrange  = newPanes.filter(p => !(paneOnScreen(p, col, row) && (newCollapsedSet.has(p.id) || smartPruned.has(p.id))))
+        const toCollapse = newPanes.filter(p =>   paneOnScreen(p, col, row) && newCollapsedSet.has(p.id))
         newPanes = [...applyLayout(toArrange, layout, col, row, newVpW, newVpH), ...toCollapse]
       }
     }
@@ -401,7 +331,7 @@ export function App() {
     if (!ws) return
     const currentCollapsedIds = ws.screenCollapsed?.[activeScreen] ?? []
     const visibleOnScreen = ws.panes.filter(
-      p => Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow && !currentCollapsedIds.includes(p.id)
+      p => paneOnScreen(p, screenCol, screenRow) && !currentCollapsedIds.includes(p.id)
     )
     const target = visibleOnScreen.find(p => p.id === ws.activePaneId) ?? visibleOnScreen[0]
     const newCollapsed = currentCollapsedIds.filter(id => id !== collapsedPaneId)
@@ -427,19 +357,17 @@ export function App() {
     setSnap(await window.ananke.state.closePane(ws.id, collapsedPaneId))
   }, [ws, activeScreen])
 
-  const renderPane = (pane: PaneState) => {
-    const isActive = displayWs!.activePaneId === pane.id
-    if (pane.type === 'file-browser') return <FileBrowserPane pane={pane} isActive={isActive} allPanes={displayWs!.panes} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'terminal') return <TerminalPane pane={pane} isActive={isActive} scrollback={snap!.settings.privacy.terminalHistoryMax} fontSize={snap!.settings.terminal?.fontSize ?? 10} fontFamily={snap!.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'browser') return <BrowserPlaceholderPane pane={pane} isActive={isActive} isCollapsed={activeCollapsedIds.has(pane.id)} canvasOffset={displayWs!.canvasOffset} onClose={() => void closePane(pane.id)} onUpdate={(next) => void updatePane(pane.id, next)} />
-    if (pane.type === 'radar') return <RadarPane pane={pane} isActive={isActive} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'gitui') return <GitUiPane pane={pane} isActive={isActive} fontSize={snap!.settings.terminal?.fontSize ?? 10} fontFamily={snap!.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'api-toolkit') return <ApiToolkitPane pane={pane} isActive={isActive} onClose={() => void closePane(pane.id)} />
-    if (pane.type === 'notes') return <NotesPane pane={pane} isActive={isActive} notesUndoMax={snap!.settings.privacy.notesUndoMax} onUpdate={(next) => void updatePane(pane.id, next)} onClose={() => void closePane(pane.id)} />
-  }
+  const renderPane = usePaneRenderer({
+    displayWs,
+    snap,
+    activeCollapsedIds,
+    updatePane,
+    closePane
+  })
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      if (!shouldShellHandleShortcut(e)) return
       if (!snap || !(e.ctrlKey || e.metaKey)) return
       const n = parseInt(e.key)
       if (n >= 1 && n <= 9) { const t = snap.workspaces[n - 1]; if (t && t.id !== snap.activeWorkspaceId) { e.preventDefault(); void window.ananke.state.setActiveWorkspace(t.id).then(setSnap) } }
@@ -449,13 +377,17 @@ export function App() {
 
   useEffect(() => {
     if (!ws) return
-    const h = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === 'w' && ws.activePaneId) { e.preventDefault(); void closePane(ws.activePaneId) } }
+    const h = (e: KeyboardEvent) => {
+      if (!shouldShellHandleShortcut(e)) return
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w' && ws.activePaneId) { e.preventDefault(); void closePane(ws.activePaneId) }
+    }
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
   }, [ws, closePane])
 
   useEffect(() => {
     if (!ws) return
     const h = (e: KeyboardEvent) => {
+      if (!shouldShellHandleShortcut(e)) return
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
         e.preventDefault()
         void handleLayoutSelect(bestLayout(screenPanesCount).id)
@@ -467,6 +399,7 @@ export function App() {
   useEffect(() => {
     if (!ws) return
     const h = (e: KeyboardEvent) => {
+      if (!shouldShellHandleShortcut(e)) return
       if (!e.ctrlKey || e.key !== 'Tab') return; e.preventDefault()
       if (ws.panes.length < 2) return
       const idx = ws.panes.findIndex(p => p.id === ws.activePaneId)
@@ -497,7 +430,7 @@ export function App() {
       '--- Screen layouts ---',
       ...([0,1,2,3] as const).map(i => {
         const col = i % 2, row = Math.floor(i / 2)
-        const count = ws.panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row).length
+        const count = ws.panes.filter(p => paneOnScreen(p, col, row)).length
         const layout = ws.screenLayouts?.[i] ?? 'full'
         const intent = ws.intentLayouts?.[i] ?? layout
         const collapsed = (ws.screenCollapsed?.[i] ?? []).length
@@ -508,7 +441,7 @@ export function App() {
       'id       | screen | type         | xPct   | yPct   | wPct   | hPct   | px-x  | px-y  | px-w  | px-h  | status',
       '-'.repeat(110),
       ...ws.panes.map(p => {
-        const scr = Math.floor(p.yPct) * 2 + Math.floor(p.xPct)
+        const scr = paneScreenIndex(p)
         const status = collapsedIds.has(p.id) ? 'collapsed' : 'visible'
         const px = (n: number) => String(Math.round(n)).padStart(5)
         const fr = (n: number) => n.toFixed(4).padStart(6)
@@ -527,9 +460,10 @@ export function App() {
 
     // Move orphaned panes (outside 2×2 grid) onto the active screen
     panes = panes.map(p => {
-      const col = Math.floor(p.xPct), row = Math.floor(p.yPct)
+      const col = paneCol(p)
+      const row = paneRow(p)
       if (VALID_COLS.includes(col) && VALID_ROWS.includes(row)) return p
-      const xFrac = p.xPct - col, yFrac = p.yPct - row
+      const { xFrac, yFrac } = paneFractionalOffsets(p)
       return { ...p, xPct: screenCol + xFrac, yPct: screenRow + yFrac }
     })
 
@@ -540,7 +474,7 @@ export function App() {
     // For each screen: fit layout to actual pane count and re-arrange
     for (const screenIdx of [0, 1, 2, 3] as const) {
       const col = screenIdx % 2, row = Math.floor(screenIdx / 2)
-      const onScreen = panes.filter(p => Math.floor(p.xPct) === col && Math.floor(p.yPct) === row)
+      const onScreen = panes.filter(p => paneOnScreen(p, col, row))
       if (onScreen.length === 0) continue
       const layout = bestLayout(onScreen.length)
       panes = applyLayout(panes, layout, col, row, vpW, vpH)
@@ -552,8 +486,6 @@ export function App() {
     setSnap(await window.ananke.state.replacePanes(ws.id, panes, ws.activePaneId))
   }, [ws, screenCol, screenRow, vpW, vpH])
 
-  const activeCollapsedIds = new Set(ws?.screenCollapsed?.[activeScreen] ?? [])
-  const collapsedPanes = displayWs ? displayWs.panes.filter(p => activeCollapsedIds.has(p.id)) : []
   // Browser panes stay mounted even when collapsed so the WebContentsView is not destroyed.
   // All other pane types are unmounted when collapsed (saves memory/CPU).
   const displayWsForCanvas = displayWs ? { ...displayWs, panes: displayWs.panes.filter(p => !activeCollapsedIds.has(p.id) || p.type === 'browser') } : displayWs
@@ -588,15 +520,15 @@ export function App() {
         }} />
       <div className="main-stage">
         {tomlError && (
-          <div className="app-error-banner">
+          <div className="app-error-banner" role="alert">
             ⚠ workspace.toml error: {tomlError}
-            <button type="button" onClick={dismissTomlError}>✕</button>
+            <button type="button" aria-label="Dismiss workspace error" onClick={dismissTomlError}>✕</button>
           </div>
         )}
         {addError && (
-          <div className="app-error-banner app-error-banner--warn">
+          <div className="app-error-banner app-error-banner--warn" role="alert">
             ⚠ {addError}
-            <button type="button" onClick={dismissAddError}>✕</button>
+            <button type="button" aria-label="Dismiss warning" onClick={dismissAddError}>✕</button>
           </div>
         )}
         <div className="toolbar toolbar-thin">
@@ -638,22 +570,31 @@ export function App() {
         )}
       </div>
       {drawer === 'settings' && (
-        <aside className="drawer">
-          <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="settings-drawer-title">
+          <h3 id="settings-drawer-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             Settings
-            <button type="button" onClick={() => setDrawer('none')} style={{ background: 'transparent', border: 'none', fontSize: '16px', padding: 0 }}>✕</button>
+            <button type="button" aria-label="Close settings" onClick={() => setDrawer('none')} style={{ background: 'transparent', border: 'none', fontSize: '16px', padding: 0 }}>✕</button>
           </h3>
           <div className="body">
           <NotesSettings value={snap.settings.obsidian} onChange={(obsidian) => setSnap({ ...snap, settings: { ...snap.settings, obsidian } })} />
+          <BrowserSettings
+            value={snap.settings.browser ?? { extraAllowedHosts: [] }}
+            onChange={(browser) => setSnap({ ...snap, settings: { ...snap.settings, browser } })}
+          />
           <div style={{ marginBottom: 12 }}>
-            <p className="muted" style={{ marginBottom: 4 }}>Terminal font size</p>
-            <input type="number" min={6} max={32} value={snap.settings.terminal?.fontSize ?? 10} onChange={(e) => {
-              const terminal = { ...snap.settings.terminal ?? { fontSize: 10, fontFamily: 'ui-monospace, monospace' }, fontSize: Math.max(6, Math.min(32, Number(e.target.value) || 10)) }
+            <label className="muted" htmlFor="terminal-font-size" style={{ marginBottom: 4, display: 'block' }}>Terminal font size</label>
+            <input id="terminal-font-size" type="number" min={6} max={32} value={snap.settings.terminal?.fontSize ?? 10} onChange={(e) => {
+              const terminal = { ...snap.settings.terminal ?? { fontSize: 10, fontFamily: 'ui-monospace, monospace', scrollback: 10_000 }, fontSize: Math.max(6, Math.min(32, Number(e.target.value) || 10)) }
               setSnap({ ...snap, settings: { ...snap.settings, terminal } })
             }} style={{ width: 60, marginRight: 12 }} />
-            <p className="muted" style={{ marginBottom: 4, marginTop: 8 }}>Terminal font family</p>
-            <input type="text" value={snap.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onChange={(e) => {
-              const terminal = { ...snap.settings.terminal ?? { fontSize: 10, fontFamily: 'ui-monospace, monospace' }, fontFamily: e.target.value }
+            <label className="muted" htmlFor="terminal-scrollback" style={{ marginBottom: 4, marginTop: 8, display: 'block' }}>Terminal scrollback (xterm lines)</label>
+            <input id="terminal-scrollback" type="number" min={100} max={50000} value={snap.settings.terminal?.scrollback ?? 10_000} onChange={(e) => {
+              const terminal = { ...snap.settings.terminal ?? { fontSize: 10, fontFamily: 'ui-monospace, monospace', scrollback: 10_000 }, scrollback: Math.max(100, Math.min(50_000, Number(e.target.value) || 10_000)) }
+              setSnap({ ...snap, settings: { ...snap.settings, terminal } })
+            }} style={{ width: 100 }} />
+            <label className="muted" htmlFor="terminal-font-family" style={{ marginBottom: 4, marginTop: 8, display: 'block' }}>Terminal font family</label>
+            <input id="terminal-font-family" type="text" value={snap.settings.terminal?.fontFamily ?? 'ui-monospace, monospace'} onChange={(e) => {
+              const terminal = { ...snap.settings.terminal ?? { fontSize: 10, fontFamily: 'ui-monospace, monospace', scrollback: 10_000 }, fontFamily: e.target.value }
               setSnap({ ...snap, settings: { ...snap.settings, terminal } })
             }} style={{ width: '100%' }} />
           </div>
@@ -675,10 +616,10 @@ export function App() {
         </div></aside>
       )}
       {drawer === 'recent' && (
-        <aside className="drawer">
-          <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 0, padding: 'var(--space-inset)', borderBottom: '1px solid var(--border)' }}>
+        <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="recent-drawer-title">
+          <h3 id="recent-drawer-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 0, padding: 'var(--space-inset)', borderBottom: '1px solid var(--border)' }}>
             Recent Panes
-            <button type="button" onClick={() => setDrawer('none')} style={{ background: 'transparent', border: 'none', fontSize: '16px', padding: 0 }}>✕</button>
+            <button type="button" aria-label="Close recent panes" onClick={() => setDrawer('none')} style={{ background: 'transparent', border: 'none', fontSize: '16px', padding: 0 }}>✕</button>
           </h3>
           <RecentlyClosedPanel snap={snap} ws={ws} onClose={() => setDrawer('none')} onSnapshot={setSnap} />
         </aside>

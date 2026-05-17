@@ -16,11 +16,19 @@ export function applyVarsToHttpRequest(req: HttpRequest, vars: Variable[]): Http
     url: subStr(req.url, vars),
     params: req.params.map((p) => ({ ...p, key: subStr(p.key, vars), value: subStr(p.value, vars) })),
     headers: req.headers.map((h) => ({ ...h, key: subStr(h.key, vars), value: subStr(h.value, vars) })),
-    body: req.body.mode === 'raw'
-      ? { ...req.body, raw: subStr(req.body.raw ?? '', vars) }
-      : req.body.mode === 'form'
-        ? { ...req.body, formFields: (req.body.formFields ?? []).map((f) => ({ ...f, key: subStr(f.key, vars), value: subStr(f.value, vars) })) }
-        : req.body,
+    body:
+      req.body.mode === 'raw' || req.body.mode === 'json'
+        ? { ...req.body, raw: subStr(req.body.raw ?? '', vars) }
+        : req.body.mode === 'form' || req.body.mode === 'urlencoded' || req.body.mode === 'multipart'
+          ? {
+              ...req.body,
+              formFields: (req.body.formFields ?? []).map((f) => ({
+                ...f,
+                key: subStr(f.key, vars),
+                value: subStr(f.value, vars)
+              }))
+            }
+          : req.body,
   }
 }
 

@@ -344,8 +344,7 @@ Navigation history per pane (up to `browserHistoryMax` entries) is stored in a s
 #### Security model (`browserSecurity.ts`)
 
 - All permission requests (camera, microphone, notifications, etc.) are denied.
-- Navigation is allowed only to valid `http://`, `https://`, `about:`, or `data:` URLs.
-- `file://` navigation is blocked.
+- Top-level navigation: only `http:` / `https:` to an explicit host allowlist (`localhost`, `127.0.0.1`, `::1`, `example.com`, `www.example.com`); bare host input is checked as HTTPS. `about:` is limited to `about:blank` only. `data:` URLs are blocked. Other schemes (including `file:`) are blocked.
 - `new-window` events open in the system browser.
 
 ---

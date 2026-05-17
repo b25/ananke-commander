@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PaneState, WorkspaceState } from '../../shared/contracts'
+import { offsetToScreenIndex, paneScreenIndex } from '../lib/screenIndex'
+import { shouldMountPaneContent } from '../lib/shouldMountPane'
 import { FloatingPane } from './FloatingPane'
+import { PanePlaceholder } from './PanePlaceholder'
 import { TaskbarStrip } from './TaskbarStrip'
 
 interface Props {
@@ -24,6 +27,15 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
   onViewportResizeRef.current = onViewportResize
   const vpRef = useRef(viewportSize)
   vpRef.current = viewportSize
+  const warmedPaneIdsRef = useRef(new Set<string>())
+
+  const activatePane = useCallback(
+    (paneId: string) => {
+      warmedPaneIdsRef.current.add(paneId)
+      onActivate(paneId)
+    },
+    [onActivate]
+  )
 
   useEffect(() => {
     const el = containerRef.current
@@ -66,14 +78,19 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
   const canvasW = viewportSize.width * 2
   const canvasH = viewportSize.height * 2
 
-  // Determine which screen is visible based on canvas offset
-  const screenCol = viewportSize.width > 0 ? Math.round(ox / viewportSize.width) : 0
-  const screenRow = viewportSize.height > 0 ? Math.round(oy / viewportSize.height) : 0
-
-  // Filter taskbar to only show panes on the current screen
-  const screenPanes = (allPanes ?? []).filter(p =>
-    Math.floor(p.xPct) === screenCol && Math.floor(p.yPct) === screenRow
+  const visibleScreen = offsetToScreenIndex(
+    workspace.canvasOffset,
+    viewportSize.width,
+    viewportSize.height
   )
+  const screenCol = visibleScreen % 2
+  const screenRow = Math.floor(visibleScreen / 2)
+
+  useEffect(() => {
+    warmedPaneIdsRef.current.clear()
+  }, [visibleScreen])
+
+  const screenPanes = (allPanes ?? []).filter((p) => paneScreenIndex(p) === visibleScreen)
 
   return (
     <div className="canvas-workspace">
@@ -82,22 +99,39 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
         activePaneId={workspace.activePaneId}
         collapsedIds={collapsedIds ?? []}
         onRestore={(id) => onRestorePane?.(id)}
-        onActivate={(id) => onActivate(id)}
+        onActivate={activatePane}
         onClose={(id) => onCloseCollapsed?.(id)}
       />
       <div ref={containerRef} className="canvas-panning-area" onScroll={(e) => { e.currentTarget.scrollTop = 0; e.currentTarget.scrollLeft = 0 }}>
         <div style={{ position: 'absolute', top: 0, left: 0, width: canvasW, height: canvasH, transform: `translate(${-ox}px, ${-oy}px)`, willChange: 'transform' }}>
-          {workspace.panes.map((pane) => (
-            <FloatingPane
-              key={pane.id}
-              x={pane.x} y={pane.y} width={pane.width} height={pane.height}
-              isActive={workspace.activePaneId === pane.id}
-              isCollapsed={collapsedIds.includes(pane.id)}
-              onActivate={() => onActivate(pane.id)}
-            >
-              {renderPane(pane)}
-            </FloatingPane>
-          ))}
+          {workspace.panes.map((pane) => {
+            const mountCtx = {
+              visibleScreenIndex: visibleScreen,
+              collapsedIds,
+              activePaneId: workspace.activePaneId,
+              canvasOffset: workspace.canvasOffset,
+              vpW: viewportSize.width,
+              vpH: viewportSize.height
+            }
+            const mountFull = shouldMountPaneContent(pane, mountCtx, warmedPaneIdsRef.current)
+            const placeholderReason =
+              paneScreenIndex(pane) !== visibleScreen ? 'off-screen' as const : 'suspended' as const
+            return (
+              <FloatingPane
+                key={pane.id}
+                x={pane.x}
+                y={pane.y}
+                width={pane.width}
+                height={pane.height}
+                isActive={workspace.activePaneId === pane.id}
+                isCollapsed={collapsedIds.includes(pane.id)}
+                ariaLabel={`${pane.title} pane`}
+                onActivate={() => activatePane(pane.id)}
+              >
+                {mountFull ? renderPane(pane) : <PanePlaceholder pane={pane} reason={placeholderReason} />}
+              </FloatingPane>
+            )
+          })}
         </div>
       </div>
     </div>

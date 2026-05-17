@@ -24,13 +24,15 @@ export function WorkspaceRail({ workspaces, activeId, onSelect, onAdd, onClone, 
   }
 
   return (
-    <aside className="workspace-rail" onClick={closeMenu}>
+    <aside className="workspace-rail" onClick={closeMenu} role="navigation" aria-label="Workspaces">
       {workspaces.map((ws, i) => (
         <button
           key={ws.id}
           type="button"
           className={`ws-pill ${ws.id === activeId ? 'active' : ''}`}
           title={ws.name}
+          aria-label={`Switch to workspace ${ws.name}`}
+          aria-current={ws.id === activeId ? 'page' : undefined}
           onClick={(e) => { e.stopPropagation(); onSelect(ws.id) }}
           onDoubleClick={(e) => {
             e.stopPropagation()
@@ -61,19 +63,20 @@ export function WorkspaceRail({ workspaces, activeId, onSelect, onAdd, onClone, 
           )}
         </button>
       ))}
-      <button type="button" className="ws-pill ws-pill--add" title="Add workspace" onClick={onAdd}>
-        +
-      </button>
+      <button type="button" className="ws-pill ws-pill--add" title="Add workspace" aria-label="Add workspace" onClick={onAdd}>+</button>
 
       {ctxMenu && (
         <div
           className="ctx-menu"
+          role="menu"
+          aria-label="Workspace actions"
           style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 1000 }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
             type="button"
             className="ctx-menu__item"
+            role="menuitem"
             onClick={() => { onClone(ctxMenu.wsId); closeMenu() }}
           >
             Clone Workspace
@@ -81,6 +84,7 @@ export function WorkspaceRail({ workspaces, activeId, onSelect, onAdd, onClone, 
           <button
             type="button"
             className="ctx-menu__item ctx-menu__item--danger"
+            role="menuitem"
             disabled={workspaces.length <= 1}
             onClick={() => {
               if (workspaces.length <= 1) return

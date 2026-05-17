@@ -1,9 +1,14 @@
-import { app, net, protocol } from 'electron'
+import { net, protocol } from 'electron'
 import { readFile } from 'node:fs/promises'
-import { extname, join, normalize } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { extname, join, resolve } from 'node:path'
+import { resolvePathUnderRendererRoot } from './appProtocolPaths.js'
 
 const SCHEME = 'app'
+
+const ASSET_EXTENSIONS = new Set([
+  '.js', '.mjs', '.css', '.json', '.svg', '.png', '.ico', '.woff', '.woff2',
+  '.ttf', '.otf', '.webp', '.gif', '.jpg', '.jpeg', '.map', '.wasm'
+])
 
 export function registerPrivilegedAppScheme(): void {
   protocol.registerSchemesAsPrivileged([
@@ -25,14 +30,31 @@ function mimeForPath(filePath: string): string {
   const map: Record<string, string> = {
     '.html': 'text/html; charset=utf-8',
     '.js': 'text/javascript; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8',
     '.json': 'application/json; charset=utf-8',
     '.svg': 'image/svg+xml',
     '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
     '.ico': 'image/x-icon',
-    '.woff2': 'font/woff2'
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.otf': 'font/otf',
+    '.wasm': 'application/wasm',
+    '.map': 'application/json'
   }
   return map[ext] ?? 'application/octet-stream'
+}
+
+function wantsHtmlSpaFallback(request: Request, pathname: string): boolean {
+  const ext = extname(pathname).toLowerCase()
+  if (ext && ASSET_EXTENSIONS.has(ext)) return false
+  const accept = request.headers.get('accept') ?? ''
+  return accept.includes('text/html') || accept.includes('*/*')
 }
 
 export async function handleAppProtocolRequest(
@@ -53,8 +75,10 @@ export async function handleAppProtocolRequest(
     }
   }
 
-  const safe = normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, '')
-  const filePath = join(rendererDir, safe)
+  const filePath = resolvePathUnderRendererRoot(url.pathname, rendererDir)
+  if (!filePath) {
+    return new Response('Not Found', { status: 404 })
+  }
 
   try {
     const data = await readFile(filePath)
@@ -62,8 +86,8 @@ export async function handleAppProtocolRequest(
       headers: { 'Content-Type': mimeForPath(filePath) }
     })
   } catch {
-    if (pathname !== '/index.html') {
-      const indexPath = join(rendererDir, 'index.html')
+    if (pathname !== '/index.html' && wantsHtmlSpaFallback(request, pathname)) {
+      const indexPath = join(resolve(rendererDir), 'index.html')
       try {
         const html = await readFile(indexPath)
         return new Response(html, {

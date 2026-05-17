@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function RequestEditor({ tab }: Props) {
-  const { setHttpMethod, setHttpUrl, setHttpParams, setHttpHeaders, setHttpBody, setHttpAuth, updateTab, saveTabToCollection, collections, addItemToCollection, environments, activeEnvironmentId } = useStore()
+  const { setHttpMethod, setHttpUrl, setHttpParams, setHttpHeaders, setHttpBody, setHttpAuth, updateTab, saveTabToCollection, collections, addItemToCollection, environments, activeEnvironmentId, addHistoryEntry } = useStore()
   const req = tab.httpRequest
   const [innerTab, setInnerTab] = useState<'params' | 'headers' | 'body' | 'auth'>('params')
   const [sending, setSending] = useState(false)
@@ -101,15 +101,17 @@ export function RequestEditor({ tab }: Props) {
       const resp = await window.ananke.apiToolkit.http.send(id, resolvedReq)
       updateTab(id, { httpResponse: resp, loading: false })
       // persist history
-      window.ananke.apiToolkit.storage.addHistory({
+      const entry = {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
-        protocol: 'http',
+        protocol: 'http' as const,
         name: req.url || 'Request',
-        httpRequest: req,
+        httpRequest: resolvedReq,
         httpResponse: resp,
         duration: resp.timings.total,
-      })
+      }
+      addHistoryEntry(entry)
+      void window.ananke.apiToolkit.storage.addHistory(entry)
     } catch (e) {
       updateTab(id, { error: String(e), loading: false })
     } finally {

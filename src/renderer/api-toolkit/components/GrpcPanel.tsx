@@ -42,9 +42,7 @@ export function GrpcPanel({ tab }: Props) {
   // Cancel any live stream when the component unmounts (tab closed while streaming)
   useEffect(() => {
     return () => {
-      if (tab.grpcStreamActive) {
-        window.ananke.apiToolkit.grpc.streamCancel(tab.id)
-      }
+      window.ananke.apiToolkit.grpc.streamCancel(tab.id)
     }
   }, [tab.id])
 
@@ -89,7 +87,7 @@ export function GrpcPanel({ tab }: Props) {
         updateTab(tab.id, { grpcStreamActive: false, loading: false })
       } else {
         updateTab(tab.id, { grpcMessages: [], grpcStreamActive: true, loading: true, error: null })
-        window.ananke.apiToolkit.grpc.streamStart(tab.id, { ...resolvedReq, messageJson: tab.grpcRequest.messageJson })
+        window.ananke.apiToolkit.grpc.streamStart(tab.id, { ...resolvedReq, messageJson: resolvedReq.messageJson })
       }
     } else {
       updateTab(tab.id, { loading: true, error: null, grpcResponse: null })

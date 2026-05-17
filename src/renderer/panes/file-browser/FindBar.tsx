@@ -28,9 +28,10 @@ export function FindBar({
   }, [])
 
   return (
-    <div className="find-bar">
-      <span className="find-bar-label">Find:</span>
+    <div className="find-bar" role="search" aria-label="Find files">
+      <label className="find-bar-label" htmlFor="file-find-input">Find:</label>
       <input
+        id="file-find-input"
         ref={inputRef}
         className="find-bar-input"
         placeholder="*.ts · note* · *.{js,tsx}"
@@ -46,20 +47,19 @@ export function FindBar({
           type="checkbox"
           checked={recursive}
           onChange={e => onRecursiveChange(e.target.checked)}
-          tabIndex={-1}
         />
         Recursive
       </label>
       {status === 'searching' && (
-        <span className="find-bar-status find-bar-status--searching">Searching…</span>
+        <span className="find-bar-status find-bar-status--searching" role="status" aria-live="polite">Searching…</span>
       )}
       {status === 'done' && (
-        <span className="find-bar-status">{resultCount} found</span>
+        <span className="find-bar-status" role="status" aria-live="polite">{resultCount} found</span>
       )}
       {status === 'error' && (
-        <span className="find-bar-status" style={{ color: 'var(--danger)' }}>Error</span>
+        <span className="find-bar-status" role="alert" style={{ color: 'var(--danger)' }}>Error</span>
       )}
-      <button type="button" className="find-bar-close" onClick={onClose} tabIndex={-1}>&times;</button>
+      <button type="button" className="find-bar-close" onClick={onClose} aria-label="Close find bar">&times;</button>
     </div>
   )
 }

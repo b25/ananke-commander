@@ -10,6 +10,7 @@ function clampScrollback(n: number): number {
 
 // Track which pane IDs already have a PTY process running in the main process.
 const spawnedPanes = new Set<string>()
+const exitedPanes = new Set<string>()
 
 // Ring buffer of PTY output per pane so we can replay on remount.
 // Keeps up to MAX_BUFFER_SIZE bytes of recent output.
@@ -52,10 +53,23 @@ function ensureGlobalListener(): void {
   })
   window.ananke.pty.onExit(({ paneId }) => {
     spawnedPanes.delete(paneId)
+    exitedPanes.add(paneId)
+    clearBuffer(paneId)
   })
 }
 
-export function useXterm(paneId: string, cwd: string | undefined, scrollback: number, onTitleChange?: (title: string) => void, cmd?: string, args?: string[], fontSize?: number, fontFamily?: string) {
+export function useXterm(
+  paneId: string,
+  cwd: string | undefined,
+  scrollback: number,
+  onTitleChange?: (title: string) => void,
+  cmd?: string,
+  args?: string[],
+  fontSize?: number,
+  fontFamily?: string,
+  options?: { respawn?: boolean }
+) {
+  const allowRespawn = options?.respawn !== false
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -90,6 +104,16 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
       webgl.onContextLoss(() => {
         try { webgl?.dispose() } catch { /* ignore */ }
         webgl = null
+        try {
+          const next = new WebglAddon()
+          next.onContextLoss(() => {
+            try { next.dispose() } catch { /* ignore */ }
+          })
+          term.loadAddon(next)
+          webgl = next
+        } catch {
+          /* DOM renderer */
+        }
       })
       term.loadAddon(webgl)
     } catch {
@@ -101,11 +125,6 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     // Replay buffered output from before this mount
     const buffered = drainBuffer(paneId)
     if (buffered) term.write(buffered)
-
-    term.onSelectionChange(() => {
-      const sel = term.getSelection()
-      if (sel) void window.ananke.clipboard.writeText(sel)
-    })
 
     // Local listener writes to xterm in real-time (global listener buffers)
     const d = window.ananke.pty.onData(({ paneId: id, data }) => {
@@ -131,7 +150,9 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
 
     const doSpawnIfNeeded = () => {
       if (spawnedPanes.has(paneId)) return
+      if (!allowRespawn && exitedPanes.has(paneId)) return
       spawnedPanes.add(paneId)
+      exitedPanes.delete(paneId)
       void window.ananke.pty.spawn(paneId, term.cols || 80, term.rows || 24, cwd || undefined, cmd, args)
     }
 
@@ -156,6 +177,7 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     }
 
     return () => {
+      spawnedPanes.delete(paneId)
       cancelAnimationFrame(resizeFrame)
       ro.disconnect()
       sub.dispose()
@@ -178,6 +200,14 @@ export function useXterm(paneId: string, cwd: string | undefined, scrollback: nu
     const t = termRef.current
     if (t) t.options.scrollback = clampScrollback(scrollback)
   }, [scrollback])
+
+  useEffect(() => {
+    const t = termRef.current
+    if (!t) return
+    if (typeof fontSize === 'number' && Number.isFinite(fontSize)) t.options.fontSize = fontSize
+    if (fontFamily) t.options.fontFamily = fontFamily
+    try { fitRef.current?.fit() } catch { /* ignore */ }
+  }, [fontSize, fontFamily])
 
   return { hostRef, fitRef, termRef }
 }

@@ -74,12 +74,15 @@ export function FileBrowserActions({
         type="button"
         className={`layout-picker__trigger btn-thin${open ? ' open' : ''}`}
         onClick={() => setOpen(o => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls="file-browser-actions-menu"
       >
         Actions <span className="layout-picker__chevron">&#9662;</span>
       </button>
 
       {open && (
-        <div className="layout-picker__popover" role="menu" style={{ right: 0, left: 'auto', minWidth: 200 }}>
+        <div id="file-browser-actions-menu" className="layout-picker__popover" role="menu" aria-label="File browser actions" style={{ right: 0, left: 'auto', minWidth: 200 }}>
           <button type="button" className="layout-picker__option" onClick={() => exec(onRead)} role="menuitem">
             <span className="layout-picker__label">Read</span><Shortcut label="F3" />
           </button>
