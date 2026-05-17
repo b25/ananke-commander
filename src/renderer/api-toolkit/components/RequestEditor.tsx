@@ -4,6 +4,8 @@ import type { Tab } from '../store'
 import type { HttpMethod, AuthConfig } from '../../../shared/api-toolkit-contracts'
 import { KvEditor } from './KvEditor'
 import { GrpcPanel } from './GrpcPanel'
+import { PanelTabStrip } from './PanelTabStrip'
+import { SaveToCollectionPicker } from './SaveToCollectionPicker'
 import { applyVarsToHttpRequest } from '../lib/substituteVars'
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE']
@@ -147,18 +149,11 @@ export function RequestEditor({ tab }: Props) {
           </button>
         </div>
         {showSavePicker && (
-          <div style={{ padding: '6px 8px', background: 'var(--bg-1)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 10, color: 'var(--text-2)', flexShrink: 0 }}>Save to:</span>
-            {collections.length === 0
-              ? <span style={{ fontSize: 10, color: 'var(--text-2)' }}>No collections — create one first</span>
-              : collections.map((col) => (
-                <button key={col.id} style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-0)', cursor: 'pointer' }} onClick={() => void saveToCollection(col.id)}>
-                  {col.name}
-                </button>
-              ))
-            }
-            <button style={{ marginLeft: 'auto', fontSize: 10, background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer' }} onClick={() => setShowSavePicker(false)}>✕</button>
-          </div>
+          <SaveToCollectionPicker
+            collections={collections}
+            onPick={(colId) => void saveToCollection(colId)}
+            onDismiss={() => setShowSavePicker(false)}
+          />
         )}
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <GrpcPanel tab={tab} />
@@ -221,27 +216,11 @@ export function RequestEditor({ tab }: Props) {
 
       {/* Save-to-collection picker */}
       {showSavePicker && (
-        <div style={{ padding: '6px 8px', background: 'var(--bg-1)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: 'var(--text-2)', flexShrink: 0 }}>Save to:</span>
-          {collections.length === 0
-            ? <span style={{ fontSize: 10, color: 'var(--text-2)' }}>No collections — create one first</span>
-            : collections.map((col) => (
-              <button
-                key={col.id}
-                style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-0)', cursor: 'pointer' }}
-                onClick={() => void saveToCollection(col.id)}
-              >
-                {col.name}
-              </button>
-            ))
-          }
-          <button
-            style={{ marginLeft: 'auto', fontSize: 10, background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer' }}
-            onClick={() => setShowSavePicker(false)}
-          >
-            ✕
-          </button>
-        </div>
+        <SaveToCollectionPicker
+          collections={collections}
+          onPick={(colId) => void saveToCollection(colId)}
+          onDismiss={() => setShowSavePicker(false)}
+        />
       )}
 
       {/* cURL import panel */}
@@ -267,22 +246,22 @@ export function RequestEditor({ tab }: Props) {
         </div>
       )}
 
-      {/* Inner tabs */}
-      <div className="panel-tabs">
-        {(['params', 'headers', 'body', 'auth'] as const).map((t) => (
-          <div
-            key={t}
-            className={`panel-tab ${innerTab === t ? 'active' : ''}`}
-            onClick={() => setInnerTab(t)}
-          >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-            {t === 'params' && enabledParams > 0 && <span className="panel-tab-count">{enabledParams}</span>}
-            {t === 'headers' && enabledHeaders > 0 && <span className="panel-tab-count">{enabledHeaders}</span>}
-            {t === 'body' && req.body.mode !== 'none' && <span className="panel-tab-count">•</span>}
-            {t === 'auth' && req.auth.type !== 'none' && <span className="panel-tab-count">•</span>}
-          </div>
-        ))}
-      </div>
+      <PanelTabStrip
+        activeId={innerTab}
+        onSelect={(id) => setInnerTab(id as typeof innerTab)}
+        tabs={(['params', 'headers', 'body', 'auth'] as const).map((t) => ({
+          id: t,
+          label: (
+            <>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+              {t === 'params' && enabledParams > 0 && <span className="panel-tab-count">{enabledParams}</span>}
+              {t === 'headers' && enabledHeaders > 0 && <span className="panel-tab-count">{enabledHeaders}</span>}
+              {t === 'body' && req.body.mode !== 'none' && <span className="panel-tab-count">•</span>}
+              {t === 'auth' && req.auth.type !== 'none' && <span className="panel-tab-count">•</span>}
+            </>
+          )
+        }))}
+      />
 
       <div className="panel-body" style={{ maxHeight: 240, overflow: 'auto' }}>
         {innerTab === 'params' && (

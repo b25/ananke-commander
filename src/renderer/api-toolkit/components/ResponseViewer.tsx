@@ -4,6 +4,7 @@ import type { Tab } from '../store'
 import { useStore } from '../store'
 import type { MockRoute } from '../../../shared/api-toolkit-contracts'
 import { StreamLog } from './GrpcPanel'
+import { PanelTabStrip } from './PanelTabStrip'
 
 interface Props {
   tab: Tab
@@ -116,36 +117,41 @@ export function ResponseViewer({ tab }: Props) {
         </span>
       </div>
 
-      <div className="panel-tabs">
-        {(['body', 'headers', 'timing'] as const).map((t) => (
-          <div
-            key={t}
-            className={`panel-tab ${innerTab === t ? 'active' : ''}`}
-            onClick={() => setInnerTab(t)}
-          >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-            {t === 'headers' && <span className="panel-tab-count">{Object.keys(resp.headers).length}</span>}
-          </div>
-        ))}
-        {innerTab === 'body' && (
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, paddingRight: 6 }}>
-            <button
-              style={{ fontSize: 10, padding: '1px 8px', background: rawMode ? 'var(--bg-4)' : 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-1)', cursor: 'pointer' }}
-              onClick={() => setRawMode((m) => !m)}
-              title="Toggle raw / pretty view"
-            >
-              {rawMode ? 'Pretty' : 'Raw'}
-            </button>
-            <button
-              style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: copied ? 'var(--method-get)' : 'var(--text-1)', cursor: 'pointer' }}
-              onClick={() => copyBody(resp.body)}
-              title="Copy response body"
-            >
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-        )}
-      </div>
+      <PanelTabStrip
+        activeId={innerTab}
+        onSelect={(id) => setInnerTab(id as typeof innerTab)}
+        tabs={(['body', 'headers', 'timing'] as const).map((t) => ({
+          id: t,
+          label: (
+            <>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+              {t === 'headers' && <span className="panel-tab-count">{Object.keys(resp.headers).length}</span>}
+            </>
+          )
+        }))}
+        trailing={
+          innerTab === 'body' ? (
+            <>
+              <button
+                type="button"
+                style={{ fontSize: 10, padding: '1px 8px', background: rawMode ? 'var(--bg-4)' : 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-1)', cursor: 'pointer' }}
+                onClick={() => setRawMode((m) => !m)}
+                title="Toggle raw / pretty view"
+              >
+                {rawMode ? 'Pretty' : 'Raw'}
+              </button>
+              <button
+                type="button"
+                style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: copied ? 'var(--method-get)' : 'var(--text-1)', cursor: 'pointer' }}
+                onClick={() => copyBody(resp.body)}
+                title="Copy response body"
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </>
+          ) : undefined
+        }
+      />
 
       {innerTab === 'body' && (
         <ResponseBodyViewport>
@@ -199,17 +205,23 @@ function GrpcResponseView({ tab }: { tab: Tab }) {
         </div>
       )}
 
-      <div className="panel-tabs">
-        <div className={`panel-tab ${innerTab === 'messages' ? 'active' : ''}`} onClick={() => setInnerTab('messages')}>
-          Messages {messages.length > 0 && <span className="panel-tab-count">{messages.length}</span>}
-        </div>
-        <div className={`panel-tab ${innerTab === 'status' ? 'active' : ''}`} onClick={() => setInnerTab('status')}>
-          Status
-        </div>
-        <div className={`panel-tab ${innerTab === 'trailers' ? 'active' : ''}`} onClick={() => setInnerTab('trailers')}>
-          Trailers
-        </div>
-      </div>
+      <PanelTabStrip
+        activeId={innerTab}
+        onSelect={(id) => setInnerTab(id as typeof innerTab)}
+        tabs={[
+          {
+            id: 'messages',
+            label: (
+              <>
+                Messages
+                {messages.length > 0 && <span className="panel-tab-count">{messages.length}</span>}
+              </>
+            )
+          },
+          { id: 'status', label: 'Status' },
+          { id: 'trailers', label: 'Trailers' }
+        ]}
+      />
 
       {innerTab === 'messages' && (
         <div className="response-body" style={{ padding: 0 }}>

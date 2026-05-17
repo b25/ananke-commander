@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar'
 import { RequestEditor } from './components/RequestEditor'
 import { ResponseViewer } from './components/ResponseViewer'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { ScrollableTabStrip } from './components/ScrollableTabStrip'
 
 export function App() {
   const { tabs, activeTabId, openTab, closeTab, setActiveTab, setCollections, setEnvironments, setHistory, addHistoryEntry } = useStore()
@@ -152,33 +153,64 @@ function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
   onClose: (id: string) => void
   onNew: () => void
 }) {
+  const compact = tabs.length > 5
+
   return (
-    <div className="tabbar">
-      {tabs.map((tab) => (
-        <div
-          key={tab.id}
-          className={`tab ${tab.id === activeTabId ? 'active' : ''}`}
-          onClick={() => onSelect(tab.id)}
-        >
-          {tab.protocol === 'grpc' && <span className="method-badge method-grpc" style={{ fontSize: 9 }}>gRPC</span>}
-          {tab.protocol === 'http' && tab.httpRequest.method && (
-            <span className={`method-badge method-${tab.httpRequest.method}`} style={{ fontSize: 9 }}>
-              {tab.httpRequest.method}
-            </span>
-          )}
-          <span className="tab-name" title={tab.name}>{tab.name}</span>
-          {tab.dirty && <span style={{ fontSize: 9, color: 'var(--text-2)' }}>●</span>}
-          <span className="tab-close" onClick={(e) => {
-            e.stopPropagation()
-            if (tab.dirty && tab.collectionId) {
-              if (!window.confirm(`"${tab.name}" has unsaved changes. Close anyway?`)) return
-            }
-            onClose(tab.id)
-          }}>×</span>
-        </div>
-      ))}
-      <div className="tab-new-btn" onClick={onNew} title="New request">+</div>
-    </div>
+    <ScrollableTabStrip
+      scrollKey={activeTabId}
+      compact={compact}
+      trackClassName="tabbar-track"
+      ariaLabel="Open requests"
+      trailing={
+        <button type="button" className="tab-new-btn" onClick={onNew} title="New request" aria-label="New request">
+          +
+        </button>
+      }
+    >
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTabId
+        return (
+          <div
+            key={tab.id}
+            role="tab"
+            tabIndex={0}
+            aria-selected={isActive}
+            data-scroll-active={isActive ? 'true' : undefined}
+            className={`tab ${isActive ? 'active' : ''}`}
+            onClick={() => onSelect(tab.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelect(tab.id)
+              }
+            }}
+          >
+            {tab.protocol === 'grpc' && <span className="method-badge method-grpc">gRPC</span>}
+            {tab.protocol === 'http' && tab.httpRequest.method && (
+              <span className={`method-badge method-${tab.httpRequest.method}`}>
+                {tab.httpRequest.method}
+              </span>
+            )}
+            <span className="tab-name" title={tab.name}>{tab.name}</span>
+            {tab.dirty && <span className="tab-dirty" aria-label="Unsaved changes">●</span>}
+            <button
+              type="button"
+              className="tab-close"
+              aria-label={`Close ${tab.name}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (tab.dirty && tab.collectionId) {
+                  if (!window.confirm(`"${tab.name}" has unsaved changes. Close anyway?`)) return
+                }
+                onClose(tab.id)
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )
+      })}
+    </ScrollableTabStrip>
   )
 }
 
