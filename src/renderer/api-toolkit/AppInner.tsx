@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { loadResponseViewPrefs } from './lib/responseViewPrefs'
 import { useStore, useActiveTab } from './store'
 import type { Tab } from './store'
 import { Sidebar } from './components/Sidebar'
@@ -21,6 +22,16 @@ export function App() {
     window.ananke.apiToolkit.storage.getEnvironments().then(setEnvironments).catch(console.error)
     window.ananke.apiToolkit.storage.getHistory().then(setHistory).catch(console.error)
     window.ananke.apiToolkit.mock.getData().then(useStore.getState().setMockData).catch(console.error)
+
+    const viewPrefs = loadResponseViewPrefs()
+    if (viewPrefs.remember) {
+      useStore.setState({ responseViewRaw: viewPrefs.raw })
+      useStore.setState((s) => ({
+        tabs: s.tabs.map((t) =>
+          t.responseViewRaw === undefined ? { ...t, responseViewRaw: viewPrefs.raw } : t
+        ),
+      }))
+    }
 
     // Bootstrap active tab if none
     if (!activeTabId && tabs.length > 0) {
@@ -139,7 +150,7 @@ function ResizableSplit({ tab }: { tab: Tab }) {
       />
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <ErrorBoundary label="Response Viewer">
-          <ResponseViewer key={tab.id} tab={tab} />
+          <ResponseViewer tab={tab} />
         </ErrorBoundary>
       </div>
     </div>

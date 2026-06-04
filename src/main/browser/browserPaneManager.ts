@@ -1,6 +1,8 @@
 import { BrowserWindow, Menu, MenuItem, WebContentsView, app, clipboard, shell } from 'electron'
 import Store from 'electron-store'
+import type { BrowserNavigateResult } from '../../shared/contracts.js'
 import { attachGuestWebContentsGuards, hardenGuestSession, isExternalUrlAllowed, isNavigationAllowed } from '../security/browserSecurity.js'
+import { applyJsonPrettyPrint } from './browserJsonPrettyPrint.js'
 import { HarCapture } from './harCapture.js'
 
 export type HistoryEntry = { url: string; timestamp: number }
@@ -18,6 +20,9 @@ export class BrowserPaneManager {
   private views = new Map<string, WebContentsView>()
   private histories = new Map<string, HistoryEntry[]>()
   private harCaptures = new Map<string, HarCapture>()
+  private pendingNavigations = new Map<string, string>()
+  private jsonPrettyPrint = new Map<string, boolean>()
+  private defaultJsonPrettyPrint = true
   private historyOpts: HistoryOptions
   private historyStore: Store<HistoryStoreSchema>
   private persistTimer: ReturnType<typeof setTimeout> | null = null
@@ -117,21 +122,65 @@ export class BrowserPaneManager {
       view.webContents.on('did-stop-loading', () => {
         if (!win.isDestroyed())
           win.webContents.send('browser:loadingState', { paneId: id, loading: false })
+        void this.applyJsonPrettyPrintForPane(id)
       })
       view.webContents.on('context-menu', (_e, params) => {
         this.showContextMenu(id, view!, params)
       })
       this.mainWindow.contentView.addChildView(view)
       this.views.set(paneId, view)
+      const pending = this.pendingNavigations.get(paneId)
+      if (pending && isNavigationAllowed(pending)) {
+        this.pendingNavigations.delete(paneId)
+        void view.webContents.loadURL(pending)
+      }
     }
     view.setBounds(bounds)
   }
 
-  navigate(paneId: string, url: string): void {
+  setJsonPrettyPrint(paneId: string, enabled: boolean): void {
+    this.jsonPrettyPrint.set(paneId, enabled)
+    void this.applyJsonPrettyPrintForPane(paneId)
+  }
+
+  getJsonPrettyPrint(paneId: string): boolean {
+    return this.jsonPrettyPrint.get(paneId) ?? this.defaultJsonPrettyPrint
+  }
+
+  setDefaultJsonPrettyPrint(enabled: boolean): void {
+    this.defaultJsonPrettyPrint = enabled
+  }
+
+  private async applyJsonPrettyPrintForPane(paneId: string): Promise<void> {
     const view = this.views.get(paneId)
-    if (!view) return
-    const target = isNavigationAllowed(url) ? url : 'about:blank'
-    void view.webContents.loadURL(target)
+    if (!view || view.webContents.isDestroyed()) return
+    const enabled = this.getJsonPrettyPrint(paneId)
+    const run = async () => {
+      const result = await applyJsonPrettyPrint(view.webContents, enabled)
+      if (result === 'reload') view.webContents.reload()
+      return result
+    }
+    const first = await run()
+    if (enabled && first !== true) {
+      for (const delay of [120, 350, 700]) {
+        setTimeout(() => void run(), delay)
+      }
+    }
+  }
+
+  navigate(paneId: string, url: string): BrowserNavigateResult {
+    if (!isNavigationAllowed(url)) {
+      this.pendingNavigations.delete(paneId)
+      return { status: 'blocked', url }
+    }
+    const view = this.views.get(paneId)
+    if (!view) {
+      this.pendingNavigations.set(paneId, url)
+      return { status: 'pending' }
+    }
+    this.pendingNavigations.delete(paneId)
+    void view.webContents.loadURL(url)
+    return { status: 'ok' }
   }
 
   goBack(paneId: string): void {
@@ -312,6 +361,8 @@ export class BrowserPaneManager {
     this.harCaptures.get(paneId)?.stop()
     this.harCaptures.delete(paneId)
     this.histories.delete(paneId)
+    this.pendingNavigations.delete(paneId)
+    this.jsonPrettyPrint.delete(paneId)
     this.persistHistory()
     if (!this.mainWindow.isDestroyed()) {
       try { this.mainWindow.contentView.removeChildView(view) } catch {}

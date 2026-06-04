@@ -107,9 +107,15 @@ export function BrowserActions({ navHistory, pane, onUpdate }: Props) {
                 role="menuitem"
                 title={entry.url}
                 onClick={() => {
-                  void window.ananke.browser.navigate(pane.id, entry.url)
-                  onUpdate({ ...pane, url: entry.url })
-                  setOpen(false)
+                  void (async () => {
+                    const result = await window.ananke.browser.navigate(pane.id, entry.url)
+                    if (result.status === 'blocked') {
+                      alert(`Navigation blocked (only http/https URLs are allowed).\n\n${entry.url}`)
+                      return
+                    }
+                    onUpdate({ ...pane, url: entry.url })
+                    setOpen(false)
+                  })()
                 }}
               >
                 <span className="browser-history__url">{entry.url}</span>

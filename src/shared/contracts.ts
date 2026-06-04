@@ -20,16 +20,16 @@ export interface TerminalSettings {
   scrollback: number
 }
 
-export interface BrowserSettings {
-  /** Extra hostnames allowed for embedded browser navigation (one per line in UI). */
-  extraAllowedHosts: string[]
-}
+/** Result of `browser:navigate` IPC. */
+export type BrowserNavigateResult =
+  | { status: 'ok' }
+  | { status: 'pending' }
+  | { status: 'blocked'; url: string }
 
 export interface AppSettings {
   privacy: PrivacySettings
   obsidian: ObsidianSettings
   terminal: TerminalSettings
-  browser: BrowserSettings
 }
 
 export interface PaneStateBase {
@@ -67,6 +67,8 @@ export interface TerminalPaneState extends PaneStateBase {
 export interface BrowserPaneState extends PaneStateBase {
   type: 'browser'
   url: string
+  /** Pretty-print JSON responses in the embedded browser (persisted). */
+  jsonPrettyPrint?: boolean
 }
 
 export interface NotesPaneState extends PaneStateBase {
@@ -135,15 +137,10 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   privateMode: false
 }
 
-export const DEFAULT_BROWSER: BrowserSettings = {
-  extraAllowedHosts: []
-}
-
 export const DEFAULT_SETTINGS: AppSettings = {
   privacy: DEFAULT_PRIVACY,
   obsidian: { vaultPath: '', subfolder: 'ananke-commander-notes' },
-  terminal: { fontSize: 10, fontFamily: 'ui-monospace, monospace', scrollback: 10_000 },
-  browser: DEFAULT_BROWSER
+  terminal: { fontSize: 10, fontFamily: 'ui-monospace, monospace', scrollback: 10_000 }
 }
 
 export interface ListDirEntry {

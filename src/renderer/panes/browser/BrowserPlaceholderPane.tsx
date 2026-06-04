@@ -3,6 +3,11 @@ import type { BrowserPaneState } from '../../../shared/contracts'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { BrowserActions } from './BrowserActions'
 import { BrowserMenu } from './BrowserMenu'
+import {
+  loadBrowserJsonPrettyPrint,
+  paneJsonPrettyPrint,
+  saveBrowserJsonPrettyPrint,
+} from './browserJsonPrettyPrintPrefs'
 
 type Props = {
   pane: BrowserPaneState
@@ -17,10 +22,12 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
   const hostRef = useRef<HTMLDivElement>(null)
   type HistoryEntry = { url: string; timestamp: number }
   const [navHistory, setNavHistory] = useState<HistoryEntry[]>([])
-  const [urlInput, setUrlInput] = useState(pane.url || '')
+  const [urlInput, setUrlInput] = useState(() => urlForOmnibox(pane.url))
   const [loading, setLoading] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const [findText, setFindText] = useState('')
+  const [navError, setNavError] = useState<string | null>(null)
+  const [jsonPrettyPrint, setJsonPrettyPrint] = useState(() => paneJsonPrettyPrint(pane))
   const findRef = useRef<HTMLInputElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
   const focusBeforeFindRef = useRef<HTMLElement | null>(null)
@@ -49,8 +56,20 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
   onUpdateRef.current = onUpdate
 
   useEffect(() => {
-    setUrlInput(pane.url || '')
+    setUrlInput(urlForOmnibox(pane.url))
   }, [pane.url])
+
+  useEffect(() => {
+    const enabled = paneJsonPrettyPrint(pane)
+    setJsonPrettyPrint(enabled)
+    void window.ananke.browser.setJsonPrettyPrint(pane.id, enabled)
+  }, [pane.id, pane.jsonPrettyPrint])
+
+  useEffect(() => {
+    if (!loading && jsonPrettyPrint) {
+      void window.ananke.browser.setJsonPrettyPrint(pane.id, true)
+    }
+  }, [loading, jsonPrettyPrint, pane.id])
 
   useEffect(() => {
     void window.ananke.browser.getHistory(pane.id).then(setNavHistory)
@@ -65,7 +84,7 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
     })
     const unsubUrl = window.ananke.browser.onUrlUpdate(({ paneId, url }) => {
       if (paneId === pane.id) {
-        setUrlInput(url)
+        setUrlInput(urlForOmnibox(url))
         onUpdateRef.current({ ...paneRef.current, url })
       }
     })
@@ -82,9 +101,14 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
   }, [pane.id])
 
   useEffect(() => {
-    // Initial mount navigation
     const target = pane.url?.trim() || 'about:blank'
-    void window.ananke.browser.navigate(pane.id, target)
+    if (target === 'about:blank') return
+    void (async () => {
+      const result = await window.ananke.browser.navigate(pane.id, target)
+      if (result.status === 'blocked') {
+        setNavError(blockedHostMessage(result.url))
+      }
+    })()
   }, [pane.id]) // Intentionally only on pane ID change / fresh component mount
 
   const nativeVisibleRef = useRef(true)
@@ -258,21 +282,27 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
     return false
   }
 
-  const doNav = (u: string) => {
+  const doNav = async (u: string) => {
     let target = u.trim() || 'about:blank'
     if (target === 'about:blank') {
-      // no-op
-    } else if (/^(https?:\/\/|data:)/.test(target)) {
+      setNavError(null)
+      return
+    }
+    if (/^(https?:\/\/|data:)/.test(target)) {
       // Already has protocol
     } else if (/^localhost(:\d+)?/.test(target)) {
       target = 'http://' + target
     } else if (looksLikeUrl(target)) {
       target = 'https://' + target
     } else {
-      // Treat as search query
       target = 'https://www.google.com/search?q=' + encodeURIComponent(target)
     }
-    void window.ananke.browser.navigate(pane.id, target)
+    const result = await window.ananke.browser.navigate(pane.id, target)
+    if (result.status === 'blocked') {
+      setNavError(blockedHostMessage(result.url))
+      return
+    }
+    setNavError(null)
     onUpdate({ ...pane, url: target })
     setUrlInput(target)
   }
@@ -303,7 +333,7 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
                 </button>
             }
           </div>
-          <form className="browser-toolbar__url-form" onSubmit={(e) => { e.preventDefault(); doNav(urlInput) }}>
+          <form className="browser-toolbar__url-form" onSubmit={(e) => { e.preventDefault(); void doNav(urlInput) }}>
             <span className="browser-toolbar__ssl-indicator" title={urlInput.startsWith('https://') ? 'Secure connection' : urlInput.startsWith('http://') ? 'Not secure' : ''}>
               {urlInput.startsWith('https://') ? (
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -329,6 +359,25 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
           </button>
           <BrowserMenu paneId={pane.id} onFindToggle={() => (findOpen ? closeFind() : openFind())} onClipToVault={() => void clipPageToVault(pane.id)} />
         </div>
+        <label className="browser-json-pretty" title="Pretty-print JSON responses (saved across refresh)">
+          <input
+            type="checkbox"
+            checked={jsonPrettyPrint}
+            onChange={(e) => {
+              const enabled = e.target.checked
+              setJsonPrettyPrint(enabled)
+              saveBrowserJsonPrettyPrint(enabled)
+              onUpdate({ ...pane, jsonPrettyPrint: enabled })
+              void window.ananke.browser.setJsonPrettyPrint(pane.id, enabled)
+            }}
+          />
+          Pretty-print
+        </label>
+        {navError && (
+          <div className="browser-nav-error" role="alert">
+            {navError}
+          </div>
+        )}
         {findOpen && (
           <div className="browser-find-bar">
             <form className="browser-find-bar__form" onSubmit={(e) => { e.preventDefault(); void window.ananke.browser.findInPage(pane.id, findText, true) }}>
@@ -363,4 +412,14 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
       </div>
     </div>
   )
+}
+
+function urlForOmnibox(url: string | undefined): string {
+  const u = (url ?? '').trim()
+  if (!u || u === 'about:blank' || u === 'about:blank/') return ''
+  return u
+}
+
+function blockedHostMessage(url: string): string {
+  return `Navigation blocked (only http/https URLs are allowed): ${url}`
 }

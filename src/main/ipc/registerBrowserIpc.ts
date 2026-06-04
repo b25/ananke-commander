@@ -17,7 +17,7 @@ export function registerBrowserIpcHandlers(deps: RegisterBrowserIpcDeps): void {
   )
 
   ipcMain.handle('browser:navigate', (_e, paneId: string, url: string) => {
-    getBrowserPanes().navigate(paneId, url)
+    return getBrowserPanes().navigate(paneId, url)
   })
 
   ipcMain.handle('browser:goBack', (_e, paneId: string) => {
@@ -96,5 +96,13 @@ export function registerBrowserIpcHandlers(deps: RegisterBrowserIpcDeps): void {
 
   ipcMain.handle('browser:getPageInfo', async (_e, paneId: string) => {
     return getBrowserPanes().getPageInfo(paneId)
+  })
+
+  ipcMain.handle('browser:setJsonPrettyPrint', (_e, paneId: string, enabled: boolean) => {
+    getBrowserPanes().setJsonPrettyPrint(paneId, enabled)
+  })
+
+  ipcMain.handle('browser:getJsonPrettyPrint', (_e, paneId: string) => {
+    return getBrowserPanes().getJsonPrettyPrint(paneId)
   })
 }

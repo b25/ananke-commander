@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { isExternalUrlAllowed, isNavigationAllowed, parseAllowlistHost, setGuestAllowedHosts } from './browserSecurity.ts'
+import { isExternalUrlAllowed, isNavigationAllowed } from './browserSecurity.ts'
 
 describe('isNavigationAllowed', () => {
-  it('allows http(s) only for trusted hosts', () => {
+  it('allows any http(s) URL with a hostname', () => {
     assert.equal(isNavigationAllowed('https://example.com/'), true)
-    assert.equal(isNavigationAllowed('http://www.example.com/'), true)
+    assert.equal(isNavigationAllowed('https://evil.example.com/'), true)
+    assert.equal(isNavigationAllowed('https://sportium-es-tt.ptstaging.eu/'), true)
+    assert.equal(isNavigationAllowed('https://google.com/search?q=1'), true)
     assert.equal(isNavigationAllowed('https://localhost:3000/'), true)
     assert.equal(isNavigationAllowed('http://127.0.0.1/'), true)
     assert.equal(isNavigationAllowed('http://[::1]/'), true)
-    assert.equal(isNavigationAllowed('https://evil.example.com/'), false)
-    assert.equal(isNavigationAllowed('https://google.com/'), false)
   })
 
   it('allows only about:blank for about:', () => {
@@ -28,31 +28,13 @@ describe('isNavigationAllowed', () => {
     assert.equal(isNavigationAllowed('javascript:alert(1)'), false)
   })
 
-  it('treats bare hostnames as https for the allowlist check', () => {
+  it('treats bare hostnames as https', () => {
     assert.equal(isNavigationAllowed('example.com'), true)
-    assert.equal(isNavigationAllowed('malicious.test'), false)
+    assert.equal(isNavigationAllowed('sportium-es-tt.ptstaging.eu'), true)
   })
 
   it('returns false for malformed URLs', () => {
     assert.equal(isNavigationAllowed('https://'), false)
-  })
-})
-
-describe('setGuestAllowedHosts', () => {
-  it('allows configured extra hosts', () => {
-    setGuestAllowedHosts(['google.com', 'https://docs.github.com/foo'])
-    assert.equal(isNavigationAllowed('https://google.com/search'), true)
-    assert.equal(isNavigationAllowed('https://docs.github.com/'), true)
-    assert.equal(isNavigationAllowed('https://evil.google.com/'), false)
-    setGuestAllowedHosts([])
-  })
-})
-
-describe('parseAllowlistHost', () => {
-  it('normalizes bare hostnames and URLs', () => {
-    assert.equal(parseAllowlistHost('GitHub.com'), 'github.com')
-    assert.equal(parseAllowlistHost('https://npmjs.com/package/foo'), 'npmjs.com')
-    assert.equal(parseAllowlistHost(''), null)
   })
 })
 

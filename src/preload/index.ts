@@ -186,6 +186,10 @@ const api = {
     stopFindInPage: (paneId: string) => ipcRenderer.invoke('browser:stopFindInPage', paneId),
     getPageInfo: (paneId: string): Promise<{ title: string; url: string; selectedText: string; bodyText: string } | null> =>
       ipcRenderer.invoke('browser:getPageInfo', paneId),
+    setJsonPrettyPrint: (paneId: string, enabled: boolean) =>
+      ipcRenderer.invoke('browser:setJsonPrettyPrint', paneId, enabled),
+    getJsonPrettyPrint: (paneId: string): Promise<boolean> =>
+      ipcRenderer.invoke('browser:getJsonPrettyPrint', paneId),
     onClipToVault: (cb: (msg: { paneId: string }) => void) => {
       const fn = (_: unknown, msg: { paneId: string }) => cb(msg)
       ipcRenderer.on('browser:clipToVault', fn)

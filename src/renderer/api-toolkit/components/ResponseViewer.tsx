@@ -1,8 +1,9 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Tab } from '../store'
 import { useStore } from '../store'
 import type { MockRoute } from '../../../shared/api-toolkit-contracts'
+import { loadResponseViewPrefs, tabResponseViewRaw } from '../lib/responseViewPrefs'
 import { StreamLog } from './GrpcPanel'
 import { PanelTabStrip } from './PanelTabStrip'
 
@@ -11,11 +12,17 @@ interface Props {
 }
 
 export function ResponseViewer({ tab }: Props) {
-  const [innerTab, setInnerTab] = useState<'body' | 'headers' | 'timing'>('body')
-  const [rawMode, setRawMode] = useState(false)
   const [copied, setCopied] = useState(false)
   const [savedAsMock, setSavedAsMock] = useState(false)
-  const { mockData, saveMockData, setSidebarTab } = useStore()
+  const { mockData, saveMockData, setSidebarTab, responseViewRaw, setTabResponseViewRaw } = useStore()
+
+  // Re-apply persisted preference when switching tabs (store is module-singleton).
+  useEffect(() => {
+    if (tab.protocol !== 'http') return
+    if (tab.responseViewRaw !== undefined) return
+    const prefs = loadResponseViewPrefs()
+    if (prefs.remember) setTabResponseViewRaw(tab.id, prefs.raw)
+  }, [tab.id, tab.protocol, tab.responseViewRaw, setTabResponseViewRaw])
 
   function copyBody(body: string) {
     window.ananke.clipboard.writeText(body)
@@ -51,71 +58,92 @@ export function ResponseViewer({ tab }: Props) {
     setTimeout(() => setSavedAsMock(false), 2000)
   }
 
-  // Loading state
-  if (tab.loading && !tab.grpcStreamActive) {
-    return (
-      <div className="response-viewer">
-        <div className="empty-state">
-          <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
-          <span>Sending…</span>
-        </div>
-      </div>
-    )
-  }
-
-  // Error state
-  if (tab.error && !tab.httpResponse && !tab.grpcResponse) {
-    return (
-      <div className="response-viewer">
-        <div className="error-box" style={{ margin: 16 }}>
-          {tab.error}
-        </div>
-      </div>
-    )
-  }
-
-  // gRPC response/stream
   if (tab.protocol === 'grpc') {
     return <GrpcResponseView tab={tab} />
   }
 
-  // HTTP response
-  if (!tab.httpResponse) {
-    return (
-      <div className="response-viewer">
-        <div className="empty-state">
-          <div className="empty-state-icon">→</div>
-          <span>Send a request to see the response</span>
-        </div>
-      </div>
-    )
-  }
+  return (
+    <HttpResponseView
+      tab={tab}
+      copied={copied}
+      savedAsMock={savedAsMock}
+      viewRaw={tabResponseViewRaw(tab, responseViewRaw)}
+      onToggleView={() => setTabResponseViewRaw(tab.id, !tabResponseViewRaw(tab, responseViewRaw))}
+      onCopy={copyBody}
+      onSaveMock={saveAsMock}
+    />
+  )
+}
 
+function HttpResponseView({
+  tab,
+  copied,
+  savedAsMock,
+  viewRaw,
+  onToggleView,
+  onCopy,
+  onSaveMock,
+}: {
+  tab: Tab
+  copied: boolean
+  savedAsMock: boolean
+  viewRaw: boolean
+  onToggleView: () => void
+  onCopy: (body: string) => void
+  onSaveMock: () => void
+}) {
+  const [innerTab, setInnerTab] = useState<'body' | 'headers' | 'timing'>('body')
   const resp = tab.httpResponse
-  const statusClass = `status-${Math.floor(resp.status / 100)}xx`
+  const headerCount = resp ? Object.keys(resp.headers).length : 0
+
+  const viewToggle = innerTab === 'body' ? (
+    <>
+      <button
+        type="button"
+        style={{ fontSize: 10, padding: '1px 8px', background: viewRaw ? 'var(--bg-4)' : 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-1)', cursor: 'pointer' }}
+        onClick={onToggleView}
+        title="Toggle raw / pretty view (saved for next response)"
+      >
+        {viewRaw ? 'Pretty' : 'Raw'}
+      </button>
+      {resp && (
+        <button
+          type="button"
+          style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: copied ? 'var(--method-get)' : 'var(--text-1)', cursor: 'pointer' }}
+          onClick={() => onCopy(resp.body)}
+          title="Copy response body"
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      )}
+    </>
+  ) : undefined
 
   return (
     <div className="response-viewer">
-      <div className="response-status-bar">
-        <span className={`status-pill ${statusClass}`}>{resp.status} {resp.statusText}</span>
-        <span className="timing-label">Time:</span>
-        <span className="timing-val">{resp.timings.total}ms</span>
-        {resp.timings.ttfb && <>
-          <span className="timing-label">TTFB:</span>
-          <span className="timing-val">{resp.timings.ttfb}ms</span>
-        </>}
-        <span className="timing-label">Size:</span>
-        <span className="timing-val">{formatSize(resp.size.body)}</span>
-        <span style={{ marginLeft: 'auto' }}>
-          <button
-            style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: savedAsMock ? 'var(--method-get)' : 'var(--text-2)', cursor: 'pointer' }}
-            onClick={saveAsMock}
-            title="Save request+response as mock route"
-          >
-            {savedAsMock ? 'Saved!' : 'Save as mock'}
-          </button>
-        </span>
-      </div>
+      {resp && (
+        <div className="response-status-bar">
+          <span className={`status-pill status-${Math.floor(resp.status / 100)}xx`}>{resp.status} {resp.statusText}</span>
+          <span className="timing-label">Time:</span>
+          <span className="timing-val">{resp.timings.total}ms</span>
+          {resp.timings.ttfb && <>
+            <span className="timing-label">TTFB:</span>
+            <span className="timing-val">{resp.timings.ttfb}ms</span>
+          </>}
+          <span className="timing-label">Size:</span>
+          <span className="timing-val">{formatSize(resp.size.body)}</span>
+          <span style={{ marginLeft: 'auto' }}>
+            <button
+              type="button"
+              style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: savedAsMock ? 'var(--method-get)' : 'var(--text-2)', cursor: 'pointer' }}
+              onClick={onSaveMock}
+              title="Save request+response as mock route"
+            >
+              {savedAsMock ? 'Saved!' : 'Save as mock'}
+            </button>
+          </span>
+        </div>
+      )}
 
       <PanelTabStrip
         activeId={innerTab}
@@ -125,43 +153,36 @@ export function ResponseViewer({ tab }: Props) {
           label: (
             <>
               {t.charAt(0).toUpperCase() + t.slice(1)}
-              {t === 'headers' && <span className="panel-tab-count">{Object.keys(resp.headers).length}</span>}
+              {t === 'headers' && resp && <span className="panel-tab-count">{headerCount}</span>}
             </>
-          )
+          ),
         }))}
-        trailing={
-          innerTab === 'body' ? (
-            <>
-              <button
-                type="button"
-                style={{ fontSize: 10, padding: '1px 8px', background: rawMode ? 'var(--bg-4)' : 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-1)', cursor: 'pointer' }}
-                onClick={() => setRawMode((m) => !m)}
-                title="Toggle raw / pretty view"
-              >
-                {rawMode ? 'Pretty' : 'Raw'}
-              </button>
-              <button
-                type="button"
-                style={{ fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: copied ? 'var(--method-get)' : 'var(--text-1)', cursor: 'pointer' }}
-                onClick={() => copyBody(resp.body)}
-                title="Copy response body"
-              >
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
-            </>
-          ) : undefined
-        }
+        trailing={viewToggle}
       />
 
       {innerTab === 'body' && (
         <ResponseBodyViewport>
-          {rawMode
-            ? <RawBody body={resp.body} />
-            : <PrettyBody body={resp.body} contentType={resp.headers['content-type'] ?? ''} />}
+          {tab.loading && !tab.grpcStreamActive ? (
+            <div className="empty-state">
+              <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
+              <span>Sending…</span>
+            </div>
+          ) : tab.error && !resp ? (
+            <div className="error-box" style={{ margin: 16 }}>{tab.error}</div>
+          ) : !resp ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">→</div>
+              <span>Send a request to see the response</span>
+            </div>
+          ) : viewRaw ? (
+            <RawBody body={resp.body} />
+          ) : (
+            <PrettyBody body={resp.body} contentType={resp.headers['content-type'] ?? ''} />
+          )}
         </ResponseBodyViewport>
       )}
 
-      {innerTab === 'headers' && (
+      {innerTab === 'headers' && resp && (
         <div className="panel-body">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
             <tbody>
@@ -176,10 +197,17 @@ export function ResponseViewer({ tab }: Props) {
         </div>
       )}
 
-      {innerTab === 'timing' && (
+      {innerTab === 'timing' && resp && (
         <div className="panel-body">
           <TimingBar timings={resp.timings} />
         </div>
+      )}
+
+      {innerTab === 'headers' && !resp && (
+        <div className="empty-state"><span>No response yet</span></div>
+      )}
+      {innerTab === 'timing' && !resp && (
+        <div className="empty-state"><span>No response yet</span></div>
       )}
     </div>
   )
@@ -298,13 +326,25 @@ function PrettyBody({ body, contentType }: { body: string; contentType: string }
   if (isJson) {
     try {
       const parsed = JSON.parse(body)
+      const formatted = JSON.stringify(parsed, null, 2)
+      if (formatted.length <= 80_000) {
+        return (
+          <pre style={{ margin: 0, fontSize: 10, fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {formatted}
+          </pre>
+        )
+      }
       return <JsonTree value={parsed} />
     } catch {
-      // fall through to raw
+      // fall through to raw text
     }
   }
 
-  return <>{body}</>
+  return (
+    <pre style={{ margin: 0, fontSize: 10, fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+      {body}
+    </pre>
+  )
 }
 
 const JSON_PAGE_SIZE = 40

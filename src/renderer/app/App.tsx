@@ -10,7 +10,6 @@ import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { TomlEditorModal } from '../layout/TomlEditorModal'
 import { DiagOverlay } from '../layout/DiagOverlay'
 import { NotesSettings } from '../settings/NotesSettings'
-import { BrowserSettings } from '../settings/BrowserSettings'
 import { PrivacySettings } from '../settings/PrivacySettings'
 import { LAYOUTS, LAYOUT_SLOTS, applyLayout, bestLayout, nextProgressionLayout, fittingLayout } from '../lib/layouts'
 import { useWorkspaceStability } from './useWorkspaceStability'
@@ -231,7 +230,17 @@ export function App() {
     let p: PaneState
     if (type === 'file-browser') p = { ...base, type: 'file-browser', title: 'Files', leftPath: home, rightPath: home, focusedSide: 'left', leftSelection: [], rightSelection: [] } satisfies FileBrowserPaneState
     else if (type === 'terminal') p = { ...base, type: 'terminal', title: 'Terminal', cwd: opts?.cwd || home } satisfies TerminalPaneState
-    else if (type === 'browser') p = { ...base, type: 'browser', title: 'Browser', url: 'about:blank' } satisfies BrowserPaneState
+    else if (type === 'browser') {
+      const jsonPrettyPrint = (() => {
+        try {
+          const v = localStorage.getItem('ananke.browser.jsonPrettyPrint')
+          return v === null ? true : v === '1'
+        } catch {
+          return true
+        }
+      })()
+      p = { ...base, type: 'browser', title: 'Browser', url: 'about:blank', jsonPrettyPrint } satisfies BrowserPaneState
+    }
     else if (type === 'radar') p = { ...base, type: 'radar', title: 'Radar', rootPath: home, pathHistory: [] } satisfies RadarPaneState
     else if (type === 'gitui') p = { ...base, type: 'gitui', title: 'GitUI', cwd: opts?.cwd || home } satisfies GitUiPaneState
     else if (type === 'api-toolkit') p = { ...base, type: 'api-toolkit', title: 'API Toolkit', cwd: home } satisfies ApiToolkitPaneState
@@ -577,10 +586,6 @@ export function App() {
           </h3>
           <div className="body">
           <NotesSettings value={snap.settings.obsidian} onChange={(obsidian) => setSnap({ ...snap, settings: { ...snap.settings, obsidian } })} />
-          <BrowserSettings
-            value={snap.settings.browser ?? { extraAllowedHosts: [] }}
-            onChange={(browser) => setSnap({ ...snap, settings: { ...snap.settings, browser } })}
-          />
           <div style={{ marginBottom: 12 }}>
             <label className="muted" htmlFor="terminal-font-size" style={{ marginBottom: 4, display: 'block' }}>Terminal font size</label>
             <input id="terminal-font-size" type="number" min={6} max={32} value={snap.settings.terminal?.fontSize ?? 10} onChange={(e) => {

@@ -707,6 +707,25 @@ select {
   position: static;
 }
 
+.browser-json-pretty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.browser-json-pretty input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .browser-toolbar__nav {
   display: flex;
   gap: 2px;
@@ -1225,6 +1244,15 @@ select {
   border: none;
   border-radius: 0;
   box-shadow: none;
+}
+
+.browser-nav-error {
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--warning, #e8a838);
+  background: color-mix(in srgb, var(--warning, #e8a838) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--warning, #e8a838) 35%, transparent);
 }
 
 .browser-loading-bar {

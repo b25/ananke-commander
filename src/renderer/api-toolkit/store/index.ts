@@ -4,6 +4,7 @@ import type {
   Collection, CollectionItem, RequestItem, Environment, HistoryEntry, KeyValue, HttpBody, AuthConfig, TlsConfig, ProtoDiscovery,
   MockRoute, MockServerData,
 } from '../../../shared/api-toolkit-contracts'
+import { loadResponseViewPrefs, saveResponseViewPrefs } from '../lib/responseViewPrefs'
 
 export type Protocol = 'http' | 'grpc'
 let mockPersistTimer: ReturnType<typeof setTimeout> | null = null
@@ -38,6 +39,8 @@ export interface Tab {
   collectionId?: string
   requestId?: string
   dirty: boolean
+  /** Response body view: false = pretty, true = raw. */
+  responseViewRaw?: boolean
 }
 
 function defaultHttpRequest(): HttpRequest {
@@ -65,6 +68,7 @@ function defaultGrpcRequest(): GrpcRequest {
 }
 
 function newTab(overrides?: Partial<Tab>): Tab {
+  const viewPrefs = loadResponseViewPrefs()
   return {
     id: crypto.randomUUID(),
     name: 'New Request',
@@ -80,6 +84,7 @@ function newTab(overrides?: Partial<Tab>): Tab {
     loading: false,
     error: null,
     dirty: false,
+    responseViewRaw: viewPrefs.raw,
     ...overrides,
   }
 }
@@ -92,6 +97,10 @@ interface AppState {
   activeEnvironmentId: string | null
   history: HistoryEntry[]
   sidebarTab: 'collections' | 'history' | 'environments' | 'mock'
+
+  /** Default for new tabs: false = pretty, true = raw */
+  responseViewRaw: boolean
+  setTabResponseViewRaw: (tabId: string, raw: boolean) => void
 
   // Tab actions
   openTab: (overrides?: Partial<Tab>) => void
@@ -146,6 +155,8 @@ interface AppState {
   updateRouteHitCount: (routeId: string, hitCount: number) => void
 }
 
+const initialResponseView = loadResponseViewPrefs()
+
 export const useStore = create<AppState>((set, get) => ({
   tabs: [newTab()],
   activeTabId: null,
@@ -157,6 +168,15 @@ export const useStore = create<AppState>((set, get) => ({
   mockData: { port: 3001, routes: [] },
   mockRunning: false,
   mockActualPort: null,
+  responseViewRaw: initialResponseView.raw,
+
+  setTabResponseViewRaw: (tabId, raw) => {
+    set((s) => ({
+      responseViewRaw: raw,
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, responseViewRaw: raw } : t)),
+    }))
+    saveResponseViewPrefs({ raw, remember: true })
+  },
 
   openTab: (overrides) => {
     const tab = newTab(overrides)

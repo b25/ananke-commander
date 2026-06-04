@@ -15,7 +15,6 @@ import { TerminalManager } from './pty/terminalManager.js'
 import { BrowserPaneManager } from './browser/browserPaneManager.js'
 import { TerminalSessionStore } from './pty/terminalSessionStore.js'
 import { isExternalUrlAllowed } from './security/browserSecurity.js'
-import { syncBrowserGuestHostsFromSettings } from './security/syncGuestHosts.js'
 import { assertMaxBytes, IPC_LIMITS } from './ipc/ipcLimits.js'
 import * as archive from './archive/archiveService.js'
 import { saveMarkdownToVault, listVaultNotes, readVaultNote, deleteVaultNote } from './notes/notesService.js'
@@ -25,6 +24,11 @@ import { installAppMenu } from './menu.js'
 import { registerApiToolkitHandlers } from './api-toolkit/ipcHandlers.js'
 import { registerBrowserIpcHandlers } from './ipc/registerBrowserIpc.js'
 import { registerFsIpcHandlers } from './ipc/registerFsIpc.js'
+import {
+  attachMainWindowStatePersistence,
+  getMainWindowCreateOptions,
+  restoreMainWindowDevTools
+} from './window/windowState.js'
 
 registerPrivilegedAppScheme()
 
@@ -113,9 +117,6 @@ function registerIpcHandlers(): void {
     }
     stateStore!.setSnapshot(patch)
     stateStore!.applyRecentlyClosedRetention()
-    if (patch.settings !== undefined) {
-      syncBrowserGuestHostsFromSettings(stateStore!.getSnapshot().settings)
-    }
     return stateStore!.getSnapshot()
   })
 
@@ -350,8 +351,9 @@ async function createWindow(): Promise<void> {
   }
 
   const win = new BrowserWindow({
-    width: 1280,
-    height: 840,
+    ...getMainWindowCreateOptions(),
+    minWidth: 640,
+    minHeight: 480,
     title: 'Ananke Commander',
     icon: join(app.getAppPath(), 'resources', 'icon.png'),
     webPreferences: {
@@ -363,19 +365,18 @@ async function createWindow(): Promise<void> {
       spellcheck: false
     }
   })
+  const allowDevTools = !app.isPackaged
+  attachMainWindowStatePersistence(win, allowDevTools)
   mainWindow = win
 
   stateStore = new StateStore()
   stateStore.setMainWindow(win)
-  syncBrowserGuestHostsFromSettings(stateStore.getSnapshot().settings)
 
   registerIpcHandlers()
 
   await win.loadURL(appEntryUrl())
 
-  if (!app.isPackaged) {
-    win.webContents.openDevTools()
-  }
+  restoreMainWindowDevTools(win, allowDevTools)
 
   win.on('closed', () => {
     // Auto-save open terminal sessions before shutdown

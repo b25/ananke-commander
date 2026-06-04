@@ -6,7 +6,6 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AppSettings, AppStateSnapshot, PaneState, PaneType, RecentlyClosedEntry, WorkspaceState } from '../../shared/contracts.js'
 import { DEFAULT_SETTINGS } from '../../shared/contracts.js'
-import { syncBrowserGuestHostsFromSettings } from '../security/syncGuestHosts.js'
 import { TomlConfigService, tomlToSnapshot } from '../tomlConfig.js'
 
 const FALLBACK_VP_W = 1440
@@ -160,8 +159,7 @@ export class StateStore {
       ...stored,
       privacy: { ...DEFAULT_SETTINGS.privacy, ...stored?.privacy },
       terminal: { ...DEFAULT_SETTINGS.terminal, ...stored?.terminal },
-      obsidian: { ...DEFAULT_SETTINGS.obsidian, ...stored?.obsidian },
-      browser: { ...DEFAULT_SETTINGS.browser, ...stored?.browser }
+      obsidian: { ...DEFAULT_SETTINGS.obsidian, ...stored?.obsidian }
     }
     const disk: AppStateSnapshot = {
       workspaces: migrateWorkspaces(sanitizePaths(this.store.get('workspaces'))),
@@ -183,10 +181,7 @@ export class StateStore {
     const patch = this.pendingPatch; this.pendingPatch = {}
     if (patch.workspaces !== undefined) this.store.set('workspaces', patch.workspaces)
     if (patch.activeWorkspaceId !== undefined) this.store.set('activeWorkspaceId', patch.activeWorkspaceId)
-    if (patch.settings !== undefined) {
-      this.store.set('settings', patch.settings)
-      syncBrowserGuestHostsFromSettings(this.getSnapshot().settings)
-    }
+    if (patch.settings !== undefined) this.store.set('settings', patch.settings)
     if (patch.recentlyClosed !== undefined) this.store.set('recentlyClosed', patch.recentlyClosed)
   }
 
