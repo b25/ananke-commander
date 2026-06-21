@@ -1,25 +1,17 @@
 import { BrowserWindow, Menu, MenuItem, WebContentsView, app, clipboard, shell } from 'electron'
-import Store from 'electron-store'
 import type { BrowserNavigateResult } from '../../shared/contracts.js'
 import { attachGuestWebContentsGuards, hardenGuestSession, isExternalUrlAllowed, isNavigationAllowed } from '../security/browserSecurity.js'
 import { applyJsonPrettyPrint } from './browserJsonPrettyPrint.js'
-import { HarCapture } from './harCapture.js'
+import { BrowserHistoryService, type HistoryEntry, type HistoryOptions } from './browserHistoryService.js'
+import { HarCaptureService } from './harCaptureService.js'
 
-export type HistoryEntry = { url: string; timestamp: number }
-
-type HistoryStoreSchema = { histories: Record<string, HistoryEntry[]> }
-
-type HistoryOptions = {
-  maxEntries: () => number
-  shouldRecord: () => boolean
-  onHistory: (paneId: string, entries: HistoryEntry[]) => void
-}
+export type { HistoryEntry, HistoryOptions }
 
 export class BrowserPaneManager {
   private mainWindow: BrowserWindow
   private views = new Map<string, WebContentsView>()
-  private histories = new Map<string, HistoryEntry[]>()
-  private harCaptures = new Map<string, HarCapture>()
+  private history: BrowserHistoryService
+  private har = new HarCaptureService()
   private pendingNavigations = new Map<string, string>()
   /** Panes that have loaded a page at least once. Lets `ensureNavigated` stay idempotent
    *  across React remounts so switching workspace/screen never reloads a live page. */
@@ -30,65 +22,18 @@ export class BrowserPaneManager {
   private lastBounds = new Map<string, string>()
   private jsonPrettyPrint = new Map<string, boolean>()
   private defaultJsonPrettyPrint = true
-  private historyOpts: HistoryOptions
-  private historyStore: Store<HistoryStoreSchema>
-  private persistTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(mainWindow: BrowserWindow, historyOpts: HistoryOptions) {
     this.mainWindow = mainWindow
-    this.historyOpts = historyOpts
-    this.historyStore = new Store<HistoryStoreSchema>({
-      name: 'ananke-browser-history',
-      defaults: { histories: {} }
-    })
-    // Restore persisted history into memory
-    const saved = this.historyStore.get('histories', {})
-    for (const [paneId, entries] of Object.entries(saved)) {
-      if (Array.isArray(entries) && entries.length > 0) {
-        this.histories.set(paneId, entries)
-      }
-    }
-  }
-
-  private persistHistory(): void {
-    if (this.persistTimer) clearTimeout(this.persistTimer)
-    this.persistTimer = setTimeout(() => {
-      const obj: Record<string, HistoryEntry[]> = {}
-      for (const [id, entries] of this.histories) {
-        if (entries.length > 0) obj[id] = entries
-      }
-      this.historyStore.set('histories', obj)
-    }, 1000) // Debounce 1s
-  }
-
-  private appendHistory(paneId: string, url: string): void {
-    if (!this.historyOpts.shouldRecord()) return
-    if (!isNavigationAllowed(url)) return
-    try {
-      const u = new URL(url)
-      if (u.protocol !== 'http:' && u.protocol !== 'https:') return
-    } catch {
-      return
-    }
-    const max = Math.max(1, this.historyOpts.maxEntries())
-    let h = this.histories.get(paneId) ?? []
-    if (h.length === 0 || h[h.length - 1].url !== url) {
-      h = [...h, { url, timestamp: Date.now() }]
-    }
-    h = h.slice(-max)
-    this.histories.set(paneId, h)
-    this.historyOpts.onHistory(paneId, h)
-    this.persistHistory()
+    this.history = new BrowserHistoryService(historyOpts)
   }
 
   getHistory(paneId: string): HistoryEntry[] {
-    return [...(this.histories.get(paneId) ?? [])]
+    return this.history.get(paneId)
   }
 
   clearHistory(paneId: string): void {
-    this.histories.set(paneId, [])
-    this.historyOpts.onHistory(paneId, [])
-    this.persistHistory()
+    this.history.clear(paneId)
   }
 
   layout(paneId: string, bounds: Electron.Rectangle): void {
@@ -109,12 +54,12 @@ export class BrowserPaneManager {
       const id = paneId
       const win = this.mainWindow
       view.webContents.on('did-navigate', (_e, navigatedUrl) => {
-        this.appendHistory(id, navigatedUrl)
+        this.history.append(id, navigatedUrl)
         if (!win.isDestroyed())
           win.webContents.send('browser:urlUpdate', { paneId: id, url: navigatedUrl })
       })
       view.webContents.on('did-navigate-in-page', (_e, navigatedUrl) => {
-        this.appendHistory(id, navigatedUrl)
+        this.history.append(id, navigatedUrl)
         if (!win.isDestroyed())
           win.webContents.send('browser:urlUpdate', { paneId: id, url: navigatedUrl })
       })
@@ -236,28 +181,23 @@ export class BrowserPaneManager {
   harStart(paneId: string): void {
     const view = this.views.get(paneId)
     if (!view) return
-    let capture = this.harCaptures.get(paneId)
-    if (!capture) {
-      capture = new HarCapture()
-      this.harCaptures.set(paneId, capture)
-    }
-    capture.start(view.webContents)
+    this.har.start(paneId, view.webContents)
   }
 
   harStop(paneId: string): void {
-    this.harCaptures.get(paneId)?.stop()
+    this.har.stop(paneId)
   }
 
   harGetData(paneId: string): object | null {
-    return this.harCaptures.get(paneId)?.getHar() ?? null
+    return this.har.getData(paneId)
   }
 
   harIsRecording(paneId: string): boolean {
-    return this.harCaptures.get(paneId)?.isRecording ?? false
+    return this.har.isRecording(paneId)
   }
 
   harGetEntryCount(paneId: string): number {
-    return this.harCaptures.get(paneId)?.entryCount ?? 0
+    return this.har.getEntryCount(paneId)
   }
 
   openDevTools(paneId: string): void {
@@ -406,15 +346,13 @@ export class BrowserPaneManager {
   destroy(paneId: string): void {
     const view = this.views.get(paneId)
     if (!view) return
-    this.harCaptures.get(paneId)?.stop()
-    this.harCaptures.delete(paneId)
-    this.histories.delete(paneId)
+    this.har.delete(paneId)
+    this.history.delete(paneId)
     this.pendingNavigations.delete(paneId)
     this.jsonPrettyPrint.delete(paneId)
     this.loaded.delete(paneId)
     this.suspended.delete(paneId)
     this.lastBounds.delete(paneId)
-    this.persistHistory()
     if (!this.mainWindow.isDestroyed()) {
       try { this.mainWindow.contentView.removeChildView(view) } catch {}
     }

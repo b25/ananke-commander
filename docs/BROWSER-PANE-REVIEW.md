@@ -129,14 +129,18 @@ symptoms are all addressable without a rewrite.
   an explicit restore, so a stray sync can't resurrect a hidden view.
 - Bound `canvasSnapRan` (clear on workspace change).
 
-### Phase 3 — Perf + modularity (P2, deferred)
-- Delta-based state IPC (return/persist only the changed workspace).
-- Decompose `FileBrowserPane.tsx` (824 lines), `App.tsx` (635), and split `BrowserPaneManager`
-  into view-lifecycle + `BrowserHistoryService` + `HarCaptureService`.
+### Phase 3 — Perf + modularity (P2)
+- **Done:** split `BrowserPaneManager` into native-view lifecycle + `BrowserHistoryService`
+  (`browserHistoryService.ts`) + `HarCaptureService` (`harCaptureService.ts`). The manager no
+  longer carries history persistence or HAR bookkeeping; it delegates.
+- **Deferred** (larger / better with live profiling): delta-based state IPC (return/persist only
+  the changed workspace instead of the full `AppStateSnapshot`); decompose `FileBrowserPane.tsx`
+  (824 lines) and `App.tsx` (635) into focused hooks/components.
 
 ## 6. Verification
 
-- `npm run typecheck` and `npm test` (node `--test`) green.
-- Manual: open a browser tile, navigate, switch workspace and back → **no reload** (page state,
-  scroll, form input preserved); pan across screens → no toolbar bleed / no seam; open Settings
-  drawer → tile hides and restores to the same page.
+- `npm run typecheck` clean; `npm test` (node `--test`) 22/22 pass; `npm run build:app`
+  (full electron-vite bundle) clean; app boots cleanly under Electron 40.
+- Manual (needs a GUI session): open a browser tile, navigate, switch workspace and back →
+  **no reload** (page state, scroll, form input preserved); pan across screens → no toolbar bleed /
+  no seam; open Settings drawer → tile hides and restores to the same page.
