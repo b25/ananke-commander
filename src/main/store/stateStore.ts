@@ -1,63 +1,13 @@
 import { app } from 'electron'
 import Store from 'electron-store'
-import { copyFileSync, existsSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { AppSettings, AppStateSnapshot, PaneState, PaneType, RecentlyClosedEntry, WorkspaceState } from '../../shared/contracts.js'
+import type { AppSettings, AppStateSnapshot, PaneState, RecentlyClosedEntry, WorkspaceState } from '../../shared/contracts.js'
 import { DEFAULT_SETTINGS } from '../../shared/contracts.js'
 import { TomlConfigService, tomlToSnapshot } from '../tomlConfig.js'
-
-const FALLBACK_VP_W = 1440
-const FALLBACK_VP_H = 900
-
-const DEFAULT_PANE_SIZES: Record<PaneType, { w: number; h: number }> = {
-  'file-browser': { w: 720, h: 450 },
-  'terminal':     { w: 720, h: 450 },
-  'browser':      { w: 720, h: 450 },
-  'notes':        { w: 720, h: 450 },
-  'radar':        { w: 720, h: 450 },
-  'gitui':        { w: 720, h: 450 },
-  'api-toolkit':  { w: 720, h: 450 }
-}
-
-function injectPaneGeometry(panes: PaneState[]): PaneState[] {
-  return panes.map((pane, idx) => {
-    const base = typeof pane.x === 'number' ? pane : (() => {
-      const { w, h } = DEFAULT_PANE_SIZES[pane.type]
-      const s = idx * 30
-      return { ...pane, x: 40 + s, y: 40 + s, width: w, height: h }
-    })()
-    if (typeof base.xPct === 'number') return base
-    return { ...base, xPct: base.x / FALLBACK_VP_W, yPct: base.y / FALLBACK_VP_H, wPct: base.width / FALLBACK_VP_W, hPct: base.height / FALLBACK_VP_H }
-  })
-}
-
-function migrateWorkspaces(workspaces: WorkspaceState[]): WorkspaceState[] {
-  return workspaces.map((ws) => ({
-    ...ws,
-    canvasOffset: ws.canvasOffset ?? { x: 0, y: 0 },
-    screenLayouts: ws.screenLayouts ?? {},
-    intentLayouts: ws.intentLayouts ?? {},
-    screenCollapsed: ws.screenCollapsed ?? {},
-    panes: injectPaneGeometry(ws.panes)
-  }))
-}
-
-function isValidDir(p: string): boolean {
-  try { return statSync(p).isDirectory() } catch { return false }
-}
-
-function sanitizePaths(workspaces: WorkspaceState[]): WorkspaceState[] {
-  const home = homedir()
-  return workspaces.map((ws) => ({
-    ...ws,
-    panes: ws.panes.map((pane) => {
-      if (pane.type !== 'file-browser') return pane
-      return { ...pane, leftPath: isValidDir(pane.leftPath) ? pane.leftPath : home, rightPath: isValidDir(pane.rightPath) ? pane.rightPath : home }
-    })
-  }))
-}
+import { normalizeWorkspaces } from './workspaceMigration.js'
 
 function createDefaultWorkspace(): WorkspaceState {
   const paneId = randomUUID()
@@ -106,6 +56,11 @@ export class StateStore {
       this.store.set('activeWorkspaceId', ws.id)
     }
 
+    // Normalize stored workspaces ONCE at startup. Doing it here (at the write boundary)
+    // lets getSnapshot() be a cheap read instead of re-running statSync on every
+    // file-browser path on every state IPC call.
+    this.store.set('workspaces', normalizeWorkspaces(this.store.get('workspaces')))
+
     this.tomlService = new TomlConfigService(this.handleExternalTomlChange.bind(this))
 
     // On first launch (no TOML yet), write current state; otherwise merge from TOML
@@ -115,7 +70,7 @@ export class StateStore {
     } else {
       try {
         const parsed = tomlToSnapshot(existing)
-        this.store.set('workspaces', migrateWorkspaces(sanitizePaths(parsed.workspaces)))
+        this.store.set('workspaces', normalizeWorkspaces(parsed.workspaces))
         this.store.set('activeWorkspaceId', parsed.activeWorkspaceId)
       } catch { /* malformed TOML on startup — keep electron-store state */ }
     }
@@ -136,7 +91,7 @@ export class StateStore {
       }
       return
     }
-    this.store.set('workspaces', migrateWorkspaces(sanitizePaths(parsed.workspaces)))
+    this.store.set('workspaces', normalizeWorkspaces(parsed.workspaces))
     this.store.set('activeWorkspaceId', parsed.activeWorkspaceId)
     this.pendingPatch = {}
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
@@ -161,8 +116,10 @@ export class StateStore {
       terminal: { ...DEFAULT_SETTINGS.terminal, ...stored?.terminal },
       obsidian: { ...DEFAULT_SETTINGS.obsidian, ...stored?.obsidian }
     }
+    // Workspaces are normalized when they enter the store (startup / TOML import), so this is
+    // a cheap read — no per-call statSync on file-browser paths.
     const disk: AppStateSnapshot = {
-      workspaces: migrateWorkspaces(sanitizePaths(this.store.get('workspaces'))),
+      workspaces: this.store.get('workspaces'),
       activeWorkspaceId: this.store.get('activeWorkspaceId'),
       settings,
       recentlyClosed: this.store.get('recentlyClosed')
@@ -227,7 +184,7 @@ export class StateStore {
   validateAndApplyToml(raw: string): string | null {
     try {
       const parsed = tomlToSnapshot(raw)
-      this.store.set('workspaces', migrateWorkspaces(sanitizePaths(parsed.workspaces)))
+      this.store.set('workspaces', normalizeWorkspaces(parsed.workspaces))
       this.store.set('activeWorkspaceId', parsed.activeWorkspaceId)
       this.pendingPatch = {}
       this.flushToml()
