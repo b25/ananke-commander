@@ -6,10 +6,16 @@ import { FileList, type SortState } from './FileList'
 import { FileEditor } from './FileEditor'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { ArchiveDialog } from './ArchiveDialog'
-import { ContextMenu, type ContextMenuItem } from './ContextMenu'
+import { ContextMenu } from './ContextMenu'
 import { FileBrowserActions } from './FileBrowserActions'
 import { FindBar } from './FindBar'
+import { PathBar } from './PathBar'
+import { CopyMoveDialog } from './CopyMoveDialog'
+import { InlinePromptDialog } from './InlinePromptDialog'
 import { applyFilterAndSort, togglePaths } from './fileBrowserUtils'
+import { fileContextMenuItems } from './fileContextMenuItems'
+import { useDirectoryEntries } from './useDirectoryEntries'
+import { useFileJob } from './useFileJob'
 import { useFileBrowserNavigation } from './useFileBrowserNavigation'
 import { shouldShellHandleShortcut } from '../../lib/keyboardShortcuts'
 
@@ -38,13 +44,10 @@ type Props = {
 }
 
 export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }: Props) {
-  const [leftEntries, setLeftEntries] = useState<ListDirEntry[]>([])
-  const [rightEntries, setRightEntries] = useState<ListDirEntry[]>([])
   const [copyOpen, setCopyOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [destPaneId, setDestPaneId] = useState<string>('')
-  const [fileJobLine, setFileJobLine] = useState<string | null>(null)
   const [editorState, setEditorState] = useState<{
     path: string
     text: string
@@ -62,7 +65,6 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const [editingPath, setEditingPath] = useState<{ side: 'left' | 'right'; value: string } | null>(null)
   const [leftFind, setLeftFind] = useState<FindState>({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
   const [rightFind, setRightFind] = useState<FindState>({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
-  const activeJobId = useRef<string | null>(null)
   // Inline prompt state (replaces window.prompt which doesn't work in Electron)
   const [inlinePrompt, setInlinePrompt] = useState<{ label: string; onSubmit: (value: string) => void } | null>(null)
   const [inlinePromptValue, setInlinePromptValue] = useState('')
@@ -78,20 +80,11 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   }
   const { navigateTo, historyBack, historyForward, leftFocusName, rightFocusName } = useFileBrowserNavigation(pane, onUpdate)
 
+  const { leftEntries, rightEntries, refreshBoth, refreshActive } = useDirectoryEntries(pane)
+  const { fileJobLine, setFileJobLine, startJob } = useFileJob(refreshBoth)
+
   const leftSel = new Set(pane.leftSelection)
   const rightSel = new Set(pane.rightSelection)
-
-  const refreshDir = useCallback(async (dir: string) => {
-    return window.ananke.fs.listDir(dir)
-  }, [])
-
-  useEffect(() => {
-    void refreshDir(pane.leftPath).then(setLeftEntries)
-  }, [pane.leftPath, refreshDir])
-
-  useEffect(() => {
-    void refreshDir(pane.rightPath).then(setRightEntries)
-  }, [pane.rightPath, refreshDir])
 
   const fileBrowserDests = allPanes.filter(
     (p): p is FileBrowserPaneState => p.type === 'file-browser' && p.id !== pane.id
@@ -101,22 +94,6 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     pane.focusedSide === 'left' ? [...pane.leftSelection] : [...pane.rightSelection]
 
   const activePath = pane.focusedSide === 'left' ? pane.leftPath : pane.rightPath
-
-  const refreshBoth = useCallback(() => {
-    void refreshDir(pane.leftPath).then(setLeftEntries)
-    void refreshDir(pane.rightPath).then(setRightEntries)
-  }, [pane.leftPath, pane.rightPath, refreshDir])
-
-  const refreshBothRef = useRef(refreshBoth)
-  refreshBothRef.current = refreshBoth
-
-  const refreshActive = useCallback(() => {
-    if (pane.focusedSide === 'left') {
-      void refreshDir(pane.leftPath).then(setLeftEntries)
-    } else {
-      void refreshDir(pane.rightPath).then(setRightEntries)
-    }
-  }, [pane.focusedSide, pane.leftPath, pane.rightPath, refreshDir])
 
   const runFind = async (side: 'left' | 'right', findState: FindState) => {
     const setFind = side === 'left' ? setLeftFind : setRightFind
@@ -366,34 +343,6 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     setRightFind(f => f.active ? { active: false, pattern: '', recursive: true, results: [], status: 'idle' } : f)
   }, [pane.rightPath])
 
-  useEffect(() => {
-    const offP = window.ananke.fileJob.onProgress((msg) => {
-      if (msg.jobId !== activeJobId.current) return
-      const cur = typeof msg.current === 'string' ? msg.current : ''
-      const done = typeof msg.done === 'number' ? msg.done : 0
-      const total = typeof msg.total === 'number' ? msg.total : 0
-      setFileJobLine(total ? `${done}/${total} ${cur}` : cur || 'Working…')
-    })
-    const offD = window.ananke.fileJob.onDone(({ jobId: id }) => {
-      if (id !== activeJobId.current) return
-      activeJobId.current = null
-      setFileJobLine(null)
-      void refreshBothRef.current()
-    })
-    const offE = window.ananke.fileJob.onError(({ jobId: id, message }) => {
-      if (id !== activeJobId.current) return
-      activeJobId.current = null
-      setFileJobLine(null)
-      if (message !== 'Cancelled') alert(message)
-      void refreshBothRef.current()
-    })
-    return () => {
-      offP()
-      offD()
-      offE()
-    }
-  }, [])
-
   const runCopyOrMove = async (kind: 'copy' | 'move') => {
     const destPane = fileBrowserDests.find((p) => p.id === destPaneId)
     if (!destPane || !selectedPaths.length) return
@@ -401,15 +350,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     setCopyOpen(false)
     setMoveOpen(false)
     setFileJobLine(kind === 'copy' ? 'Copy…' : 'Move…')
-    try {
-      const jobId = await window.ananke.fileJob.start(kind, selectedPaths, destDir)
-      activeJobId.current = jobId
-      setFileJobLine(`${kind}…`)
-    } catch (e) {
-      activeJobId.current = null
-      setFileJobLine(null)
-      alert(e instanceof Error ? e.message : String(e))
-    }
+    await startJob(kind, selectedPaths, destDir)
   }
 
   const renamingInFlight = useRef(false)
@@ -433,115 +374,31 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
 
   const suggestedArchive = joinPath(activePath, 'archive.zip')
 
-  const ctxItems: ContextMenuItem[] = ctxMenu
-    ? (() => {
-        const ctxSide = ctxMenu.side
-        const ctxEntries = ctxSide === 'left' ? leftEntries : rightEntries
-        const ctxActivePath = ctxSide === 'left' ? pane.leftPath : pane.rightPath
-        const ctxSelection = ctxSide === 'left' ? [...pane.leftSelection] : [...pane.rightSelection]
-        return [
-        {
-          label: 'Open', shortcut: 'Enter', onClick: () => {
-            const entry = ctxEntries.find((e) => e.path === ctxMenu.path)
-            if (entry) void activateEntry(ctxSide, entry)
-          }
-        },
-        { label: 'Read', shortcut: 'F3', onClick: () => void openEditor(true) },
-        { label: 'Edit', shortcut: 'F4', onClick: () => void openEditor(false) },
-        {
-          label: 'Rename', shortcut: 'F2', onClick: () => {
-            const entry = ctxEntries.find(en => en.path === ctxMenu.path)
-            if (entry) setRenaming({ path: entry.path, side: ctxSide, name: entry.name })
-          }
-        },
-        { label: 'Copy Path', onClick: () => void window.ananke.clipboard.writeText(ctxMenu.path) },
-        { label: '', separator: true, onClick: () => {} },
-        { label: 'Copy…', shortcut: 'F5', onClick: () => setCopyOpen(true) },
-        { label: 'Move…', shortcut: 'F6', onClick: () => setMoveOpen(true) },
-        { label: 'Archive…', onClick: () => setArchiveOpen(true) },
-        { label: '', separator: true, onClick: () => {} },
-        {
-          label: 'New File', shortcut: 'Alt+F7', onClick: () => {
-            showPrompt('New file name:', (name) => {
-              void window.ananke.fs.createFile(joinPath(ctxActivePath, name))
-                .then(() => refreshActive())
-                .catch((err: Error) => alert(err.message))
-            })
-          }
-        },
-        {
-          label: 'New Terminal Here', onClick: () => {
-            const sel = ctxEntries.find(e => e.path === ctxMenu.path)
-            const dir = sel?.isDirectory ? sel.path : ctxActivePath
-            window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'terminal', cwd: dir } }))
-          }
-        },
-        {
-          label: 'New GitUI Here', onClick: () => {
-            const sel = ctxEntries.find(e => e.path === ctxMenu.path)
-            const dir = sel?.isDirectory ? sel.path : ctxActivePath
-            window.dispatchEvent(new CustomEvent('create-pane', { detail: { type: 'gitui', cwd: dir } }))
-          }
-        },
-        ...(window.ananke.platform !== 'win32' ? [{
-          label: 'Set Execute Permission', onClick: () => {
-            void window.ananke.fs.chmod(ctxMenu.path, '755')
-              .then(() => refreshActive())
-              .catch((err: Error) => alert(err.message))
-          }
-        }] : []),
-        { label: '', separator: true, onClick: () => {} },
-        {
-          label: 'Delete', shortcut: 'F8', danger: true, onClick: () => {
-            if (!ctxSelection.length) return
-            if (!confirm(`Delete ${ctxSelection.length} item(s)?`)) return
-            void (async () => {
-              await window.ananke.fs.quickOp('delete', '', ctxSelection)
-              refreshBoth()
-              onUpdate({
-                ...pane,
-                ...(ctxSide === 'left' ? { leftSelection: [] } : { rightSelection: [] })
-              })
-            })()
-          }
-        },
-      ]
-      })()
+  const ctxItems = ctxMenu
+    ? fileContextMenuItems({
+        ctxMenu,
+        leftEntries,
+        rightEntries,
+        pane,
+        activateEntry,
+        openEditor,
+        setRenaming,
+        refreshActive,
+        refreshBoth,
+        onUpdate,
+        showPrompt,
+        setCopyOpen,
+        setMoveOpen,
+        setArchiveOpen
+      })
     : []
-
-  const renderPathBar = (side: 'left' | 'right') => {
-    const currentPath = side === 'left' ? pane.leftPath : pane.rightPath
-    if (editingPath?.side === side) {
-      return (
-        <input
-          className="path-bar path-bar--editing"
-          value={editingPath.value}
-          onChange={(e) => setEditingPath({ side, value: e.target.value })}
-          onBlur={() => setEditingPath(null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              onUpdate({ ...pane, [side === 'left' ? 'leftPath' : 'rightPath']: editingPath.value })
-              setEditingPath(null)
-            }
-            if (e.key === 'Escape') setEditingPath(null)
-          }}
-          autoFocus
-        />
-      )
-    }
-    return (
-      <div className="path-bar" title={currentPath} onClick={() => setEditingPath({ side, value: currentPath })}>
-        {currentPath}
-      </div>
-    )
-  }
 
   return (
     <div className={`pane-tile ${isActive ? 'active' : ''} ${pane.needsAttention ? 'attention' : ''}`}>
-      <PaneHeader 
-        title={pane.title} 
-        paneType="file-browser" 
-        onClose={onClose} 
+      <PaneHeader
+        title={pane.title}
+        paneType="file-browser"
+        onClose={onClose}
         actions={
           <FileBrowserActions
             onRead={() => void openEditor(true)}
@@ -611,7 +468,14 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
           <div className="file-browser-main">
           <div className="lists">
             <div className="file-list-panel">
-              {renderPathBar('left')}
+              <PathBar
+                currentPath={pane.leftPath}
+                editingValue={editingPath?.side === 'left' ? editingPath.value : null}
+                onBeginEdit={() => setEditingPath({ side: 'left', value: pane.leftPath })}
+                onChange={(value) => setEditingPath({ side: 'left', value })}
+                onCommit={(value) => { onUpdate({ ...pane, leftPath: value }); setEditingPath(null) }}
+                onCancel={() => setEditingPath(null)}
+              />
               {leftFind.active && (
                 <FindBar
                   pattern={leftFind.pattern}
@@ -658,7 +522,14 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
               />
             </div>
             <div className="file-list-panel">
-              {renderPathBar('right')}
+              <PathBar
+                currentPath={pane.rightPath}
+                editingValue={editingPath?.side === 'right' ? editingPath.value : null}
+                onBeginEdit={() => setEditingPath({ side: 'right', value: pane.rightPath })}
+                onChange={(value) => setEditingPath({ side: 'right', value })}
+                onCommit={(value) => { onUpdate({ ...pane, rightPath: value }); setEditingPath(null) }}
+                onCancel={() => setEditingPath(null)}
+              />
               {rightFind.active && (
                 <FindBar
                   pattern={rightFind.pattern}
@@ -724,42 +595,17 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         </div>
       </div>
 
-      {(copyOpen || moveOpen) && createPortal(
-        <div className="modal-backdrop" role="presentation" onClick={() => { setCopyOpen(false); setMoveOpen(false) }}>
-          <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()}>
-            <h2>{copyOpen ? 'Copy (F5)' : 'Move (F6)'}</h2>
-            <p className="muted">Source: {activePath}</p>
-            <p className="muted">Selected: {selectedPaths.length} items</p>
-            <label className="muted">Destination file browser pane</label>
-            <select
-              value={destPaneId}
-              onChange={(e) => setDestPaneId(e.target.value)}
-              style={{ width: '100%', marginBottom: 12 }}
-            >
-              <option value="">— choose —</option>
-              {fileBrowserDests.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title} → {p.focusedSide === 'left' ? p.leftPath : p.rightPath}
-                </option>
-              ))}
-            </select>
-            {!fileBrowserDests.length && (
-              <p className="muted">Add another file browser pane in this workspace.</p>
-            )}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => { setCopyOpen(false); setMoveOpen(false) }}>Cancel</button>
-              <button
-                type="button"
-                className="primary"
-                disabled={!destPaneId || !selectedPaths.length}
-                onClick={() => void runCopyOrMove(copyOpen ? 'copy' : 'move')}
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {(copyOpen || moveOpen) && (
+        <CopyMoveDialog
+          mode={copyOpen ? 'copy' : 'move'}
+          activePath={activePath}
+          selectedCount={selectedPaths.length}
+          dests={fileBrowserDests}
+          destPaneId={destPaneId}
+          onDestChange={setDestPaneId}
+          onCancel={() => { setCopyOpen(false); setMoveOpen(false) }}
+          onConfirm={() => void runCopyOrMove(copyOpen ? 'copy' : 'move')}
+        />
       )}
 
       {archiveOpen && createPortal(
@@ -780,33 +626,20 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         document.body
       )}
 
-      {inlinePrompt && createPortal(
-        <div className="modal-backdrop" role="presentation" onClick={() => setInlinePrompt(null)}>
-          <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()} style={{ minWidth: 320 }}>
-            <h2>{inlinePrompt.label}</h2>
-            <form onSubmit={(e) => {
-              e.preventDefault()
-              const val = inlinePromptValue.trim()
-              if (val) {
-                inlinePrompt.onSubmit(val)
-                setInlinePrompt(null)
-              }
-            }}>
-              <input
-                autoFocus
-                value={inlinePromptValue}
-                onChange={(e) => setInlinePromptValue(e.target.value)}
-                style={{ width: '100%', marginBottom: 12 }}
-                onKeyDown={(e) => { if (e.key === 'Escape') setInlinePrompt(null) }}
-              />
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setInlinePrompt(null)}>Cancel</button>
-                <button type="submit" className="primary" disabled={!inlinePromptValue.trim()}>OK</button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
+      {inlinePrompt && (
+        <InlinePromptDialog
+          label={inlinePrompt.label}
+          value={inlinePromptValue}
+          onChange={setInlinePromptValue}
+          onSubmit={() => {
+            const val = inlinePromptValue.trim()
+            if (val) {
+              inlinePrompt.onSubmit(val)
+              setInlinePrompt(null)
+            }
+          }}
+          onCancel={() => setInlinePrompt(null)}
+        />
       )}
 
       {editorState && createPortal(
