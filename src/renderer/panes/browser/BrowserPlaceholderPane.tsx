@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { BrowserPaneState } from '../../../shared/contracts'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { BrowserActions } from './BrowserActions'
@@ -104,7 +104,9 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
     const target = pane.url?.trim() || 'about:blank'
     if (target === 'about:blank') return
     void (async () => {
-      const result = await window.ananke.browser.navigate(pane.id, target)
+      // ensureNavigated only loads when the native view has not loaded a page yet, so a
+      // remount (workspace/screen switch) re-syncs bounds without reloading the live page.
+      const result = await window.ananke.browser.ensureNavigated(pane.id, target)
       if (result.status === 'blocked') {
         setNavError(blockedHostMessage(result.url))
       }
@@ -115,14 +117,27 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
   const isCollapsedRef = useRef(isCollapsed ?? false)
   isCollapsedRef.current = isCollapsed ?? false
 
+  // Coalesce the many bounds-sync triggers (ResizeObserver, window resize, visibility/modal
+  // events) into one native setBounds per animation frame. `syncBounds` is redefined every
+  // render, so we call the latest copy via a ref.
+  const syncBoundsRef = useRef<() => void>(() => {})
+  const rafRef = useRef<number | null>(null)
+  const scheduleSync = useCallback(() => {
+    if (rafRef.current != null) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      syncBoundsRef.current()
+    })
+  }, [])
+
   useEffect(() => {
     const handler = (e: CustomEvent<boolean>) => {
       nativeVisibleRef.current = e.detail
-      syncBounds()
+      scheduleSync()
     }
     window.addEventListener('native-view-visibility', handler as EventListener)
     return () => window.removeEventListener('native-view-visibility', handler as EventListener)
-  }, [])
+  }, [scheduleSync])
 
   // When collapse state changes, suspend or restore the native view explicitly.
   // This replaces the unmount/remount lifecycle so the page is never reloaded.
@@ -191,6 +206,7 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
     }
     void window.ananke.browser.layout(pane.id, bounds)
   }
+  syncBoundsRef.current = syncBounds
 
   // Re-sync on mount, active change, pane move/resize, canvas pan, and collapse state.
   // useLayoutEffect fires synchronously before paint — ensures the native view is
@@ -200,26 +216,27 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
   }, [pane.id, isActive, isCollapsed, pane.x, pane.y, pane.width, pane.height, canvasOffset.x, canvasOffset.y])
 
   useEffect(() => {
-    const ro = new ResizeObserver(() => syncBounds())
+    const ro = new ResizeObserver(() => scheduleSync())
     const el = hostRef.current
     if (el) ro.observe(el)
-    window.addEventListener('resize', syncBounds)
+    window.addEventListener('resize', scheduleSync)
     // Hide native view while any renderer modal is open (WebContentsViews paint
     // above all CSS z-index; only moving them off-screen fixes the overlap).
     const onModalOpen = () => void window.ananke.browser.suspend(pane.id)
-    const onModalClose = () => syncBounds()
+    const onModalClose = () => scheduleSync()
     window.addEventListener('ananke:modal-open', onModalOpen)
     window.addEventListener('ananke:modal-close', onModalClose)
     return () => {
       ro.disconnect()
-      window.removeEventListener('resize', syncBounds)
+      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
+      window.removeEventListener('resize', scheduleSync)
       window.removeEventListener('ananke:modal-open', onModalOpen)
       window.removeEventListener('ananke:modal-close', onModalClose)
       // Suspend (hide offscreen) instead of destroy — keeps the page alive
       // when pane is collapsed. Actual destroy happens via explicit close.
       void window.ananke.browser.suspend(pane.id)
     }
-  }, [pane.id])
+  }, [pane.id, scheduleSync])
 
   // Keyboard shortcuts when this pane is active
   useEffect(() => {

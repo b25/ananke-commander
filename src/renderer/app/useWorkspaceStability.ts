@@ -62,13 +62,16 @@ export function useWorkspaceStability({ snap, setSnap, ws, vpW, vpH }: Params): 
     })()
   }, [ws, vpW, vpH, setSnap])
 
-  const canvasSnapRan = useRef<Set<string>>(new Set())
+  // Track only the most recently handled (ws, offset, viewport) key. A single ref is enough:
+  // revisiting a key that is already grid-snapped is a harmless no-op, so we don't need to
+  // remember every key ever seen (which grew unbounded across pans/resizes).
+  const canvasSnapLastKey = useRef<string | null>(null)
   useEffect(() => {
     if (!ws || !vpW || !vpH) return
     const wsId = ws.id
     const key = `${ws.id}:${ws.canvasOffset.x}:${ws.canvasOffset.y}:${vpW}:${vpH}`
-    if (canvasSnapRan.current.has(key)) return
-    canvasSnapRan.current.add(key)
+    if (canvasSnapLastKey.current === key) return
+    canvasSnapLastKey.current = key
     const snappedX = Math.max(0, Math.min(vpW, Math.round(ws.canvasOffset.x / vpW) * vpW))
     const snappedY = Math.max(0, Math.min(vpH, Math.round(ws.canvasOffset.y / vpH) * vpH))
     if (snappedX !== ws.canvasOffset.x || snappedY !== ws.canvasOffset.y) {

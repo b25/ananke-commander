@@ -20,6 +20,10 @@ export function registerBrowserIpcHandlers(deps: RegisterBrowserIpcDeps): void {
     return getBrowserPanes().navigate(paneId, url)
   })
 
+  ipcMain.handle('browser:ensureNavigated', (_e, paneId: string, url: string) => {
+    return getBrowserPanes().ensureNavigated(paneId, url)
+  })
+
   ipcMain.handle('browser:goBack', (_e, paneId: string) => {
     getBrowserPanes().goBack(paneId)
   })

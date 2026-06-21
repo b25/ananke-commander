@@ -134,6 +134,10 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('state:setActiveWorkspace', (_e, id: string) => {
     stateStore!.setActiveWorkspace(id)
+    // Park any browser views that belong to other workspaces offscreen so they can never
+    // bleed on-screen over the active workspace (views are kept alive to preserve page state).
+    const ws = stateStore!.getWorkspace(id)
+    if (ws && browserPanes) browserPanes.suspendAllExcept(ws.panes.map((p) => p.id))
     return stateStore!.getSnapshot()
   })
 

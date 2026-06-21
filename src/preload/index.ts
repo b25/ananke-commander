@@ -145,6 +145,7 @@ const api = {
       bounds: { x: number; y: number; width: number; height: number }
     ) => ipcRenderer.invoke('browser:layout', paneId, bounds),
     navigate: (paneId: string, url: string) => ipcRenderer.invoke('browser:navigate', paneId, url),
+    ensureNavigated: (paneId: string, url: string) => ipcRenderer.invoke('browser:ensureNavigated', paneId, url),
     goBack: (paneId: string) => ipcRenderer.invoke('browser:goBack', paneId),
     goForward: (paneId: string) => ipcRenderer.invoke('browser:goForward', paneId),
     stop: (paneId: string) => ipcRenderer.invoke('browser:stop', paneId),

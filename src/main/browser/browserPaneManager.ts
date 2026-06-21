@@ -21,6 +21,13 @@ export class BrowserPaneManager {
   private histories = new Map<string, HistoryEntry[]>()
   private harCaptures = new Map<string, HarCapture>()
   private pendingNavigations = new Map<string, string>()
+  /** Panes that have loaded a page at least once. Lets `ensureNavigated` stay idempotent
+   *  across React remounts so switching workspace/screen never reloads a live page. */
+  private loaded = new Set<string>()
+  /** Panes explicitly parked offscreen (collapse / modal / non-active workspace). */
+  private suspended = new Set<string>()
+  /** Last applied bounds per pane (serialized) to skip redundant `setBounds` churn/flicker. */
+  private lastBounds = new Map<string, string>()
   private jsonPrettyPrint = new Map<string, boolean>()
   private defaultJsonPrettyPrint = true
   private historyOpts: HistoryOptions
@@ -132,9 +139,24 @@ export class BrowserPaneManager {
       const pending = this.pendingNavigations.get(paneId)
       if (pending && isNavigationAllowed(pending)) {
         this.pendingNavigations.delete(paneId)
+        this.loaded.add(paneId)
         void view.webContents.loadURL(pending)
       }
     }
+    // A layout to real (on-screen) bounds is a restore; the offscreen sentinel is a suspend.
+    if (bounds.x <= -9999) {
+      this.suspend(paneId)
+      return
+    }
+    this.suspended.delete(paneId)
+    this.applyBounds(paneId, view, bounds)
+  }
+
+  /** Apply bounds, skipping the IPC/native work when nothing changed. */
+  private applyBounds(paneId: string, view: WebContentsView, bounds: Electron.Rectangle): void {
+    const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`
+    if (this.lastBounds.get(paneId) === key) return
+    this.lastBounds.set(paneId, key)
     view.setBounds(bounds)
   }
 
@@ -176,11 +198,23 @@ export class BrowserPaneManager {
     const view = this.views.get(paneId)
     if (!view) {
       this.pendingNavigations.set(paneId, url)
+      this.loaded.add(paneId)
       return { status: 'pending' }
     }
     this.pendingNavigations.delete(paneId)
+    this.loaded.add(paneId)
     void view.webContents.loadURL(url)
     return { status: 'ok' }
+  }
+
+  /**
+   * Load `url` only if this pane has never loaded a page. Idempotent across React remounts
+   * (workspace/screen switches), so a live page is never reloaded just because its owning
+   * component re-mounted. Explicit user navigation still goes through `navigate`.
+   */
+  ensureNavigated(paneId: string, url: string): BrowserNavigateResult {
+    if (this.loaded.has(paneId)) return { status: 'ok' }
+    return this.navigate(paneId, url)
   }
 
   goBack(paneId: string): void {
@@ -348,7 +382,21 @@ export class BrowserPaneManager {
     if (!view) return
     // Move offscreen but keep the view alive — preserves page state,
     // session cookies, scroll position, and form data.
-    view.setBounds({ x: -9999, y: -9999, width: 10, height: 10 })
+    this.suspended.add(paneId)
+    this.applyBounds(paneId, view, { x: -9999, y: -9999, width: 10, height: 10 })
+  }
+
+  /** Suspend every live browser view whose pane is not in `keepPaneIds`. Called on
+   *  workspace switch so views from non-active workspaces can never bleed on-screen. */
+  suspendAllExcept(keepPaneIds: string[]): void {
+    const keep = new Set(keepPaneIds)
+    for (const id of this.views.keys()) {
+      if (!keep.has(id)) this.suspend(id)
+    }
+  }
+
+  isSuspended(paneId: string): boolean {
+    return this.suspended.has(paneId)
   }
 
   hasSuspended(paneId: string): boolean {
@@ -363,11 +411,16 @@ export class BrowserPaneManager {
     this.histories.delete(paneId)
     this.pendingNavigations.delete(paneId)
     this.jsonPrettyPrint.delete(paneId)
+    this.loaded.delete(paneId)
+    this.suspended.delete(paneId)
+    this.lastBounds.delete(paneId)
     this.persistHistory()
     if (!this.mainWindow.isDestroyed()) {
       try { this.mainWindow.contentView.removeChildView(view) } catch {}
     }
     if (!view.webContents.isDestroyed()) {
+      // Drop the per-view listeners attached in `layout()` before closing the WebContents.
+      try { view.webContents.removeAllListeners() } catch {}
       try { view.webContents.close() } catch {}
     }
     this.views.delete(paneId)
