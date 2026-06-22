@@ -18,12 +18,13 @@ import { isExternalUrlAllowed } from './security/browserSecurity.js'
 import { assertMaxBytes, IPC_LIMITS } from './ipc/ipcLimits.js'
 import * as archive from './archive/archiveService.js'
 import { saveMarkdownToVault, listVaultNotes, readVaultNote, deleteVaultNote } from './notes/notesService.js'
-import type { AppStateSnapshot, PaneState, TerminalSessionMeta } from '../shared/contracts.js'
+import type { AppStateSnapshot, TerminalSessionMeta } from '../shared/contracts.js'
 import { randomUUID } from 'node:crypto'
 import { installAppMenu } from './menu.js'
 import { registerApiToolkitHandlers } from './api-toolkit/ipcHandlers.js'
 import { registerBrowserIpcHandlers } from './ipc/registerBrowserIpc.js'
 import { registerFsIpcHandlers } from './ipc/registerFsIpc.js'
+import { registerStateIpcHandlers } from './ipc/registerStateIpc.js'
 import {
   attachMainWindowStatePersistence,
   getMainWindowCreateOptions,
@@ -108,89 +109,11 @@ function registerIpcHandlers(): void {
     clipboard.writeText(text)
   })
 
-  ipcMain.handle('state:get', (): AppStateSnapshot => stateStore!.getSnapshot())
-
-  ipcMain.handle('state:set', (_e, patch: Partial<AppStateSnapshot>) => {
-    const estimate = JSON.stringify(patch).length
-    if (estimate > IPC_LIMITS.stateSetJsonEstimate) {
-      throw new Error(`state:set patch too large (${estimate} bytes)`)
-    }
-    stateStore!.setSnapshot(patch)
-    stateStore!.applyRecentlyClosedRetention()
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:replacePanes', (_e, wsId: string, panes: PaneState[], activeId: string | null) => {
-    stateStore!.replaceWorkspacePanes(wsId, panes, activeId)
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:addWorkspace', (_e, name: string) => {
-    const ws = stateStore!.addWorkspace(name)
-    stateStore!.setActiveWorkspace(ws.id)
-    stateStore!.flushToml()
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:setActiveWorkspace', (_e, id: string) => {
-    stateStore!.setActiveWorkspace(id)
-    // Park any browser views that belong to other workspaces offscreen so they can never
-    // bleed on-screen over the active workspace (views are kept alive to preserve page state).
-    const ws = stateStore!.getWorkspace(id)
-    if (ws && browserPanes) browserPanes.suspendAllExcept(ws.panes.map((p) => p.id))
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:setActivePane', (_e, workspaceId: string, paneId: string) => {
-    stateStore!.setActiveWorkspacePane(workspaceId, paneId)
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:updatePane', (_e, workspaceId: string, paneId: string, next: PaneState) => {
-    stateStore!.updatePane(workspaceId, paneId, () => next)
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:closePane', (_e, workspaceId: string, paneId: string) => {
-    const ws = stateStore!.getWorkspace(workspaceId)
-    if (!ws) return stateStore!.getSnapshot()
-    const pane = ws.panes.find((p) => p.id === paneId)
-    const panes = ws.panes.filter((p) => p.id !== paneId)
-    const active = ws.activePaneId === paneId ? (panes[0]?.id ?? null) : ws.activePaneId
-    if (pane && !stateStore!.getSettings().privacy.privateMode) {
-      const max = stateStore!.getSettings().privacy.recentlyClosedMax
-      stateStore!.pushRecentlyClosed(
-        { id: randomUUID(), closedAt: Date.now(), snapshot: structuredClone(pane) },
-        max
-      )
-    }
-    if (pane?.type === 'terminal' || pane?.type === 'gitui') getTerminals().dispose(paneId)
-    if (pane?.type === 'browser') getBrowserPanes().destroy(paneId)
-    stateStore!.replaceWorkspacePanes(workspaceId, panes, active)
-    stateStore!.flushToml()
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:removeRecentlyClosed', (_e, entryId: string) => {
-    stateStore!.removeRecentlyClosed(entryId)
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:purgeRecentlyClosed', () => {
-    stateStore!.purgeRecentlyClosed()
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:restoreClosed', (_e, workspaceId: string, entryId: string) => {
-    const snap = stateStore!.getSnapshot()
-    const entry = snap.recentlyClosed.find((e) => e.id === entryId)
-    if (!entry) return snap
-    const ws = stateStore!.getWorkspace(workspaceId)
-    if (!ws) return snap
-    const panes = [...ws.panes, structuredClone(entry.snapshot)]
-    stateStore!.removeRecentlyClosed(entryId)
-    stateStore!.replaceWorkspacePanes(workspaceId, panes, entry.snapshot.id)
-    return stateStore!.getSnapshot()
+  registerStateIpcHandlers({
+    getStateStore: () => stateStore!,
+    getBrowserPanes,
+    getBrowserPanesIfActive: () => browserPanes,
+    getTerminals
   })
 
   registerFsIpcHandlers({
@@ -271,45 +194,6 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('notes:deleteVault', async (_e, vaultPath: string, subfolder: string, filename: string) => {
     return deleteVaultNote(vaultPath, subfolder, filename)
-  })
-
-  ipcMain.handle('state:setCanvasOffset', (_e, wsId: string, x: number, y: number) => {
-    stateStore!.setCanvasOffset(wsId, x, y)
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:setScreenLayout', (_e, wsId: string, screenIndex: number, layoutId: string) => {
-    stateStore!.setScreenLayout(wsId, screenIndex, layoutId)
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:setIntentLayout', (_e, wsId: string, screenIndex: number, layoutId: string) => {
-    stateStore!.setIntentLayout(wsId, screenIndex, layoutId)
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:setScreenCollapsed', (_e, wsId: string, screenIndex: number, ids: string[]) => {
-    stateStore!.setScreenCollapsed(wsId, screenIndex, ids)
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:cloneWorkspace', (_e, wsId: string) => {
-    const ws = stateStore!.cloneWorkspace(wsId)
-    if (ws) stateStore!.setActiveWorkspace(ws.id)
-    stateStore!.flushToml()
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:renameWorkspace', (_e, wsId: string, name: string) => {
-    stateStore!.renameWorkspace(wsId, name)
-    stateStore!.flushToml()
-    return stateStore!.getSnapshot()
-  })
-
-  ipcMain.handle('state:deleteWorkspace', (_e, wsId: string) => {
-    stateStore!.deleteWorkspace(wsId)
-    stateStore!.flushToml()
-    return stateStore!.getSnapshot()
   })
 
   ipcMain.handle('config:getTomlPath', () => stateStore!.getTomlPath())

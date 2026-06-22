@@ -187,8 +187,8 @@ export function useXterm(
 
       host.style.display = 'none'
       setTimeout(() => {
-        try { webgl?.dispose() } catch {}
-        try { term.dispose() } catch {}
+        try { webgl?.dispose() } catch (e) { console.warn("useXterm: dispose failed", e) }
+        try { term.dispose() } catch (e) { console.warn("useXterm: dispose failed", e) }
       }, 50)
 
       termRef.current = null

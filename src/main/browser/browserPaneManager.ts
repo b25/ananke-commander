@@ -354,12 +354,12 @@ export class BrowserPaneManager {
     this.suspended.delete(paneId)
     this.lastBounds.delete(paneId)
     if (!this.mainWindow.isDestroyed()) {
-      try { this.mainWindow.contentView.removeChildView(view) } catch {}
+      try { this.mainWindow.contentView.removeChildView(view) } catch (e) { console.warn("browserPaneManager: cleanup failed", e) }
     }
     if (!view.webContents.isDestroyed()) {
       // Drop the per-view listeners attached in `layout()` before closing the WebContents.
-      try { view.webContents.removeAllListeners() } catch {}
-      try { view.webContents.close() } catch {}
+      try { view.webContents.removeAllListeners() } catch (e) { console.warn("browserPaneManager: cleanup failed", e) }
+      try { view.webContents.close() } catch (e) { console.warn("browserPaneManager: cleanup failed", e) }
     }
     this.views.delete(paneId)
   }

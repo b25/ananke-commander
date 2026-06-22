@@ -15,23 +15,23 @@ export function useDirectoryEntries(pane: FileBrowserPaneState) {
   }, [])
 
   useEffect(() => {
-    void refreshDir(pane.leftPath).then(setLeftEntries)
+    void refreshDir(pane.leftPath).then(setLeftEntries).catch((e) => console.warn("useDirectoryEntries: listDir failed", e))
   }, [pane.leftPath, refreshDir])
 
   useEffect(() => {
-    void refreshDir(pane.rightPath).then(setRightEntries)
+    void refreshDir(pane.rightPath).then(setRightEntries).catch((e) => console.warn("useDirectoryEntries: listDir failed", e))
   }, [pane.rightPath, refreshDir])
 
   const refreshBoth = useCallback(() => {
-    void refreshDir(pane.leftPath).then(setLeftEntries)
-    void refreshDir(pane.rightPath).then(setRightEntries)
+    void refreshDir(pane.leftPath).then(setLeftEntries).catch((e) => console.warn("useDirectoryEntries: listDir failed", e))
+    void refreshDir(pane.rightPath).then(setRightEntries).catch((e) => console.warn("useDirectoryEntries: listDir failed", e))
   }, [pane.leftPath, pane.rightPath, refreshDir])
 
   const refreshActive = useCallback(() => {
     if (pane.focusedSide === 'left') {
-      void refreshDir(pane.leftPath).then(setLeftEntries)
+      void refreshDir(pane.leftPath).then(setLeftEntries).catch((e) => console.warn("useDirectoryEntries: listDir failed", e))
     } else {
-      void refreshDir(pane.rightPath).then(setRightEntries)
+      void refreshDir(pane.rightPath).then(setRightEntries).catch((e) => console.warn("useDirectoryEntries: listDir failed", e))
     }
   }, [pane.focusedSide, pane.leftPath, pane.rightPath, refreshDir])
 

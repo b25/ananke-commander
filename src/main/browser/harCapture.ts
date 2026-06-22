@@ -82,7 +82,7 @@ export class HarCapture {
 
     try {
       this.wc.debugger.off('message', this.onDebuggerMessage)
-      void this.wc.debugger.sendCommand('Network.disable').catch(() => {})
+      void this.wc.debugger.sendCommand('Network.disable').catch((e) => console.warn("harCapture: Network.disable failed", e))
       this.wc.debugger.detach()
     } catch {
       // Ignore detach errors
