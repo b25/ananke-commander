@@ -8,6 +8,34 @@ Effort scale:
 - `L` <= 2 days
 - `XL` > 2 days
 
+## Status — re-verified against source 2026-06-22
+
+This queue predates a hardening pass; most items are now DONE in the codebase. A line-by-line
+re-verification found:
+
+- **Security — all DONE:** S1 (`app://` containment via `resolvePathUnderRendererRoot`), S2
+  (`isNavigationAllowed` validates scheme/protocol/host; general browsing via search is by
+  design), S3 (`resolveWithinVault` containment), S4 (`browser:openDevTools` gated on
+  `!isPackaged`).
+- **Correctness — all DONE:** C1 (fs read/write/rename all `resolve()`), C2 (`useXterm`
+  `spawnedPanes` cleared on teardown), C3 (NotesPane undo pushes prior body + syncs), C4 (App.tsx
+  reconciliation is effect-only), C5 (empty-dir keyboard guard; Ctrl/Cmd-click toggles via
+  `togglePaths`), C6 (archive unpack defaults to active dir; FileEditor dirty-guard), C7
+  (api-toolkit history synced after send), **C8 (gRPC stream send now resolves `{{vars}}` via
+  `subStr` — fixed 2026-06-22)**, C9 (proto cache keyed by SHA-256; `invalidateCache` wired),
+  C10 (all HTTP body modes; response capped at 10 MB), C11 (folder-size cancel emits a terminal
+  "Cancelled" error so the manager cleans up).
+- **Performance — all DONE:** P1 (ResponseViewer virtualizes large JSON), P2 (mock-hit writes
+  debounced 300 ms), P3 (HAR capped at 1000 entries / 2000 pending), P4 (`fs:listDir`/`findFiles`
+  use bounded concurrency).
+- **Modularity — mostly DONE:** M1 (browser + fs + api-toolkit IPC extracted into
+  `src/main/ipc/*` registrars; the `state:*` handlers still live in `index.ts`),
+  M2 (App.tsx 635→264, FileBrowserPane 824→657, BrowserPaneManager split into history/HAR
+  services; `getSnapshot()` made a cheap read).
+
+Remaining genuinely-open work is the **Later (UX + Quality)** tier below (U1 accessibility,
+U2 shell upgrades, Q1 broader regression tests) and the **Backlog**.
+
 ## Now (Security + Correctness)
 
 | ID | Priority | Area | Item | Files | Effort | Acceptance criteria |

@@ -5,10 +5,10 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '../store'
 import type { Tab } from '../store'
-import type { ProtoDiscovery, MessageSchema, GrpcMessage } from '../../../shared/api-toolkit-contracts'
+import type { ProtoDiscovery, MessageSchema, GrpcMessage, Variable } from '../../../shared/api-toolkit-contracts'
 import { ProtoFormEditor } from './ProtoFormEditor'
 import { KvEditor } from './KvEditor'
-import { applyVarsToGrpcRequest } from '../lib/substituteVars'
+import { applyVarsToGrpcRequest, subStr } from '../lib/substituteVars'
 
 interface Props {
   tab: Tab
@@ -266,7 +266,11 @@ export function GrpcPanel({ tab }: Props) {
               />
             )}
             {isStreaming && active && selectedMethod?.clientStreaming && (
-              <StreamSendBar tabId={tab.id} reqSchema={reqSchema} />
+              <StreamSendBar
+                tabId={tab.id}
+                reqSchema={reqSchema}
+                activeVars={environments.find((e) => e.id === activeEnvironmentId)?.variables.filter((v) => v.enabled) ?? []}
+              />
             )}
           </div>
           {/* Metadata section */}
@@ -287,13 +291,14 @@ export function GrpcPanel({ tab }: Props) {
   )
 }
 
-function StreamSendBar({ tabId, reqSchema }: { tabId: string; reqSchema: MessageSchema | null }) {
+function StreamSendBar({ tabId, reqSchema, activeVars }: { tabId: string; reqSchema: MessageSchema | null; activeVars: Variable[] }) {
   const [json, setJson] = useState('{}')
   const [formVal, setFormVal] = useState<Record<string, unknown>>({})
   const [jsonMode, setJsonMode] = useState(false)
 
   function send() {
-    const msg = jsonMode ? json : JSON.stringify(formVal, null, 2)
+    // Resolve {{env}} variables before sending, mirroring the unary / stream-start path.
+    const msg = subStr(jsonMode ? json : JSON.stringify(formVal, null, 2), activeVars)
     window.ananke.apiToolkit.grpc.streamSend(tabId, msg)
   }
 
