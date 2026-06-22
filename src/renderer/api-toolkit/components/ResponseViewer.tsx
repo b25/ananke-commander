@@ -1,62 +1,20 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Tab } from '../store'
-import { useStore } from '../store'
-import type { MockRoute } from '../../../shared/api-toolkit-contracts'
-import { loadResponseViewPrefs, tabResponseViewRaw } from '../lib/responseViewPrefs'
 import { StreamLog } from './GrpcPanel'
 import { PanelTabStrip } from './PanelTabStrip'
+import { useCopyResponse } from './response/useCopyResponse'
+import { useSaveAsMockRoute } from './response/useSaveAsMockRoute'
+import { useResponseViewPref } from './response/useResponseViewPref'
 
 interface Props {
   tab: Tab
 }
 
 export function ResponseViewer({ tab }: Props) {
-  const [copied, setCopied] = useState(false)
-  const [savedAsMock, setSavedAsMock] = useState(false)
-  const { mockData, saveMockData, setSidebarTab, responseViewRaw, setTabResponseViewRaw } = useStore()
-
-  // Re-apply persisted preference when switching tabs (store is module-singleton).
-  useEffect(() => {
-    if (tab.protocol !== 'http') return
-    if (tab.responseViewRaw !== undefined) return
-    const prefs = loadResponseViewPrefs()
-    if (prefs.remember) setTabResponseViewRaw(tab.id, prefs.raw)
-  }, [tab.id, tab.protocol, tab.responseViewRaw, setTabResponseViewRaw])
-
-  function copyBody(body: string) {
-    window.ananke.clipboard.writeText(body)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-
-  async function saveAsMock() {
-    if (!tab.httpResponse) return
-    const req = tab.httpRequest
-    let urlPattern = '/'
-    try {
-      urlPattern = new URL(req.url).pathname || '/'
-    } catch {
-      urlPattern = req.url.startsWith('/') ? req.url.split('?')[0] : '/' + req.url.split('?')[0]
-    }
-    const route: MockRoute = {
-      id: crypto.randomUUID(),
-      name: tab.name !== 'New Request' ? tab.name : urlPattern,
-      enabled: true,
-      method: req.method,
-      urlPattern,
-      statusCode: tab.httpResponse.status,
-      responseHeaders: { 'Content-Type': tab.httpResponse.headers['content-type'] ?? 'application/json' },
-      responseBody: tab.httpResponse.body,
-      delay: 0,
-      hitCount: 0,
-      createdAt: Date.now(),
-    }
-    await saveMockData({ ...mockData, routes: [...mockData.routes, route] })
-    setSidebarTab('mock')
-    setSavedAsMock(true)
-    setTimeout(() => setSavedAsMock(false), 2000)
-  }
+  const { copied, copyBody } = useCopyResponse()
+  const { savedAsMock, saveAsMock } = useSaveAsMockRoute(tab)
+  const { viewRaw, toggleView } = useResponseViewPref(tab)
 
   if (tab.protocol === 'grpc') {
     return <GrpcResponseView tab={tab} />
@@ -67,8 +25,8 @@ export function ResponseViewer({ tab }: Props) {
       tab={tab}
       copied={copied}
       savedAsMock={savedAsMock}
-      viewRaw={tabResponseViewRaw(tab, responseViewRaw)}
-      onToggleView={() => setTabResponseViewRaw(tab.id, !tabResponseViewRaw(tab, responseViewRaw))}
+      viewRaw={viewRaw}
+      onToggleView={toggleView}
       onCopy={copyBody}
       onSaveMock={saveAsMock}
     />

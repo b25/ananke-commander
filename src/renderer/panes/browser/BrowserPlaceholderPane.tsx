@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { BrowserPaneState } from '../../../shared/contracts'
 import { PaneHeader } from '../../layout/PaneHeader'
 import { BrowserActions } from './BrowserActions'
-import { BrowserMenu } from './BrowserMenu'
+import { BrowserFindBar } from './BrowserFindBar'
+import { BrowserToolbar } from './BrowserToolbar'
 import {
   loadBrowserJsonPrettyPrint,
   paneJsonPrettyPrint,
@@ -333,49 +334,21 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
         actions={<BrowserActions navHistory={navHistory} pane={pane} onUpdate={onUpdate} />}
       />
       <div className="pane-body browser-pane-body">
-        <div className="browser-toolbar">
-          <div className="browser-toolbar__nav">
-            <button type="button" className="browser-toolbar__btn" onClick={() => window.ananke.browser.goBack(pane.id)} title="Back" aria-label="Back">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-            </button>
-            <button type="button" className="browser-toolbar__btn" onClick={() => window.ananke.browser.goForward(pane.id)} title="Forward" aria-label="Forward">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-            </button>
-            {loading
-              ? <button type="button" className="browser-toolbar__btn" onClick={() => window.ananke.browser.stop(pane.id)} title="Stop loading" aria-label="Stop loading">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                </button>
-              : <button type="button" className="browser-toolbar__btn" onClick={() => void window.ananke.browser.reload(pane.id)} title="Reload" aria-label="Reload">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-                </button>
-            }
-          </div>
-          <form className="browser-toolbar__url-form" onSubmit={(e) => { e.preventDefault(); void doNav(urlInput) }}>
-            <span className="browser-toolbar__ssl-indicator" title={urlInput.startsWith('https://') ? 'Secure connection' : urlInput.startsWith('http://') ? 'Not secure' : ''}>
-              {urlInput.startsWith('https://') ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              ) : urlInput.startsWith('http://') ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning, #e8a838)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 7.5-4.33"/></svg>
-              ) : null}
-            </span>
-            <input
-              ref={urlRef}
-              className="browser-toolbar__url-input"
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              placeholder="Enter URL or search..."
-              spellCheck={false}
-            />
-            <button type="submit" className="browser-toolbar__btn" title="Go" aria-label="Go">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-            </button>
-          </form>
-          <button type="button" className="browser-toolbar__btn" title="Open in system browser" aria-label="Open in system browser"
-            onClick={() => void window.ananke.shell.openExternal(pane.url)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          </button>
-          <BrowserMenu paneId={pane.id} onFindToggle={() => (findOpen ? closeFind() : openFind())} onClipToVault={() => void clipPageToVault(pane.id)} />
-        </div>
+        <BrowserToolbar
+          paneId={pane.id}
+          loading={loading}
+          urlInput={urlInput}
+          urlRef={urlRef}
+          onUrlInputChange={(value) => setUrlInput(value)}
+          onSubmit={() => void doNav(urlInput)}
+          onBack={() => window.ananke.browser.goBack(pane.id)}
+          onForward={() => window.ananke.browser.goForward(pane.id)}
+          onStop={() => window.ananke.browser.stop(pane.id)}
+          onReload={() => void window.ananke.browser.reload(pane.id)}
+          onOpenExternal={() => void window.ananke.shell.openExternal(pane.url)}
+          onFindToggle={() => (findOpen ? closeFind() : openFind())}
+          onClipToVault={() => void clipPageToVault(pane.id)}
+        />
         <label className="browser-json-pretty" title="Pretty-print JSON responses (saved across refresh)">
           <input
             type="checkbox"
@@ -396,33 +369,18 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
           </div>
         )}
         {findOpen && (
-          <div className="browser-find-bar">
-            <form className="browser-find-bar__form" onSubmit={(e) => { e.preventDefault(); void window.ananke.browser.findInPage(pane.id, findText, true) }}>
-              <input
-                ref={findRef}
-                className="browser-find-bar__input"
-                value={findText}
-                onChange={(e) => {
-                  setFindText(e.target.value)
-                  if (e.target.value) void window.ananke.browser.findInPage(pane.id, e.target.value, true)
-                }}
-                placeholder="Find in page..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') { e.preventDefault(); closeFind() }
-                  if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); void window.ananke.browser.findInPage(pane.id, findText, false) }
-                }}
-              />
-              <button type="button" className="browser-toolbar__btn" title="Previous" aria-label="Find previous" onClick={() => void window.ananke.browser.findInPage(pane.id, findText, false)}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-              </button>
-              <button type="button" className="browser-toolbar__btn" title="Next" aria-label="Find next" onClick={() => void window.ananke.browser.findInPage(pane.id, findText, true)}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-              </button>
-              <button type="button" className="browser-toolbar__btn" title="Close find" aria-label="Close find in page" onClick={closeFind}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-              </button>
-            </form>
-          </div>
+          <BrowserFindBar
+            findText={findText}
+            findRef={findRef}
+            onSubmit={() => void window.ananke.browser.findInPage(pane.id, findText, true)}
+            onFindTextChange={(value) => {
+              setFindText(value)
+              if (value) void window.ananke.browser.findInPage(pane.id, value, true)
+            }}
+            onFindNext={() => void window.ananke.browser.findInPage(pane.id, findText, true)}
+            onFindPrev={() => void window.ananke.browser.findInPage(pane.id, findText, false)}
+            onClose={closeFind}
+          />
         )}
         {loading && <div className="browser-loading-bar" />}
         <div ref={hostRef} className="browser-host" />

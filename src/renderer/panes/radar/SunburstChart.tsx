@@ -57,12 +57,15 @@ export function SunburstChart({ data, width, height, onDrillDown, onSelect, sele
     ].join(' ')
   }
 
-  const prefersReducedMotion =
-    typeof window !== 'undefined'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false
+  const prefersReducedMotion = useMemo(
+    () =>
+      typeof window !== 'undefined'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        : false,
+    [],
+  )
 
-  const descendants = root.descendants().filter((d) => d.depth > 0)
+  const descendants = useMemo(() => root.descendants().filter((d) => d.depth > 0), [root])
   const centerR = radius * 0.18
 
   return (

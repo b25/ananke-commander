@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { Collection, CollectionItem, RequestItem } from '../../../shared/api-toolkit-contracts'
 
@@ -11,7 +11,7 @@ type CtxMenu =
   | { kind: 'collection'; col: Collection; x: number; y: number }
   | { kind: 'item'; col: Collection; item: CollectionItem; x: number; y: number }
 
-function TreeItem({
+const TreeItem = memo(function TreeItem({
   item,
   col,
   depth,
@@ -59,7 +59,7 @@ function TreeItem({
       <span className="tree-item-name">{item.name}</span>
     </div>
   )
-}
+})
 
 export function CollectionTree() {
   const { collections, openTab, setActiveTab, addItemToCollection, updateCollectionItem, removeCollectionItem, importPostmanCollection } = useStore()
@@ -86,7 +86,7 @@ export function CollectionTree() {
     setInlinePrompt(null)
   }
 
-  function openRequest(item: RequestItem, col: Collection) {
+  const openRequest = useCallback((item: RequestItem, col: Collection) => {
     openTab({
       name: item.name,
       protocol: item.protocol,
@@ -96,7 +96,24 @@ export function CollectionTree() {
       requestId: item.id,
       dirty: false,
     })
-  }
+  }, [openTab])
+
+  // Per-collection handler caches so TreeItem receives stable callback identities
+  // across unrelated re-renders (ctx menu, notifications, inline prompt) and only
+  // change when the collections themselves change — keeping React.memo effective.
+  const treeHandlers = useMemo(() => {
+    const map = new Map<string, {
+      onOpen: (ri: RequestItem) => void
+      onCtx: (e: React.MouseEvent, it: CollectionItem) => void
+    }>()
+    for (const col of collections) {
+      map.set(col.id, {
+        onOpen: (ri) => openRequest(ri, col),
+        onCtx: (e, it) => setCtx({ kind: 'item', col, item: it, x: e.clientX, y: e.clientY }),
+      })
+    }
+    return map
+  }, [collections, openRequest])
 
   function newCollection() {
     showPrompt('Collection name', '', (name) => {
@@ -286,8 +303,8 @@ export function CollectionTree() {
               item={item}
               col={col}
               depth={0}
-              onOpen={(ri) => openRequest(ri, col)}
-              onCtx={(e, it) => setCtx({ kind: 'item', col, item: it, x: e.clientX, y: e.clientY })}
+              onOpen={treeHandlers.get(col.id)!.onOpen}
+              onCtx={treeHandlers.get(col.id)!.onCtx}
             />
           ))}
         </div>
