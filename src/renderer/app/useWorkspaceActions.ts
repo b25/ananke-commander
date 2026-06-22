@@ -21,6 +21,7 @@ import {
   nextProgressionLayout
 } from '../lib/layouts'
 import { paneCol, paneFractionalOffsets, paneOnScreen, paneRow } from '../lib/screenIndex'
+import { useStateSync } from './useStateSync'
 
 const MAX_WINDOWS_PER_WORKSPACE = 36
 const MAX_PANES_PER_SCREEN = 9 // 9-grid is the maximum layout
@@ -52,38 +53,40 @@ export function useWorkspaceActions({
   setSnap,
   notifyAddError
 }: Params) {
+  const run = useStateSync(setSnap)
+
   const setActivePane = useCallback(
-    async (id: string) => {
+    (id: string) => {
       if (!ws) return
-      setSnap(await window.ananke.state.setActivePane(ws.id, id))
+      void run(() => window.ananke.state.setActivePane(ws.id, id))
     },
-    [ws, setSnap]
+    [ws, run]
   )
 
   const updatePane = useCallback(
-    async (paneId: string, next: PaneState) => {
+    (paneId: string, next: PaneState) => {
       if (!ws) return
-      setSnap(await window.ananke.state.updatePane(ws.id, paneId, next))
+      void run(() => window.ananke.state.updatePane(ws.id, paneId, next))
     },
-    [ws, setSnap]
+    [ws, run]
   )
 
   const closePane = useCallback(
-    async (paneId: string) => {
+    (paneId: string) => {
       if (!ws) return
-      setSnap(await window.ananke.state.closePane(ws.id, paneId))
+      void run(() => window.ananke.state.closePane(ws.id, paneId))
     },
-    [ws, setSnap]
+    [ws, run]
   )
 
   const handleCanvasOffsetChange = useCallback(
-    async (x: number, y: number) => {
+    (x: number, y: number) => {
       if (!ws) return
       const sx = Math.max(0, Math.min(vpW, Math.round(x / (vpW || 1)) * vpW))
       const sy = Math.max(0, Math.min(vpH, Math.round(y / (vpH || 1)) * vpH))
-      setSnap(await window.ananke.state.setCanvasOffset(ws.id, sx, sy))
+      void run(() => window.ananke.state.setCanvasOffset(ws.id, sx, sy))
     },
-    [ws, vpW, vpH, setSnap]
+    [ws, vpW, vpH, run]
   )
 
   const handleLayoutSelect = useCallback(
@@ -124,12 +127,14 @@ export function useWorkspaceActions({
       const collapsedPanes = ws.panes.filter((p) => newCollapsedSet.has(p.id))
       const finalPanes = [...arranged, ...collapsedPanes]
 
-      await window.ananke.state.setIntentLayout(ws.id, activeScreen, layoutId)
-      await window.ananke.state.setScreenLayout(ws.id, activeScreen, layoutId)
-      await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, newCollapsedIds)
-      setSnap(await window.ananke.state.replacePanes(ws.id, finalPanes, ws.activePaneId))
+      await run(async () => {
+        await window.ananke.state.setIntentLayout(ws.id, activeScreen, layoutId)
+        await window.ananke.state.setScreenLayout(ws.id, activeScreen, layoutId)
+        await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, newCollapsedIds)
+        return window.ananke.state.replacePanes(ws.id, finalPanes, ws.activePaneId)
+      })
     },
-    [ws, screenCol, screenRow, vpW, vpH, activeScreen, setSnap]
+    [ws, screenCol, screenRow, vpW, vpH, activeScreen, run]
   )
 
   const addPane = useCallback(
@@ -235,10 +240,12 @@ export function useWorkspaceActions({
       // Recombine arranged (visible) panes with untouched collapsed ones
       const finalPanes = [...arranged, ...collapsedPanes]
 
-      await window.ananke.state.setScreenLayout(ws.id, tIdx, layout.id)
-      setSnap(await window.ananke.state.replacePanes(ws.id, finalPanes, id))
+      await run(async () => {
+        await window.ananke.state.setScreenLayout(ws.id, tIdx, layout.id)
+        return window.ananke.state.replacePanes(ws.id, finalPanes, id)
+      })
     },
-    [ws, vpW, vpH, screenCol, screenRow, activeScreen, setSnap, notifyAddError]
+    [ws, vpW, vpH, screenCol, screenRow, activeScreen, run, notifyAddError]
   )
 
   const applySmartLayouts = useCallback(
@@ -292,15 +299,17 @@ export function useWorkspaceActions({
       }
 
       if (Object.keys(layoutChanges).length === 0) return
-      for (const [idx, layoutId] of Object.entries(layoutChanges)) {
-        await window.ananke.state.setScreenLayout(ws.id, Number(idx), layoutId)
-      }
-      for (const [idx, ids] of Object.entries(collapsedChanges)) {
-        await window.ananke.state.setScreenCollapsed(ws.id, Number(idx), ids)
-      }
-      setSnap(await window.ananke.state.replacePanes(ws.id, newPanes, ws.activePaneId))
+      await run(async () => {
+        for (const [idx, layoutId] of Object.entries(layoutChanges)) {
+          await window.ananke.state.setScreenLayout(ws.id, Number(idx), layoutId)
+        }
+        for (const [idx, ids] of Object.entries(collapsedChanges)) {
+          await window.ananke.state.setScreenCollapsed(ws.id, Number(idx), ids)
+        }
+        return window.ananke.state.replacePanes(ws.id, newPanes, ws.activePaneId)
+      })
     },
-    [ws, setSnap]
+    [ws, run]
   )
 
   const handleRestorePane = useCallback(
@@ -314,8 +323,10 @@ export function useWorkspaceActions({
       const newCollapsed = currentCollapsedIds.filter((id) => id !== collapsedPaneId)
 
       if (!target) {
-        await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, newCollapsed)
-        setSnap(await window.ananke.state.replacePanes(ws.id, ws.panes, ws.activePaneId))
+        await run(async () => {
+          await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, newCollapsed)
+          return window.ananke.state.replacePanes(ws.id, ws.panes, ws.activePaneId)
+        })
         return
       }
 
@@ -333,23 +344,27 @@ export function useWorkspaceActions({
           height: target.height
         }
       })
-      await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, [
-        ...newCollapsed.filter((id) => id !== target.id),
-        target.id
-      ])
-      setSnap(await window.ananke.state.replacePanes(ws.id, newPanes, collapsedPaneId))
+      await run(async () => {
+        await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, [
+          ...newCollapsed.filter((id) => id !== target.id),
+          target.id
+        ])
+        return window.ananke.state.replacePanes(ws.id, newPanes, collapsedPaneId)
+      })
     },
-    [ws, screenCol, screenRow, activeScreen, setSnap]
+    [ws, screenCol, screenRow, activeScreen, run]
   )
 
   const handleCloseCollapsed = useCallback(
     async (collapsedPaneId: string) => {
       if (!ws) return
       const newCollapsed = (ws.screenCollapsed?.[activeScreen] ?? []).filter((id) => id !== collapsedPaneId)
-      await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, newCollapsed)
-      setSnap(await window.ananke.state.closePane(ws.id, collapsedPaneId))
+      await run(async () => {
+        await window.ananke.state.setScreenCollapsed(ws.id, activeScreen, newCollapsed)
+        return window.ananke.state.closePane(ws.id, collapsedPaneId)
+      })
     },
-    [ws, activeScreen, setSnap]
+    [ws, activeScreen, run]
   )
 
   const repairWorkspace = useCallback(async () => {
@@ -384,8 +399,8 @@ export function useWorkspaceActions({
       await window.ananke.state.setIntentLayout(ws.id, screenIdx, layout.id)
     }
 
-    setSnap(await window.ananke.state.replacePanes(ws.id, panes, ws.activePaneId))
-  }, [ws, screenCol, screenRow, vpW, vpH, setSnap])
+    await run(() => window.ananke.state.replacePanes(ws.id, panes, ws.activePaneId))
+  }, [ws, screenCol, screenRow, vpW, vpH, run])
 
   return {
     setActivePane,

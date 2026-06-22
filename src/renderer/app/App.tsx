@@ -13,6 +13,7 @@ import { DiagOverlay } from '../layout/DiagOverlay'
 import { bestLayout } from '../lib/layouts'
 import { useWorkspaceStability } from './useWorkspaceStability'
 import { useWorkspaceActions } from './useWorkspaceActions'
+import { useStateSync } from './useStateSync'
 import { useAppKeyboardShortcuts } from './useAppKeyboardShortcuts'
 import { usePaneRenderer } from './usePaneRenderer'
 import { buildDebugInfo } from '../lib/debugInfo'
@@ -76,7 +77,7 @@ export function App() {
   const prevDrawer = useRef(drawer)
   useEffect(() => {
     if (prevDrawer.current === 'settings' && drawer !== 'settings' && snap) {
-      void window.ananke.state.set({ settings: snap.settings })
+      void window.ananke.state.set({ settings: snap.settings }).catch((e) => console.error('[state] settings save failed', e))
     }
     prevDrawer.current = drawer
   }, [drawer, snap])
@@ -109,6 +110,8 @@ export function App() {
   }, [ws])
 
   useWorkspaceStability({ snap, setSnap, ws, vpW, vpH })
+
+  const runState = useStateSync(setSnap)
 
   const {
     setActivePane,
@@ -179,14 +182,14 @@ export function App() {
   return (
     <div className="app-shell">
       <WorkspaceRail workspaces={snap.workspaces} activeId={snap.activeWorkspaceId}
-        onSelect={(id) => void window.ananke.state.setActiveWorkspace(id).then(setSnap)}
-        onAdd={() => void window.ananke.state.addWorkspace(`Workspace ${snap.workspaces.length + 1}`).then(setSnap)}
-        onClone={(id) => void window.ananke.state.cloneWorkspace(id).then(setSnap)}
-        onRename={(id, name) => void window.ananke.state.renameWorkspace(id, name).then(setSnap)}
+        onSelect={(id) => void runState(() => window.ananke.state.setActiveWorkspace(id))}
+        onAdd={() => void runState(() => window.ananke.state.addWorkspace(`Workspace ${snap.workspaces.length + 1}`))}
+        onClone={(id) => void runState(() => window.ananke.state.cloneWorkspace(id))}
+        onRename={(id, name) => void runState(() => window.ananke.state.renameWorkspace(id, name))}
         onDelete={(id) => {
           const t = snap.workspaces.find(w => w.id === id)
           if (!t || !confirm(`Delete "${t.name}"? ${t.panes.length} pane(s) will be lost.`)) return
-          void window.ananke.state.deleteWorkspace(id).then(setSnap)
+          void runState(() => window.ananke.state.deleteWorkspace(id))
         }} />
       <div className="main-stage">
         {tomlError && (
