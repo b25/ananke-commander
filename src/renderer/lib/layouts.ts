@@ -1,5 +1,5 @@
 import type { PaneState } from '../../shared/contracts'
-import { paneOnScreen } from './screenIndex'
+import { paneOnScreen } from './screenIndex.ts'
 
 export interface LayoutSlot {
   xFrac: number  // 0–1 within screen (left edge)
