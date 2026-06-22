@@ -83,3 +83,22 @@ U2 shell upgrades, Q1 broader regression tests) and the **Backlog**.
 - API toolkit parity backlog: collection runner, scripts/assertions, cookie jar, GraphQL/WebSocket, OAuth2 helper.
 - File-browser parity backlog: drag/drop, richer context menus, quick preview, improved status/metadata surfaces.
 
+## Deliberately deferred — do not do blind (needs measurement / decision)
+
+The safe, shippable improvement backlog is exhausted (see `.plans/2026-06-22-improvement-spec.md`
+for what shipped). What remains is exactly the set that should NOT be auto-implemented:
+
+- **FU-RENDER-CASCADE** — needs a React Profiler. Its correct fix is entangled with the
+  full-snapshot state architecture (every `setSnap` replaces the snapshot, so panes get fresh
+  per-render objects that defeat `React.memo`). Doing it without measurement risks staleness bugs
+  for an unprovable gain. Approach: run the app, profile with React DevTools, then target the
+  memoization (stabilize pane identity + callbacks) and re-measure.
+- **delta / slice state IPC** — explicit non-goal. Replacing full-snapshot request/response needs
+  renderer-side merge logic + revision tracking (high risk); full-snapshot is correct and not the
+  proven bottleneck.
+- **React Compiler trial** — exploratory; a build-config + lint change that must be validated
+  against the whole tree on its own branch before removing any manual memoization.
+- **electron-store write batching** — non-trivial, low ROI.
+- **Playwright `_electron` E2E** — heavy CI infra; the unit suite (75 tests) + the CI workflow
+  (`.github/workflows/ci.yml`) cover the baseline.
+
