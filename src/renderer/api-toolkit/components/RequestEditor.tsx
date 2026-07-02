@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import type { Tab } from '../store'
-import type { HttpMethod, AuthConfig } from '../../../shared/api-toolkit-contracts'
+import type { HttpMethod, AuthConfig, MultipartPart } from '../../../shared/api-toolkit-contracts'
 import { KvEditor } from './KvEditor'
 import { GrpcPanel } from './GrpcPanel'
 import { PanelTabStrip } from './PanelTabStrip'
@@ -342,6 +342,51 @@ function BodyEditor({ tab }: { tab: Tab }) {
   const setHttpBody = useStore((s) => s.setHttpBody)
   const body = tab.httpRequest.body
 
+  async function pickBinaryFile() {
+    const result = await window.ananke.apiToolkit.dialog.openFilePath()
+    if (result) {
+      setHttpBody(tab.id, { ...body, mode: 'binary', filePath: result.path })
+    }
+  }
+
+  function addMultipartTextRow() {
+    const newPart: MultipartPart = { key: '', kind: 'text', value: '', enabled: true }
+    setHttpBody(tab.id, { ...body, parts: [...(body.parts ?? []), newPart] })
+  }
+
+  async function pickMultipartFile(idx: number) {
+    const result = await window.ananke.apiToolkit.dialog.openFilePath()
+    if (result) {
+      const parts = [...(body.parts ?? [])]
+      parts[idx] = { key: parts[idx]?.key ?? '', kind: 'file', filePath: result.path, enabled: parts[idx]?.enabled ?? true }
+      setHttpBody(tab.id, { ...body, parts })
+    }
+  }
+
+  function updateMultipartPart(idx: number, patch: Partial<MultipartPart>) {
+    const parts = (body.parts ?? []).map((p, i) => i === idx ? { ...p, ...patch } as MultipartPart : p)
+    setHttpBody(tab.id, { ...body, parts })
+  }
+
+  function removeMultipartPart(idx: number) {
+    const parts = (body.parts ?? []).filter((_, i) => i !== idx)
+    setHttpBody(tab.id, { ...body, parts })
+  }
+
+  function toggleMultipartKind(idx: number) {
+    const p = (body.parts ?? [])[idx]
+    if (!p) return
+    if (p.kind === 'text') {
+      const updated: MultipartPart = { key: p.key, kind: 'file', filePath: '', enabled: p.enabled }
+      updateMultipartPart(idx, updated)
+    } else {
+      const updated: MultipartPart = { key: p.key, kind: 'text', value: '', enabled: p.enabled }
+      updateMultipartPart(idx, updated)
+    }
+  }
+
+  const isTextOrRaw = body.mode !== 'none' && body.mode !== 'form' && body.mode !== 'urlencoded' && body.mode !== 'binary' && body.mode !== 'multipart'
+
   return (
     <div>
       <select
@@ -350,12 +395,12 @@ function BodyEditor({ tab }: { tab: Tab }) {
         onChange={(e) => setHttpBody(tab.id, { ...body, mode: e.target.value as typeof body.mode })}
         style={{ marginBottom: 10 }}
       >
-        {['none', 'raw', 'json', 'urlencoded', 'form'].map((m) => (
+        {['none', 'raw', 'json', 'urlencoded', 'form', 'binary', 'multipart'].map((m) => (
           <option key={m} value={m}>{m}</option>
         ))}
       </select>
 
-      {body.mode !== 'none' && body.mode !== 'form' && body.mode !== 'urlencoded' && (
+      {isTextOrRaw && (
         <textarea
           className="code-editor"
           style={{ minHeight: 140 }}
@@ -370,6 +415,98 @@ function BodyEditor({ tab }: { tab: Tab }) {
           rows={body.formFields ?? []}
           onChange={(rows) => setHttpBody(tab.id, { ...body, formFields: rows })}
         />
+      )}
+
+      {body.mode === 'binary' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+          <button
+            className="send-btn"
+            style={{ background: 'var(--bg-3)', color: 'var(--text-0)', border: '1px solid var(--border)', fontSize: 11 }}
+            onClick={() => void pickBinaryFile()}
+          >
+            Choose file…
+          </button>
+          <span style={{ fontSize: 11, color: body.filePath ? 'var(--text-0)' : 'var(--text-2)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {body.filePath ? body.filePath.split('/').pop() ?? body.filePath : 'No file selected'}
+          </span>
+          {body.filePath && (
+            <button
+              title="Clear file"
+              style={{ background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer', fontSize: 11 }}
+              onClick={() => setHttpBody(tab.id, { ...body, filePath: undefined })}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+
+      {body.mode === 'multipart' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {(body.parts ?? []).map((p, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <input
+                className="kv-input"
+                style={{ width: 90, flexShrink: 0 }}
+                placeholder="Key"
+                value={p.key}
+                onChange={(e) => updateMultipartPart(idx, { key: e.target.value } as Partial<MultipartPart>)}
+              />
+              <button
+                title={`Switch to ${p.kind === 'text' ? 'file' : 'text'}`}
+                style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text-2)', borderRadius: 'var(--radius-sm)', fontSize: 10, padding: '1px 6px', cursor: 'pointer', flexShrink: 0 }}
+                onClick={() => toggleMultipartKind(idx)}
+              >
+                {p.kind === 'text' ? 'text' : 'file'}
+              </button>
+              {p.kind === 'text'
+                ? (
+                  <input
+                    className="kv-input"
+                    style={{ flex: 1 }}
+                    placeholder="Value"
+                    value={p.value}
+                    onChange={(e) => updateMultipartPart(idx, { value: e.target.value } as Partial<MultipartPart>)}
+                  />
+                )
+                : (
+                  <div style={{ flex: 1, display: 'flex', gap: 4, alignItems: 'center', overflow: 'hidden' }}>
+                    <button
+                      className="send-btn"
+                      style={{ background: 'var(--bg-3)', color: 'var(--text-0)', border: '1px solid var(--border)', fontSize: 10, flexShrink: 0 }}
+                      onClick={() => void pickMultipartFile(idx)}
+                    >
+                      Choose…
+                    </button>
+                    <span style={{ fontSize: 10, color: p.filePath ? 'var(--text-0)' : 'var(--text-2)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.filePath ? p.filePath.split('/').pop() ?? p.filePath : 'No file'}
+                    </span>
+                  </div>
+                )
+              }
+              <input
+                type="checkbox"
+                title="Enabled"
+                checked={p.enabled}
+                onChange={(e) => updateMultipartPart(idx, { enabled: e.target.checked } as Partial<MultipartPart>)}
+                style={{ flexShrink: 0 }}
+              />
+              <button
+                title="Remove row"
+                style={{ background: 'none', border: 'none', color: 'var(--text-2)', cursor: 'pointer', fontSize: 11, flexShrink: 0 }}
+                onClick={() => removeMultipartPart(idx)}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            style={{ alignSelf: 'flex-start', fontSize: 10, padding: '1px 8px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-0)', cursor: 'pointer', marginTop: 2 }}
+            onClick={addMultipartTextRow}
+          >
+            + Add field
+          </button>
+        </div>
       )}
     </div>
   )

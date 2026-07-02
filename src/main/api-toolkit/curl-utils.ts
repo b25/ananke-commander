@@ -57,6 +57,19 @@ export function toCurl(req: HttpRequest): string {
       for (const f of req.body.formFields ?? []) {
         if (f.enabled) parts.push(`-F ${shq(`${f.key}=${f.value}`)}`)
       }
+    } else if (req.body.mode === 'binary') {
+      if (req.body.filePath) {
+        parts.push(`--data-binary @${shq(req.body.filePath)}`)
+      }
+    } else if (req.body.mode === 'multipart') {
+      for (const p of req.body.parts ?? []) {
+        if (!p.enabled) continue
+        if (p.kind === 'text') {
+          parts.push(`-F ${shq(`${p.key}=${p.value}`)}`)
+        } else {
+          parts.push(`-F ${shq(`${p.key}=@${p.filePath}`)}`)
+        }
+      }
     }
   }
 
@@ -77,8 +90,11 @@ export function fromCurl(curlStr: string): HttpRequest {
   let url = ''
   const headers: { key: string; value: string; enabled: boolean }[] = []
   const formFields: { key: string; value: string; enabled: boolean }[] = []
+  const multipartParts: Array<{ key: string; kind: 'text'; value: string; enabled: boolean } | { key: string; kind: 'file'; filePath: string; enabled: boolean }> = []
   let bodyRaw = ''
+  let binaryFilePath = ''
   let bodyMode: HttpRequest['body']['mode'] = 'none'
+  let hasFilePart = false
   let user = ''
 
   let i = 1
@@ -93,10 +109,20 @@ export function fromCurl(curlStr: string): HttpRequest {
       if (colon > 0) {
         headers.push({ key: hdr.slice(0, colon).trim(), value: hdr.slice(colon + 1).trim(), enabled: true })
       }
-    } else if (tok === '-d' || tok === '--data' || tok === '--data-raw' || tok === '--data-binary') {
+    } else if (tok === '-d' || tok === '--data' || tok === '--data-raw') {
       bodyRaw = tokens[++i] ?? ''
       bodyMode = 'raw'
       if (bodyRaw.trimStart().startsWith('{') || bodyRaw.trimStart().startsWith('[')) bodyMode = 'json'
+    } else if (tok === '--data-binary') {
+      const val = tokens[++i] ?? ''
+      if (val.startsWith('@')) {
+        binaryFilePath = val.slice(1)
+        bodyMode = 'binary'
+      } else {
+        bodyRaw = val
+        bodyMode = 'raw'
+        if (bodyRaw.trimStart().startsWith('{') || bodyRaw.trimStart().startsWith('[')) bodyMode = 'json'
+      }
     } else if (tok === '--data-urlencode') {
       const raw = tokens[++i] ?? ''
       // parse key=value pairs separated by &
@@ -108,8 +134,19 @@ export function fromCurl(curlStr: string): HttpRequest {
     } else if (tok === '-F' || tok === '--form') {
       const kv = tokens[++i] ?? ''
       const eq = kv.indexOf('=')
-      if (eq >= 0) formFields.push({ key: kv.slice(0, eq), value: kv.slice(eq + 1), enabled: true })
-      bodyMode = 'form'
+      if (eq >= 0) {
+        const key = kv.slice(0, eq)
+        const val = kv.slice(eq + 1)
+        if (val.startsWith('@')) {
+          multipartParts.push({ key, kind: 'file', filePath: val.slice(1), enabled: true })
+          hasFilePart = true
+          bodyMode = 'multipart'
+        } else {
+          formFields.push({ key, value: val, enabled: true })
+          multipartParts.push({ key, kind: 'text', value: val, enabled: true })
+          if (!hasFilePart && bodyMode !== 'multipart') bodyMode = 'form'
+        }
+      }
     } else if (tok === '-u' || tok === '--user') {
       user = tokens[++i] ?? ''
     } else if (tok === '-L' || tok === '--location' || tok === '--compressed' || tok === '-s' || tok === '--silent' || tok === '-v' || tok === '--verbose') {
@@ -119,6 +156,9 @@ export function fromCurl(curlStr: string): HttpRequest {
     }
     i++
   }
+
+  // If any -F had a file part, upgrade mode to multipart
+  if (hasFilePart) bodyMode = 'multipart'
 
   // Detect method from body presence
   if (method === 'GET' && bodyMode !== 'none') method = 'POST'
@@ -161,7 +201,11 @@ export function fromCurl(curlStr: string): HttpRequest {
     ? { mode: 'none' }
     : bodyMode === 'urlencoded' || bodyMode === 'form'
       ? { mode: bodyMode, formFields }
-      : { mode: bodyMode, raw: bodyRaw }
+      : bodyMode === 'binary'
+        ? { mode: 'binary', filePath: binaryFilePath }
+        : bodyMode === 'multipart'
+          ? { mode: 'multipart', parts: multipartParts, formFields }
+          : { mode: bodyMode, raw: bodyRaw }
 
   return {
     method: method as HttpRequest['method'],

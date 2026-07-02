@@ -36,6 +36,17 @@ export function registerDialogIpc(): void {
     return readFileSync(result.filePaths[0], 'utf8')
   })
 
+  /** Returns the chosen file's path and name without reading its contents.
+   *  Used by the binary and multipart body editors — the actual read happens in the main process at send time. */
+  ipcMain.handle(IPC.DIALOG_OPEN_FILE_PATH, async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, { properties: ['openFile'] })
+    if (result.canceled) return null
+    const filePath = result.filePaths[0]
+    return { path: filePath, name: filePath.split('/').pop() ?? filePath }
+  })
+
   ipcMain.handle(IPC.DIALOG_SAVE_FILE, async (_e, content: string, defaultName: string) => {
     const win = BrowserWindow.getFocusedWindow()
     if (!win) return false

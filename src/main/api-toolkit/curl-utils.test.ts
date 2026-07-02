@@ -110,6 +110,67 @@ test("toCurl escapes single quotes in raw body (SEC-2/CORR-18 — deduplication)
   assert.ok(c.includes("it'\\''s raw"), `Expected escaped apostrophe in body, got:\n${c}`)
 })
 
+// ─── CORR-17: binary and multipart modes ────────────────────────────────────
+
+test('toCurl emits --data-binary @path for binary mode', () => {
+  const c = toCurl(baseReq({
+    method: 'POST',
+    body: { mode: 'binary', filePath: '/tmp/data.bin' }
+  }))
+  assert.ok(
+    c.includes("--data-binary @'/tmp/data.bin'"),
+    `Expected --data-binary @path, got:\n${c}`
+  )
+})
+
+test('toCurl emits -F for multipart text and file parts', () => {
+  const c = toCurl(baseReq({
+    method: 'POST',
+    body: {
+      mode: 'multipart',
+      parts: [
+        { key: 'name', kind: 'text', value: 'alice', enabled: true },
+        { key: 'avatar', kind: 'file', filePath: '/tmp/img.png', enabled: true },
+        { key: 'skip', kind: 'text', value: 'x', enabled: false },
+      ]
+    }
+  }))
+  assert.ok(c.includes("-F 'name=alice'"), `Expected -F name=alice, got:\n${c}`)
+  assert.ok(c.includes("-F 'avatar=@/tmp/img.png'"), `Expected -F avatar=@path, got:\n${c}`)
+  assert.ok(!c.includes('skip'), `Disabled parts should be omitted, got:\n${c}`)
+})
+
+test('toCurl escapes single quotes in multipart text values', () => {
+  const c = toCurl(baseReq({
+    method: 'POST',
+    body: {
+      mode: 'multipart',
+      parts: [{ key: 'msg', kind: 'text', value: "it's here", enabled: true }]
+    }
+  }))
+  assert.ok(c.includes("it'\\''s here"), `Expected escaped apostrophe in part value, got:\n${c}`)
+})
+
+test('fromCurl parses --data-binary @path into binary mode', () => {
+  const r = fromCurl(`curl -X POST 'https://h/p' --data-binary '@/tmp/data.bin'`)
+  assert.equal(r.body.mode, 'binary')
+  assert.equal((r.body as { filePath?: string }).filePath, '/tmp/data.bin')
+})
+
+test('fromCurl parses -F with file part into multipart mode', () => {
+  const r = fromCurl(`curl -X POST 'https://h/p' -F 'name=alice' -F 'file=@/tmp/img.png'`)
+  assert.equal(r.body.mode, 'multipart')
+  const parts = (r.body as { parts?: Array<{ key: string; kind: string; value?: string; filePath?: string; enabled: boolean }> }).parts ?? []
+  const textPart = parts.find((p) => p.key === 'name')
+  const filePart = parts.find((p) => p.key === 'file')
+  assert.ok(textPart, 'Expected name text part')
+  assert.equal(textPart?.kind, 'text')
+  assert.equal((textPart as { value?: string }).value, 'alice')
+  assert.ok(filePart, 'Expected file part')
+  assert.equal(filePart?.kind, 'file')
+  assert.equal((filePart as { filePath?: string }).filePath, '/tmp/img.png')
+})
+
 test("toCurl -> fromCurl round-trip survives normal request (no apostrophes)", () => {
   const req = baseReq({
     method: 'POST',

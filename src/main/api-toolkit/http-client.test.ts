@@ -1,5 +1,6 @@
 /**
- * Tests for RFC-correct redirect method/body rewriting (CORR-13 / Task 15).
+ * Tests for RFC-correct redirect method/body rewriting (CORR-13 / Task 15)
+ * and binary + multipart body modes (CORR-17).
  *
  * RFC 7231 §6.4:
  *  - 303 See Other: always switch to GET, drop body
@@ -9,6 +10,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import * as http from 'node:http'
+import { writeFile, unlink } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { HttpRequest } from '../../shared/api-toolkit-contracts.ts'
 import { sendHttp } from './http-client.ts'
 
@@ -218,6 +222,93 @@ test('308 redirect preserves POST method and body', async () => {
     assert.equal(result.body, '308-POST-OK')
   } finally {
     await closeServer(server)
+  }
+})
+
+// ─── CORR-17: binary and multipart body modes ────────────────────────────────
+
+test('binary mode reads file bytes and sends them to server', async () => {
+  const content = 'hello binary world'
+  const tmpPath = join(tmpdir(), `ananke-test-binary-${Date.now()}.bin`)
+  await writeFile(tmpPath, content, 'utf8')
+
+  const { server, port } = await startServer(async (req, res) => {
+    const body = await readBody(req)
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end(body)
+  })
+
+  try {
+    const result = await sendHttp('test-binary', baseReq({
+      method: 'POST',
+      url: `http://127.0.0.1:${port}/`,
+      body: { mode: 'binary', filePath: tmpPath },
+    }))
+    assert.equal(result.status, 200, `Expected 200 but got ${result.status}: ${result.body}`)
+    assert.equal(result.body, content)
+  } finally {
+    await closeServer(server)
+    await unlink(tmpPath).catch(() => {})
+  }
+})
+
+test('binary mode with no filePath sends null body (no crash)', async () => {
+  const { server, port } = await startServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('ok')
+  })
+
+  try {
+    const result = await sendHttp('test-binary-no-path', baseReq({
+      method: 'POST',
+      url: `http://127.0.0.1:${port}/`,
+      body: { mode: 'binary' },
+    }))
+    assert.equal(result.status, 200)
+  } finally {
+    await closeServer(server)
+  }
+})
+
+test('multipart mode sends text and file parts as multipart/form-data', async () => {
+  const fileContent = 'file-data-here'
+  const tmpPath = join(tmpdir(), `ananke-test-multipart-${Date.now()}.txt`)
+  await writeFile(tmpPath, fileContent, 'utf8')
+
+  let receivedContentType = ''
+  let receivedBody = ''
+
+  const { server, port } = await startServer(async (req, res) => {
+    receivedContentType = req.headers['content-type'] ?? ''
+    receivedBody = await readBody(req)
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    res.end('ok')
+  })
+
+  try {
+    const result = await sendHttp('test-multipart', baseReq({
+      method: 'POST',
+      url: `http://127.0.0.1:${port}/`,
+      body: {
+        mode: 'multipart',
+        parts: [
+          { key: 'username', kind: 'text', value: 'alice', enabled: true },
+          { key: 'upload', kind: 'file', filePath: tmpPath, enabled: true },
+          { key: 'disabled', kind: 'text', value: 'skip', enabled: false },
+        ],
+      },
+    }))
+    assert.equal(result.status, 200)
+    assert.ok(
+      receivedContentType.includes('multipart/form-data'),
+      `Expected multipart/form-data content-type, got: ${receivedContentType}`
+    )
+    assert.ok(receivedBody.includes('alice'), `Expected field value in body, got: ${receivedBody}`)
+    assert.ok(receivedBody.includes(fileContent), `Expected file content in body, got: ${receivedBody}`)
+    assert.ok(!receivedBody.includes('skip'), `Disabled part should be omitted, got: ${receivedBody}`)
+  } finally {
+    await closeServer(server)
+    await unlink(tmpPath).catch(() => {})
   }
 })
 

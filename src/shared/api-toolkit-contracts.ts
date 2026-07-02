@@ -26,11 +26,19 @@ export interface HttpRequest {
   timeout: number
 }
 
+export type MultipartPart =
+  | { key: string; kind: 'text'; value: string; enabled: boolean }
+  | { key: string; kind: 'file'; filePath: string; enabled: boolean }
+
 export interface HttpBody {
   mode: 'none' | 'raw' | 'json' | 'form' | 'multipart' | 'binary' | 'urlencoded'
   raw?: string
   contentType?: string
   formFields?: KeyValue[]
+  /** Path to file to send as the body (binary mode only). */
+  filePath?: string
+  /** Typed parts for multipart mode (replaces text-only formFields for multipart). */
+  parts?: MultipartPart[]
 }
 
 export interface HttpResponse {
@@ -283,6 +291,7 @@ export const IPC = {
   // File dialogs
   DIALOG_OPEN_PROTO: 'at:dialog:openProto',
   DIALOG_OPEN_FILE: 'at:dialog:openFile',
+  DIALOG_OPEN_FILE_PATH: 'at:dialog:openFilePath',
   DIALOG_SAVE_FILE: 'at:dialog:saveFile',
 
   // Mock proxy server
