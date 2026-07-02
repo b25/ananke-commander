@@ -71,3 +71,57 @@ test('toCurl -> fromCurl round-trips method, url, bearer auth, and body', () => 
   assert.equal((back.body as { raw: string }).raw, '{"name":"ada"}')
   assert.equal(back.headers.find((h) => h.key === 'X-Trace')?.value, 'abc')
 })
+
+// ─── SEC-2 / CORR-18: single-quote escaping in toCurl ────────────────────────
+
+test("toCurl escapes single quotes in header values (SEC-2/CORR-18)", () => {
+  const c = toCurl(baseReq({
+    headers: [{ key: 'X-Note', value: "it's here", enabled: true }]
+  }))
+  // The escaped form '\'' must appear in the output so the shell token is valid
+  assert.ok(c.includes("it'\\''s here"), `Expected escaped apostrophe in header value, got:\n${c}`)
+})
+
+test("toCurl escapes single quotes in URL (SEC-2/CORR-18)", () => {
+  const c = toCurl(baseReq({ url: "https://api.test/it's-path" }))
+  assert.ok(c.includes("it'\\''s-path"), `Expected escaped apostrophe in URL, got:\n${c}`)
+})
+
+test("toCurl escapes single quotes in basic-auth credentials (SEC-2/CORR-18)", () => {
+  const c = toCurl(baseReq({
+    auth: { type: 'basic', username: 'alice', password: "p@ss'word" }
+  }))
+  assert.ok(c.includes("p@ss'\\''word"), `Expected escaped apostrophe in password, got:\n${c}`)
+})
+
+test("toCurl escapes single quotes in bearer token (SEC-2/CORR-18)", () => {
+  const c = toCurl(baseReq({
+    method: 'GET',
+    auth: { type: 'bearer', token: "tok'en" }
+  }))
+  assert.ok(c.includes("tok'\\''en"), `Expected escaped apostrophe in bearer token, got:\n${c}`)
+})
+
+test("toCurl escapes single quotes in raw body (SEC-2/CORR-18 — deduplication)", () => {
+  const c = toCurl(baseReq({
+    method: 'POST',
+    body: { mode: 'raw', raw: "it's raw" }
+  }))
+  assert.ok(c.includes("it'\\''s raw"), `Expected escaped apostrophe in body, got:\n${c}`)
+})
+
+test("toCurl -> fromCurl round-trip survives normal request (no apostrophes)", () => {
+  const req = baseReq({
+    method: 'POST',
+    url: 'https://api.test/safe',
+    headers: [{ key: 'X-Safe', value: 'value', enabled: true }],
+    auth: { type: 'bearer', token: 'safetoken' },
+    body: { mode: 'json', raw: '{"ok":true}' }
+  })
+  const back = fromCurl(toCurl(req))
+  assert.equal(back.method, 'POST')
+  assert.equal(back.url, 'https://api.test/safe')
+  assert.deepEqual(back.auth, { type: 'bearer', token: 'safetoken' })
+  assert.equal((back.body as { raw: string }).raw, '{"ok":true}')
+  assert.equal(back.headers.find((h) => h.key === 'X-Safe')?.value, 'value')
+})

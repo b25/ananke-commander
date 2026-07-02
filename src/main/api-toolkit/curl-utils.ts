@@ -1,5 +1,12 @@
 import type { HttpRequest } from '../../shared/api-toolkit-contracts.js'
 
+// ─── Shell quoting ────────────────────────────────────────────────────────────
+
+/** Wrap `s` in POSIX single quotes, escaping any embedded single quotes. */
+function shq(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'"
+}
+
 // ─── cURL export ─────────────────────────────────────────────────────────────
 
 export function toCurl(req: HttpRequest): string {
@@ -18,38 +25,37 @@ export function toCurl(req: HttpRequest): string {
     const sep = url.includes('?') ? '&' : '?'
     url += sep + enabledParams.map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join('&')
   }
-  parts.push(`'${url}'`)
+  parts.push(shq(url))
 
   // Auth headers
   if (req.auth.type === 'basic') {
-    parts.push(`-u '${req.auth.username}:${req.auth.password}'`)
+    parts.push(`-u ${shq(`${req.auth.username}:${req.auth.password}`)}`)
   } else if (req.auth.type === 'bearer') {
-    parts.push(`-H 'Authorization: Bearer ${req.auth.token}'`)
+    parts.push(`-H ${shq(`Authorization: Bearer ${req.auth.token}`)}`)
   } else if (req.auth.type === 'apiKey' && req.auth.in === 'header') {
-    parts.push(`-H '${req.auth.key}: ${req.auth.value}'`)
+    parts.push(`-H ${shq(`${req.auth.key}: ${req.auth.value}`)}`)
   }
 
   // User-defined headers
   for (const h of req.headers) {
     if (h.enabled && h.key.trim()) {
-      parts.push(`-H '${h.key}: ${h.value}'`)
+      parts.push(`-H ${shq(`${h.key}: ${h.value}`)}`)
     }
   }
 
   // Body
   if (req.body.mode !== 'none' && req.method !== 'GET' && req.method !== 'HEAD') {
     if (req.body.mode === 'raw' || req.body.mode === 'json') {
-      const raw = (req.body.raw ?? '').replace(/'/g, "'\\''")
-      parts.push(`-d '${raw}'`)
+      parts.push(`-d ${shq(req.body.raw ?? '')}`)
     } else if (req.body.mode === 'urlencoded') {
       const encoded = (req.body.formFields ?? [])
         .filter((f) => f.enabled)
         .map((f) => `${encodeURIComponent(f.key)}=${encodeURIComponent(f.value)}`)
         .join('&')
-      parts.push(`--data-urlencode '${encoded}'`)
+      parts.push(`--data-urlencode ${shq(encoded)}`)
     } else if (req.body.mode === 'form') {
       for (const f of req.body.formFields ?? []) {
-        if (f.enabled) parts.push(`-F '${f.key}=${f.value}'`)
+        if (f.enabled) parts.push(`-F ${shq(`${f.key}=${f.value}`)}`)
       }
     }
   }
