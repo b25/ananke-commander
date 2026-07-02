@@ -60,6 +60,13 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
   paneRef.current = pane
   const onUpdateRef = useRef(onUpdate)
   onUpdateRef.current = onUpdate
+  // Debounce timers for url/title persistence (500 ms) so SPA history.replaceState
+  // storms and rapid title updates don't trigger a full state-write per event.
+  const urlUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const titleUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Last *received* values — guards against persisting when nothing actually changed.
+  const lastReceivedUrlRef = useRef(pane.url ?? '')
+  const lastReceivedTitleRef = useRef(pane.title ?? '')
 
   useEffect(() => {
     setUrlInput(urlForOmnibox(pane.url))
@@ -83,16 +90,35 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
       if (paneId === pane.id) setNavHistory(entries)
     })
     const unsubTitle = window.ananke.browser.onTitleUpdate(({ paneId, title }) => {
-      if (paneId === pane.id) onUpdateRef.current({ ...paneRef.current, title })
+      if (paneId !== pane.id) return
+      // Skip persist entirely if the title hasn't changed since the last received event.
+      if (title === lastReceivedTitleRef.current) return
+      lastReceivedTitleRef.current = title
+      // Debounce: a rapid flurry of page-title-updated events (e.g. animated page titles)
+      // is collapsed into one persist 500 ms after the last distinct value arrives.
+      if (titleUpdateTimerRef.current) clearTimeout(titleUpdateTimerRef.current)
+      titleUpdateTimerRef.current = setTimeout(() => {
+        titleUpdateTimerRef.current = null
+        onUpdateRef.current({ ...paneRef.current, title })
+      }, 500)
     })
     const unsubLoading = window.ananke.browser.onLoadingState(({ paneId, loading: l }) => {
       if (paneId === pane.id) setLoading(l)
     })
     const unsubUrl = window.ananke.browser.onUrlUpdate(({ paneId, url }) => {
-      if (paneId === pane.id) {
-        setUrlInput(urlForOmnibox(url))
+      if (paneId !== pane.id) return
+      // Always update the omnibox immediately for a responsive feel.
+      setUrlInput(urlForOmnibox(url))
+      // Skip persist if the URL hasn't changed (e.g. SPA history.replaceState with same value).
+      if (url === lastReceivedUrlRef.current) return
+      lastReceivedUrlRef.current = url
+      // Debounce: collapse rapid in-page navigation events (scroll-driven replaceState)
+      // into one persist 500 ms after the last distinct URL arrives.
+      if (urlUpdateTimerRef.current) clearTimeout(urlUpdateTimerRef.current)
+      urlUpdateTimerRef.current = setTimeout(() => {
+        urlUpdateTimerRef.current = null
         onUpdateRef.current({ ...paneRef.current, url })
-      }
+      }, 500)
     })
     const unsubClip = window.ananke.browser.onClipToVault(({ paneId }) => {
       if (paneId === pane.id) void clipPageToVault(pane.id)
@@ -103,6 +129,8 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
       unsubLoading()
       unsubUrl()
       unsubClip()
+      if (urlUpdateTimerRef.current) { clearTimeout(urlUpdateTimerRef.current); urlUpdateTimerRef.current = null }
+      if (titleUpdateTimerRef.current) { clearTimeout(titleUpdateTimerRef.current); titleUpdateTimerRef.current = null }
     }
   }, [pane.id])
 

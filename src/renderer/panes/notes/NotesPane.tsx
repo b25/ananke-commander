@@ -30,6 +30,13 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   const lastPaneTitleRef = useRef(pane.title)
   const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Refs kept current each render so flush callbacks always see the latest values
+  const paneRef = useRef(pane)
+  paneRef.current = pane
+  const onUpdateRef = useRef(onUpdate)
+  onUpdateRef.current = onUpdate
+  // Tracks the in-flight (debounced-but-not-yet-flushed) body value; null = nothing pending
+  const pendingBodyRef = useRef<string | null>(null)
   const [view, setView] = useState<'editor' | 'list'>(pane.currentFile ? 'editor' : 'list')
   const [notesList, setNotesList] = useState<VaultNote[]>([])
   const [listFilter, setListFilter] = useState('')
@@ -148,22 +155,48 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
 
   const wordCount = localBody.trim() === '' ? 0 : localBody.trim().split(/\s+/).length
 
+  // Flush any pending body persist immediately (called on blur and unmount so
+  // the last keystrokes are always saved even if the 2s debounce hasn't fired).
+  const flushBodyUpdate = () => {
+    if (updateTimerRef.current !== null && pendingBodyRef.current !== null) {
+      clearTimeout(updateTimerRef.current)
+      updateTimerRef.current = null
+      const body = pendingBodyRef.current
+      pendingBodyRef.current = null
+      void onUpdateRef.current({ ...paneRef.current, body })
+    }
+  }
+
   const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value
     const prev = localBody
     if (val !== prev) undoStack.current.push(prev)
     setLocalBody(val)
     if (undoStack.current.length > Math.max(1, notesUndoMax)) undoStack.current.shift()
+    pendingBodyRef.current = val
     if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
+    // Debounce persist to 2 s — flushBodyUpdate ensures the final value is
+    // saved on blur or unmount so no keystrokes are ever lost.
     updateTimerRef.current = setTimeout(() => {
-      void onUpdate({ ...pane, body: val })
-    }, 400)
+      updateTimerRef.current = null
+      const body = pendingBodyRef.current
+      if (body !== null) {
+        pendingBodyRef.current = null
+        void onUpdateRef.current({ ...paneRef.current, body })
+      }
+    }, 2000)
   }
 
   useEffect(() => {
     return () => {
-      if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
       if (titleTimerRef.current) clearTimeout(titleTimerRef.current)
+      // Cancel the debounce timer and flush any pending body update so the
+      // last keystrokes typed before unmount are never silently dropped.
+      if (updateTimerRef.current) clearTimeout(updateTimerRef.current)
+      if (pendingBodyRef.current !== null) {
+        void onUpdateRef.current({ ...paneRef.current, body: pendingBodyRef.current })
+        pendingBodyRef.current = null
+      }
     }
   }, [])
 
@@ -254,6 +287,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
             <textarea
               value={localBody}
               onChange={handleBodyChange}
+              onBlur={flushBodyUpdate}
               placeholder="Markdown notes..."
               onKeyDown={(e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
