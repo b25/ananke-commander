@@ -10,7 +10,6 @@ type Props = {
 export function RecentlyClosedPanel({ recentlyClosed, ws, onClose, onSnapshot }: Props) {
   return (
     <>
-      <h3 id="recently-closed-title">Recently closed</h3>
       <div className="body">
         {recentlyClosed.length === 0 && <p className="muted">Empty</p>}
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>

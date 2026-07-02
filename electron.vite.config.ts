@@ -40,7 +40,6 @@ export default defineConfig({
     },
     server: {
       host: 'localhost',
-      allowedHosts: true,
       hmr: {
         protocol: 'ws',
         host: 'localhost',

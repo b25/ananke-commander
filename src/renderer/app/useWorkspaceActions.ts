@@ -143,7 +143,7 @@ export function useWorkspaceActions({
 
       // Hard cap across all screens
       if (ws.panes.length >= MAX_WINDOWS_PER_WORKSPACE) {
-        notifyAddError('Maximum 36 windows per workspace reached')
+        notifyAddError('Maximum 36 panes per workspace reached')
         return
       }
 
@@ -178,7 +178,7 @@ export function useWorkspaceActions({
             tLayoutId = ws.screenLayouts?.[tIdx] ?? 'full'
             await window.ananke.state.setCanvasOffset(ws.id, Math.round(tCol * vpW), Math.round(tRow * vpH))
           } else {
-            notifyAddError('Maximum 36 windows per workspace reached')
+            notifyAddError('Maximum 36 panes per workspace reached')
             return
           }
         }
