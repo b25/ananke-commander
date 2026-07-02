@@ -8,7 +8,7 @@ import type { AppSettings, AppStateSnapshot, PaneState, RecentlyClosedEntry, Wor
 import { DEFAULT_SETTINGS } from '../../shared/contracts.js'
 import { TomlConfigService, tomlToSnapshot } from '../tomlConfig.js'
 import { normalizeWorkspaces } from './workspaceMigration.js'
-import { activePaneUnchanged } from './stateStoreUtils.js'
+import { activePaneUnchanged, toLeanSnapshot } from './stateStoreUtils.js'
 
 function createDefaultWorkspace(): WorkspaceState {
   const paneId = randomUUID()
@@ -108,7 +108,7 @@ export class StateStore {
 
   dispose(): void { this.tomlService.stopWatching() }
 
-  getSnapshot(): AppStateSnapshot {
+  private _buildSnapshot(): AppStateSnapshot {
     const stored = this.store.get('settings')
     const settings: AppSettings = {
       ...DEFAULT_SETTINGS,
@@ -142,6 +142,18 @@ export class StateStore {
     if (patch.settings !== undefined) this.store.set('settings', patch.settings)
     if (patch.recentlyClosed !== undefined) this.store.set('recentlyClosed', patch.recentlyClosed)
   }
+
+  /** Full snapshot for initial hydration and RC-mutating handlers (closePane, restoreClosed, etc.). */
+  getSnapshot(): AppStateSnapshot { return this._buildSnapshot() }
+
+  /**
+   * Lean snapshot for high-frequency mutation handlers (setActivePane, updatePane, setCanvasOffset,
+   * layout changes). Omits recentlyClosed to avoid cloning up-to-50 full pane entries over IPC.
+   */
+  getLeanSnapshot(): AppStateSnapshot { return toLeanSnapshot(this._buildSnapshot()) }
+
+  /** Returns only the recentlyClosed list — used by the dedicated state:getRecentlyClosed handler. */
+  getRecentlyClosed(): RecentlyClosedEntry[] { return this.store.get('recentlyClosed') }
 
   getSettings(): AppSettings { return this.store.get('settings') }
   updateSettings(settings: AppSettings): void { this.store.set('settings', settings) }

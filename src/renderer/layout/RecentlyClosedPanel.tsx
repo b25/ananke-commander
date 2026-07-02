@@ -1,20 +1,20 @@
-import type { AppStateSnapshot, WorkspaceState } from '../../shared/contracts'
+import type { AppStateSnapshot, RecentlyClosedEntry, WorkspaceState } from '../../shared/contracts'
 
 type Props = {
-  snap: AppStateSnapshot
+  recentlyClosed: RecentlyClosedEntry[]
   ws: WorkspaceState
   onClose: () => void
   onSnapshot: (s: AppStateSnapshot) => void
 }
 
-export function RecentlyClosedPanel({ snap, ws, onClose, onSnapshot }: Props) {
+export function RecentlyClosedPanel({ recentlyClosed, ws, onClose, onSnapshot }: Props) {
   return (
     <>
       <h3 id="recently-closed-title">Recently closed</h3>
       <div className="body">
-        {snap.recentlyClosed.length === 0 && <p className="muted">Empty</p>}
+        {recentlyClosed.length === 0 && <p className="muted">Empty</p>}
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {snap.recentlyClosed.map((e) => (
+          {recentlyClosed.map((e) => (
             <li
               key={e.id}
               style={{ marginBottom: 10, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}

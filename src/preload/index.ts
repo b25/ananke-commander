@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppStateSnapshot, ListDirEntry, PaneState, TerminalSessionMeta } from '../shared/contracts.js'
+import type { AppStateSnapshot, ListDirEntry, PaneState, RecentlyClosedEntry, TerminalSessionMeta } from '../shared/contracts.js'
 import type {
   HttpRequest, HttpResponse,
   GrpcRequest, GrpcResponse, GrpcMessage, GrpcStatus, ProtoDiscovery,
@@ -15,6 +15,9 @@ const api = {
 
   state: {
     get: (): Promise<AppStateSnapshot> => ipcRenderer.invoke('state:get'),
+    /** Fetches only the recentlyClosed list — call when the Recently Closed drawer opens. */
+    getRecentlyClosed: (): Promise<RecentlyClosedEntry[]> =>
+      ipcRenderer.invoke('state:getRecentlyClosed'),
     set: (patch: Partial<AppStateSnapshot>): Promise<AppStateSnapshot> =>
       ipcRenderer.invoke('state:set', patch),
     replacePanes: (

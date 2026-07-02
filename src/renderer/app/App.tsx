@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AppStateSnapshot, PaneType } from '../../shared/contracts'
+import type { AppStateSnapshot, PaneType, RecentlyClosedEntry } from '../../shared/contracts'
 import { WorkspaceRail } from '../layout/WorkspaceRail'
 import { CanvasWorkspace } from '../layout/CanvasWorkspace'
 import { ScreenSelector } from '../layout/ScreenSelector'
@@ -29,6 +29,11 @@ import {
 
 export function App() {
   const [snap, setSnap] = useState<AppStateSnapshot | null>(null)
+  // recentlyClosed is maintained separately from snap because mutation IPC responses now return
+  // lean snapshots (recentlyClosed: []) to avoid cloning up-to-50 full pane entries on every
+  // pane click. rcList is initialised from state:get, fetched fresh on drawer-open, and updated
+  // by the RC-mutating panel actions (restoreClosed / removeRecentlyClosed). (PERF-5 / Task 19)
+  const [rcList, setRcList] = useState<RecentlyClosedEntry[]>([])
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
   const [tomlEditorOpen, setTomlEditorOpen] = useState(false)
   const [diagOpen, setDiagOpen] = useState(false)
@@ -85,8 +90,25 @@ export function App() {
   const [wsConfirm, setWsConfirm] = useState<{ id: string; name: string; paneCount: number } | null>(null)
   // Repair workspace confirm modal state
   const [repairConfirm, setRepairConfirm] = useState<{ collapsedCount: number } | null>(null)
-  const refresh = useCallback(async () => { setSnap(await window.ananke.state.get()) }, [])
+  const refresh = useCallback(async () => {
+    const s = await window.ananke.state.get()
+    setSnap(s)
+    setRcList(s.recentlyClosed)
+  }, [])
   useEffect(() => { void refresh() }, [refresh])
+
+  // Fetch fresh recentlyClosed each time the drawer opens — lean mutation responses omit it.
+  useEffect(() => {
+    if (drawer !== 'recent') return
+    void window.ananke.state.getRecentlyClosed().then(setRcList)
+  }, [drawer])
+
+  // Combined setter for RC-mutating panel actions (restoreClosed, removeRecentlyClosed).
+  // These handlers return the full snapshot so we can extract the updated RC list from it.
+  const applyRcSnap = useCallback((newSnap: AppStateSnapshot) => {
+    setSnap(newSnap)
+    setRcList(newSnap.recentlyClosed)
+  }, [])
 
   useEffect(() => {
     const unsubState = window.ananke.config.onStateChanged((newSnap) => { setSnap(newSnap) })
@@ -302,7 +324,7 @@ export function App() {
             Recent Panes
             <button type="button" aria-label="Close recent panes" onClick={() => setDrawer('none')} style={{ background: 'transparent', border: 'none', fontSize: '16px', padding: 0 }}>✕</button>
           </h3>
-          <RecentlyClosedPanel snap={snap} ws={ws} onClose={() => setDrawer('none')} onSnapshot={setSnap} />
+          <RecentlyClosedPanel recentlyClosed={rcList} ws={ws} onClose={() => setDrawer('none')} onSnapshot={applyRcSnap} />
         </aside>
       )}
       {repairConfirm && (
