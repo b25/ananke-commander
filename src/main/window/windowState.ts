@@ -1,5 +1,7 @@
-import { screen, type BrowserWindow, type BrowserWindowConstructorOptions } from 'electron'
+import { app, screen, type BrowserWindow, type BrowserWindowConstructorOptions } from 'electron'
 import Store from 'electron-store'
+import { join } from 'node:path'
+import { backupCorruptFile } from '../store/storeRecovery.js'
 
 const DEFAULT_WIDTH = 1280
 const DEFAULT_HEIGHT = 840
@@ -19,10 +21,21 @@ type WindowStateStoreSchema = {
   mainWindow: PersistedWindowState | null
 }
 
-const windowStore = new Store<WindowStateStoreSchema>({
-  name: 'ananke-window-state',
-  defaults: { mainWindow: null }
-})
+// SEC-3: clearInvalidConfig resets to defaults on bad JSON instead of throwing.
+// The try/catch backs up the corrupt file and starts fresh so createWindow() can
+// always succeed even when ananke-window-state.json is unreadable.
+function createWindowStore(): Store<WindowStateStoreSchema> {
+  const name = 'ananke-window-state'
+  const defaults: WindowStateStoreSchema = { mainWindow: null }
+  try {
+    return new Store<WindowStateStoreSchema>({ name, defaults, clearInvalidConfig: true })
+  } catch {
+    backupCorruptFile(join(app.getPath('userData'), `${name}.json`))
+    return new Store<WindowStateStoreSchema>({ name, defaults })
+  }
+}
+
+const windowStore = createWindowStore()
 
 /** Bounds that intersect at least one display work area (handles monitor changes). */
 export function ensureVisibleOnScreen(state: PersistedWindowState): PersistedWindowState {

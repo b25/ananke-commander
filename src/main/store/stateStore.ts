@@ -4,6 +4,7 @@ import { copyFileSync, existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { backupCorruptFile } from './storeRecovery.js'
 import type { AppSettings, AppStateSnapshot, PaneState, RecentlyClosedEntry, WorkspaceState } from '../../shared/contracts.js'
 import { DEFAULT_SETTINGS } from '../../shared/contracts.js'
 import { TomlConfigService, tomlToSnapshot } from '../tomlConfig.js'
@@ -50,7 +51,16 @@ export class StateStore {
 
   constructor() {
     migrateLegacyStateIfNeeded()
-    this.store = new Store<StoreSchema>({ name: STORE_NAME, defaults: structuredClone(defaultSnapshot) })
+    // SEC-3: clearInvalidConfig resets the file to defaults when JSON is malformed instead of
+    // throwing.  The try/catch is an extra safety net: if the Store constructor still throws
+    // (e.g. a file-system permission error), back up the corrupt file and start fresh so the
+    // app can always open a window.
+    try {
+      this.store = new Store<StoreSchema>({ name: STORE_NAME, defaults: structuredClone(defaultSnapshot), clearInvalidConfig: true })
+    } catch {
+      backupCorruptFile(join(app.getPath('userData'), `${STORE_NAME}.json`))
+      this.store = new Store<StoreSchema>({ name: STORE_NAME, defaults: structuredClone(defaultSnapshot) })
+    }
     if (!this.store.get('activeWorkspaceId')) {
       const ws = createDefaultWorkspace()
       this.store.set('workspaces', [ws])

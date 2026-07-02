@@ -32,6 +32,17 @@ import {
   restoreMainWindowDevTools
 } from './window/windowState.js'
 
+// SEC-4: Global crash safety net — log-and-survive so a stray async failure
+// (archive stream error, fs.watch callback in tomlConfig, HAR debugger event, etc.)
+// does not silently kill the main process and orphan pty/child processes.
+// Registered before any windows/services start so every async path is covered.
+process.on('uncaughtException', (err) => {
+  console.error('[ananke] uncaughtException', err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[ananke] unhandledRejection', reason)
+})
+
 registerPrivilegedAppScheme()
 
 let mainWindow: BrowserWindow | null = null
