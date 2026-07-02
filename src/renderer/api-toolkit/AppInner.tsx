@@ -141,7 +141,9 @@ function ResizableSplit({ tab }: { tab: Tab }) {
     <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ height: `${requestPct}%`, overflow: 'hidden', flexShrink: 0 }}>
         <ErrorBoundary label="Request Editor">
-          <RequestEditor tab={tab} />
+          {/* key={tab.id} remounts per-tab so GrpcPanel/RequestEditor local state
+              (form value, proto text, source mode) never bleeds across tabs (CORR-2). */}
+          <RequestEditor key={tab.id} tab={tab} />
         </ErrorBoundary>
       </div>
       <div
