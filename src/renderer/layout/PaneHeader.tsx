@@ -1,15 +1,6 @@
 import type { ReactNode } from 'react'
 import type { PaneType } from '../../shared/contracts'
-
-const PANE_ICONS: Record<PaneType, string> = {
-  'file-browser': '🗂',
-  'terminal': '🖥',
-  'browser': '🌐',
-  'notes': '📝',
-  'radar': '📡',
-  'gitui': '🧰',
-  'api-toolkit': '🛠'
-}
+import { PaneIcon } from '../components/icons'
 
 type Props = {
   title: string
@@ -24,7 +15,7 @@ export function PaneHeader({ title, onClose, needsAttention, actions, paneType }
     <div className="pane-header">
       {paneType && (
         <span className="pane-type-icon" aria-hidden="true">
-          {PANE_ICONS[paneType]}
+          <PaneIcon type={paneType} size={12} />
         </span>
       )}
       <span className="title">{title}</span>

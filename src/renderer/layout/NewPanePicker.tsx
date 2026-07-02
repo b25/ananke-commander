@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PaneType } from '../../shared/contracts'
+import { PaneIcon } from '../components/icons'
 
-const OPTIONS: { type: PaneType; label: string; icon: string }[] = [
-  { type: 'file-browser', label: 'Files', icon: '🗂' },
-  { type: 'terminal', label: 'Terminal', icon: '🖥' },
-  { type: 'browser', label: 'Browser', icon: '🌐' },
-  { type: 'notes', label: 'Notes', icon: '📝' },
-  { type: 'gitui', label: 'GitUI', icon: '🧰' },
-  { type: 'api-toolkit', label: 'API Toolkit', icon: '🛠' }
+const OPTIONS: { type: PaneType; label: string }[] = [
+  { type: 'file-browser', label: 'Files' },
+  { type: 'terminal', label: 'Terminal' },
+  { type: 'browser', label: 'Browser' },
+  { type: 'notes', label: 'Notes' },
+  { type: 'gitui', label: 'GitUI' },
+  { type: 'api-toolkit', label: 'API Toolkit' }
 ]
 
 interface Props {
@@ -83,7 +84,7 @@ export function NewPanePicker({ onSelect }: Props) {
               onClick={() => { onSelect(opt.type); setOpen(false) }}
               role="menuitem"
             >
-              <span className="layout-picker__autofit-icon">{opt.icon}</span>
+              <span className="layout-picker__autofit-icon"><PaneIcon type={opt.type} size={14} /></span>
               <span className="layout-picker__label">{opt.label}</span>
             </button>
           ))}
