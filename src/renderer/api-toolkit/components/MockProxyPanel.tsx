@@ -127,8 +127,8 @@ export function MockProxyPanel() {
         </div>
 
         {mockData.routes.length === 0 && (
-          <div className="empty-state" style={{ padding: 24 }}>
-            <div className="empty-state-icon">⊘</div>
+          <div className="atk-empty-state" style={{ padding: 24 }}>
+            <div className="atk-empty-state-icon">⊘</div>
             <span>No mock routes yet</span>
           </div>
         )}

@@ -390,7 +390,7 @@ function BodyEditor({ tab }: { tab: Tab }) {
   return (
     <div>
       <select
-        className="select"
+        className="atk-select"
         value={body.mode}
         onChange={(e) => setHttpBody(tab.id, { ...body, mode: e.target.value as typeof body.mode })}
         style={{ marginBottom: 10 }}
@@ -519,7 +519,7 @@ function AuthEditor({ tab }: { tab: Tab }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div>
-        <select className="select" value={auth.type} onChange={(e) => {
+        <select className="atk-select" value={auth.type} onChange={(e) => {
           const t = e.target.value
           const defaults: AuthConfig =
             t === 'basic'  ? { type: 'basic',  username: '', password: '' } :
@@ -547,7 +547,7 @@ function AuthEditor({ tab }: { tab: Tab }) {
         <>
           <input className="kv-input" placeholder="Header / query key name" value={auth.key} onChange={(e) => setHttpAuth(tab.id, { ...auth, key: e.target.value })} />
           <input className="kv-input" placeholder="Value" value={auth.value} onChange={(e) => setHttpAuth(tab.id, { ...auth, value: e.target.value })} />
-          <select className="select" value={auth.in} onChange={(e) => setHttpAuth(tab.id, { ...auth, in: e.target.value as 'header' | 'query' })}>
+          <select className="atk-select" value={auth.in} onChange={(e) => setHttpAuth(tab.id, { ...auth, in: e.target.value as 'header' | 'query' })}>
             <option value="header">Header</option>
             <option value="query">Query param</option>
           </select>

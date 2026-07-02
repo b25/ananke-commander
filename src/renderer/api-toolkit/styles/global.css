@@ -1,18 +1,23 @@
 /* ── API Toolkit tokens (scoped to this pane) ─────────────────────────────── */
 .api-toolkit-scope {
-  --bg-0: #0f0f1a;
-  --bg-1: #16162a;
-  --bg-2: #1e1e35;
-  --bg-3: #252540;
-  --bg-4: #2d2d50;
-  --border-focus: #5c6bc0;
+  /* Surface tokens — aliased to core theme so the toolkit follows the app colours */
+  --bg-0: var(--bg);
+  --bg-1: var(--rail);
+  --bg-2: var(--pane);
+  --bg-3: var(--header);
+  --bg-4: var(--hover);
 
-  --text-0: #e8e8f0;
-  --text-1: #b0b0c8;
-  --text-2: #7070a0;
-  --text-3: #404060;
-  --text-accent: #818cf8;
+  /* Focus ring → core accent */
+  --border-focus: var(--accent);
 
+  /* Text tokens — primary levels alias to core; mid/dim levels kept as scoped */
+  --text-0: var(--text);
+  --text-1: var(--muted);
+  --text-2: #7070a0;    /* no direct core match; kept as scoped neutral */
+  --text-3: #404060;    /* no direct core match; kept as scoped neutral */
+  --text-accent: var(--accent);
+
+  /* HTTP method colours — genuinely toolkit-specific; kept as scoped tokens */
   --method-get:    #22c55e;
   --method-post:   #f59e0b;
   --method-put:    #3b82f6;
@@ -21,16 +26,21 @@
   --method-head:   #06b6d4;
   --method-options:#64748b;
 
+  /* HTTP status colours — genuinely toolkit-specific; kept as scoped tokens */
   --status-2xx: #22c55e;
   --status-3xx: #f59e0b;
   --status-4xx: #f97316;
   --status-5xx: #ef4444;
   --status-err: #dc2626;
 
-  --radius-lg: 10px;
+  /* JSON syntax highlight colours — toolkit-specific; defined as scoped tokens */
+  --json-key:    #818cf8;
+  --json-string: #86efac;
+  --json-number: #fbbf24;
+  --json-bool:   #f472b6;
+  --json-null:   #94a3b8;
 
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Consolas, monospace;
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  /* Radius and font: no local overrides — inherit core --radius-* / --font-mono / --font-sans */
 }
 
 /* ── Scrollbar (scoped to api-toolkit) ────────────────────────────────────── */
@@ -40,7 +50,7 @@
 .api-toolkit-scope ::-webkit-scrollbar-thumb:hover { background: var(--text-2); }
 
 /* ── Layout ───────────────────────────────────────────────────────────────── */
-.app-root {
+.atk-app-root {
   display: grid;
   grid-template-rows: 1fr;
   grid-template-columns: 240px 1fr;
@@ -48,7 +58,7 @@
   overflow: hidden;
 }
 
-.sidebar {
+.atk-sidebar {
   background: var(--bg-1);
   border-right: 1px solid var(--border);
   display: flex;
@@ -56,7 +66,7 @@
   overflow: hidden;
 }
 
-.main-area {
+.atk-main-area {
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -85,7 +95,7 @@
   flex: 1;
   min-width: 0;
 }
-.tab-strip--compact .tab {
+.tab-strip--compact .atk-tab {
   min-width: 88px;
   max-width: 140px;
   padding: 0 6px;
@@ -132,7 +142,7 @@
 .tabbar-track { align-items: stretch; }
 
 /* ── Request tabs ─────────────────────────────────────────────────────────── */
-.tab {
+.atk-tab {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -150,14 +160,14 @@
   scroll-snap-align: start;
   outline: none;
 }
-.tab:hover { background: var(--bg-2); }
-.tab:focus-visible { box-shadow: inset 0 0 0 1px var(--border-focus); }
-.tab.active {
+.atk-tab:hover { background: var(--bg-2); }
+.atk-tab:focus-visible { box-shadow: inset 0 0 0 1px var(--border-focus); }
+.atk-tab.active {
   background: var(--bg-2);
   color: var(--text-0);
   box-shadow: inset 0 -2px 0 var(--border-focus);
 }
-.tab .method-badge { font-size: 9px; }
+.atk-tab .method-badge { font-size: 9px; }
 .tab-name { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
 .tab-dirty { font-size: 9px; color: var(--text-accent); flex-shrink: 0; }
 .tab-close {
@@ -177,8 +187,8 @@
   flex-shrink: 0;
   padding: 0;
 }
-.tab:hover .tab-close,
-.tab.active .tab-close { opacity: 1; }
+.atk-tab:hover .tab-close,
+.atk-tab.active .tab-close { opacity: 1; }
 .tab-close:hover { background: var(--bg-3); color: var(--text-0); }
 
 .tab-new-btn {
@@ -330,7 +340,7 @@
 
 .send-btn {
   background: var(--text-accent);
-  color: #0f0f1a;
+  color: var(--text-on-accent);
   border: none;
   border-radius: var(--radius-sm);
   font-size: 10px;
@@ -341,7 +351,7 @@
 }
 .send-btn:hover { opacity: 0.85; }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.send-btn.cancel { background: var(--status-err); color: #fff; }
+.send-btn.cancel { background: var(--status-err); color: var(--text-on-accent); }
 
 /* ── Tabs (inner panels) ──────────────────────────────────────────────────── */
 .panel-tabs-row {
@@ -555,7 +565,7 @@
   color: var(--text-0);
 }
 
-.empty-state {
+.atk-empty-state {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -565,7 +575,7 @@
   color: var(--text-2);
   font-size: 10px;
 }
-.empty-state-icon { font-size: 10px; opacity: 0.3; }
+.atk-empty-state-icon { font-size: 10px; opacity: 0.3; }
 
 /* ── gRPC panel ───────────────────────────────────────────────────────────── */
 .grpc-endpoint-bar {
@@ -691,11 +701,11 @@
 .stream-msg-meta { color: var(--text-2); font-size: 10px; margin-bottom: 2px; }
 
 /* ── Misc ─────────────────────────────────────────────────────────────────── */
-.text-muted { color: var(--text-2); }
-.text-accent { color: var(--text-accent); }
-.divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+.atk-text-muted { color: var(--text-2); }
+.atk-text-accent { color: var(--text-accent); }
+.atk-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
 
-.select {
+.atk-select {
   background: var(--bg-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -705,7 +715,7 @@
   outline: none;
   cursor: pointer;
 }
-.select:focus { border-color: var(--border-focus); }
+.atk-select:focus { border-color: var(--border-focus); }
 
 .error-box {
   padding: 6px 8px;
@@ -717,7 +727,7 @@
   margin: 8px;
 }
 
-.spinner {
+.atk-spinner {
   width: 14px; height: 14px;
   border: 2px solid var(--bg-4);
   border-top-color: var(--text-accent);
@@ -740,8 +750,8 @@
 .history-time { font-size: 10px; color: var(--text-2); flex-shrink: 0; }
 
 /* ── JSON pretty ──────────────────────────────────────────────────────────── */
-.json-key { color: #818cf8; }
-.json-string { color: #86efac; }
-.json-number { color: #fbbf24; }
-.json-bool { color: #f472b6; }
-.json-null { color: #94a3b8; }
+.json-key { color: var(--json-key); }
+.json-string { color: var(--json-string); }
+.json-number { color: var(--json-number); }
+.json-bool { color: var(--json-bool); }
+.json-null { color: var(--json-null); }

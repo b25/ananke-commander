@@ -60,14 +60,14 @@ export function App() {
   const effectiveTabId = activeTabId ?? tabs[0]?.id
 
   return (
-    <div className="app-root">
+    <div className="atk-app-root">
       {/* Sidebar */}
       <ErrorBoundary label="Sidebar">
         <Sidebar />
       </ErrorBoundary>
 
       {/* Main area */}
-      <div className="main-area">
+      <div className="atk-main-area">
         {/* Tab bar */}
         <TabBar
           tabs={tabs}
@@ -83,8 +83,8 @@ export function App() {
             <ResizableSplit tab={activeTab} />
           </ErrorBoundary>
         ) : (
-          <div className="empty-state">
-            <div className="empty-state-icon">⚡</div>
+          <div className="atk-empty-state">
+            <div className="atk-empty-state-icon">⚡</div>
             <span>Open a request or create a new one</span>
           </div>
         )}
@@ -174,7 +174,7 @@ function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
               tabIndex={0}
               aria-selected={isActive}
               data-scroll-active={isActive ? 'true' : undefined}
-              className={`tab ${isActive ? 'active' : ''}`}
+              className={`atk-tab ${isActive ? 'active' : ''}`}
               onClick={() => onSelect(tab.id)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {

@@ -136,7 +136,7 @@ export function GrpcPanel({ tab }: Props) {
           onChange={(e) => setGrpcEndpoint(tab.id, e.target.value)}
         />
         <select
-          className="select"
+          className="atk-select"
           value={req.tls.mode}
           onChange={(e) => setGrpcTls(tab.id, { ...req.tls, mode: e.target.value as 'none' | 'tls' | 'mtls' })}
           title="TLS mode"
@@ -225,7 +225,7 @@ export function GrpcPanel({ tab }: Props) {
           <button className="send-btn" style={{ fontSize: 10, padding: '3px 12px' }} onClick={discover} disabled={discovering}>
             {discovering ? 'Discovering…' : 'Discover services'}
           </button>
-          {discovering && <div className="spinner" />}
+          {discovering && <div className="atk-spinner" />}
           {discoverError && <span style={{ color: 'var(--status-err)', fontSize: 10 }}>{discoverError}</span>}
         </div>
       </div>

@@ -306,9 +306,9 @@ export function CollectionTree() {
       {collections.length === 0 && !inlinePrompt && (
         <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 10, textAlign: 'center' }}>
           No collections yet.<br />
-          <span className="text-accent" style={{ cursor: 'pointer' }} onClick={newCollection}>Create one</span>
+          <span className="atk-text-accent" style={{ cursor: 'pointer' }} onClick={newCollection}>Create one</span>
           {' or '}
-          <span className="text-accent" style={{ cursor: 'pointer' }} onClick={() => importRef.current?.click()}>import from Postman</span>
+          <span className="atk-text-accent" style={{ cursor: 'pointer' }} onClick={() => importRef.current?.click()}>import from Postman</span>
         </div>
       )}
 

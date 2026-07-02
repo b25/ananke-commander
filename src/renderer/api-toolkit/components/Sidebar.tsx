@@ -18,7 +18,7 @@ export function Sidebar() {
   const activeEnvName = environments.find((e) => e.id === activeEnvironmentId)?.name
 
   return (
-    <aside className="sidebar">
+    <aside className="atk-sidebar">
       <div className="sidebar-tabs" role="tablist" aria-label="API toolkit sections">
         <button
           type="button"

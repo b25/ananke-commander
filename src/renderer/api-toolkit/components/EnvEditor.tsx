@@ -139,7 +139,7 @@ export function EnvEditor() {
       {/* Selector row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
         <select
-          className="select"
+          className="atk-select"
           style={{ flex: 1, fontSize: 10 }}
           value={activeEnvironmentId ?? ''}
           onChange={(e) => setActiveEnvironment(e.target.value || null)}
@@ -154,7 +154,7 @@ export function EnvEditor() {
       {environments.length === 0 && !inlinePrompt && (
         <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 10, textAlign: 'center' }}>
           No environments.<br />
-          <button type="button" className="text-accent" style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }} onClick={newEnv}>Create one</button>
+          <button type="button" className="atk-text-accent" style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }} onClick={newEnv}>Create one</button>
         </div>
       )}
 

@@ -28,7 +28,7 @@ export function OneofGroup({ fields, value, onChange, depth }: {
     <div className="form-field">
       <div className="form-label" style={{ gap: 8 }}>
         <span>oneof</span>
-        <select className="select" value={selected} onChange={(e) => select(e.target.value)} style={{ fontSize: 10 }}>
+        <select className="atk-select" value={selected} onChange={(e) => select(e.target.value)} style={{ fontSize: 10 }}>
           {fields.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}
         </select>
       </div>
