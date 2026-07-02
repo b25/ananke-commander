@@ -36,11 +36,16 @@ function maybeRelease() {
   }
 }
 
-async function getFolderSizeOnce(path: string): Promise<number> {
+async function getFolderSizeOnce(
+  path: string,
+  onStarted?: (requestId: string) => void,
+  onFinished?: (requestId: string) => void
+): Promise<number> {
   ensureListeners()
   const requestId = await window.ananke.fs.startFolderSize(path)
+  onStarted?.(requestId)
   return new Promise((resolve) => {
-    pending.set(requestId, (size) => { maybeRelease(); resolve(size) })
+    pending.set(requestId, (size) => { onFinished?.(requestId); maybeRelease(); resolve(size) })
   })
 }
 
@@ -77,6 +82,7 @@ export function useRadarData(rootPath: string, onUpdate?: (data: RadarNode) => v
   useEffect(() => {
     if (!rootPath) return
     let cancelled = false
+    const outstandingIds = new Set<string>()
     setLoading(true)
     setError(null)
     setTruncated(null)
@@ -113,7 +119,11 @@ export function useRadarData(rootPath: string, onUpdate?: (data: RadarNode) => v
 
       await parallelMap(dirEntries, async (entry) => {
         if (cancelled) return
-        const size = await getFolderSizeOnce(entry.path)
+        const size = await getFolderSizeOnce(
+          entry.path,
+          (id) => outstandingIds.add(id),
+          (id) => outstandingIds.delete(id)
+        )
         if (cancelled) return
         children.push({ name: entry.name, path: entry.path, size, isDirectory: true })
         resolvedCount++
@@ -131,7 +141,12 @@ export function useRadarData(rootPath: string, onUpdate?: (data: RadarNode) => v
       .catch((e) => { if (!cancelled) setError(String(e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      for (const id of outstandingIds) {
+        void window.ananke.fs.cancelFolderSize(id)
+      }
+    }
   }, [rootPath])
 
   return { data, loading, error, truncated, progress }
