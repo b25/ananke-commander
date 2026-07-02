@@ -1,9 +1,13 @@
 import { app } from 'electron'
 import { existsSync, readFileSync, renameSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { parse, stringify } from 'smol-toml'
+import { computeContentHash, isSelfWrite } from './tomlConfigHash.ts'
+
+// Re-export so callers that previously used these from tomlConfig still work.
+export { computeContentHash, isSelfWrite } from './tomlConfigHash.ts'
 import type { AppStateSnapshot, FileBrowserPaneState, BrowserPaneState, NotesPaneState, PaneState, RadarPaneState, TerminalPaneState, WorkspaceState } from '../shared/contracts.js'
 
 // ── TOML serialization ────────────────────────────────────────────────────────
@@ -229,7 +233,8 @@ export function tomlToSnapshot(raw: string): Pick<AppStateSnapshot, 'workspaces'
 export class TomlConfigService {
   private filePath: string
   private watcher: ReturnType<typeof watch> | null = null
-  private selfWriting = false
+  /** SHA-1 of the exact bytes last written by THIS process; null = never written. */
+  private lastWrittenHash: string | null = null
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
   private onExternalChange: (raw: string) => void
 
@@ -248,30 +253,39 @@ export class TomlConfigService {
   }
 
   write(snap: AppStateSnapshot): void {
-    this.selfWriting = true
+    const content = snapshotToToml(snap)
+    // Record hash BEFORE the rename so the watcher callback always sees a
+    // matching hash, regardless of how quickly the OS delivers the event.
+    this.lastWrittenHash = computeContentHash(content)
     const tmp = this.filePath + '.tmp'
-    try {
-      writeFileSync(tmp, snapshotToToml(snap), 'utf8')
-      renameSync(tmp, this.filePath)
-    } finally {
-      // Reset after a tick — fs.watch callbacks are async
-      setImmediate(() => { this.selfWriting = false })
-    }
+    writeFileSync(tmp, content, 'utf8')
+    renameSync(tmp, this.filePath)
   }
 
   startWatching(): void {
     if (!existsSync(this.filePath)) return
+    // Watch the CONTAINING DIRECTORY rather than the file itself.
+    // On Linux, inotify tracks inodes: a tmp+rename replaces the inode so a
+    // file-watch goes silent after the first write.  A directory watch survives
+    // renames and keeps working across multiple app writes.
+    const dir = dirname(this.filePath)
+    const filename = basename(this.filePath)
     try {
-      this.watcher = watch(this.filePath, () => {
-        if (this.selfWriting) return
+      this.watcher = watch(dir, (_event, changedFile) => {
+        if (changedFile !== filename) return
         if (this.debounceTimer) clearTimeout(this.debounceTimer)
         this.debounceTimer = setTimeout(() => {
           const raw = this.readRaw()
-          if (raw !== null) this.onExternalChange(raw)
+          if (raw === null) return
+          // Hash-based self-write suppression: if the content we just read
+          // matches what we last wrote, this is OUR event — skip it so we
+          // don't re-parse and clear pendingPatch.
+          if (isSelfWrite(computeContentHash(raw), this.lastWrittenHash)) return
+          this.onExternalChange(raw)
         }, 200)
       })
       this.watcher.on('error', () => this.stopWatching())
-    } catch { /* file may not exist yet */ }
+    } catch { /* dir may not exist yet */ }
   }
 
   stopWatching(): void {
