@@ -8,7 +8,7 @@
  *   4. protobuf message → JSON decoding with well-known-type handling
  */
 
-import * as protobuf from 'protobufjs'
+import protobuf from 'protobufjs'
 import type { MessageSchema, FieldSchema, FieldType, ProtoService, ProtoDiscovery, WellKnownType } from '../../shared/api-toolkit-contracts.js'
 
 // Well-known type full names

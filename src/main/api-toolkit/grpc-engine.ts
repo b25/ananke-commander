@@ -6,7 +6,7 @@
  */
 
 import * as grpc from '@grpc/grpc-js'
-import * as protobuf from 'protobufjs'
+import protobuf from 'protobufjs'
 import { GrpcReflection } from 'grpc-js-reflection-client'
 import { createHash } from 'node:crypto'
 import type { GrpcRequest, GrpcResponse, GrpcMessage, GrpcStatus, TlsConfig, ProtoDiscovery, ProtoSource } from '../../shared/api-toolkit-contracts.js'
@@ -16,7 +16,7 @@ import {
   discoverServices,
   jsonToMessage,
   messageToJson,
-} from './proto-codec.js'
+} from './proto-codec.ts'
 
 const STATUS_NAMES: Record<number, string> = {
   0: 'OK', 1: 'CANCELLED', 2: 'UNKNOWN', 3: 'INVALID_ARGUMENT',
@@ -156,17 +156,19 @@ function parseServiceMethod(serviceMethod: string): [string, string] {
   return [svc, last]
 }
 
-function resolveTypes(root: protobuf.Root, serviceMethod: string): { reqType: string; respType: string; clientStream: boolean; serverStream: boolean } {
+function resolveTypes(root: protobuf.Root, serviceMethod: string): { reqType: string; respType: string; clientStream: boolean; serverStream: boolean; grpcPath: string } {
   const [svcName, methodName] = parseServiceMethod(serviceMethod)
   const svc = root.lookupService(svcName)
   const method = svc.methods[methodName]
   if (!method) throw new Error(`Method ${methodName} not found in service ${svcName}`)
   method.resolve()
+  const fullSvcName = svc.fullName.replace(/^\./, '')
   return {
     reqType: method.resolvedRequestType?.fullName.replace(/^\./, '') ?? method.requestType,
     respType: method.resolvedResponseType?.fullName.replace(/^\./, '') ?? method.responseType,
     clientStream: method.requestStream ?? false,
     serverStream: method.responseStream ?? false,
+    grpcPath: `/${fullSvcName}/${methodName}`,
   }
 }
 
@@ -178,8 +180,7 @@ export async function discoverProto(req: GrpcRequest): Promise<ProtoDiscovery> {
 export async function grpcUnary(req: GrpcRequest): Promise<GrpcResponse> {
   const start = Date.now()
   const root = await getRoot(req)
-  const { reqType, respType } = resolveTypes(root, req.serviceMethod)
-  const [, methodName] = parseServiceMethod(req.serviceMethod)
+  const { reqType, respType, grpcPath } = resolveTypes(root, req.serviceMethod)
   const reqBytes = jsonToMessage(root, reqType, JSON.parse(req.messageJson))
 
   const creds = buildCredentials(req.tls)
@@ -189,13 +190,21 @@ export async function grpcUnary(req: GrpcRequest): Promise<GrpcResponse> {
     ? new Date(Date.now() + req.deadline)
     : undefined
 
+  // Identity (pass-through) codecs — payloads are already encoded protobuf bytes.
+  const ident = (b: Buffer): Buffer => b
+
   try {
     return await new Promise<GrpcResponse>((resolve, reject) => {
-      const call = (client as unknown as Record<string, (...args: unknown[]) => grpc.ClientUnaryCall>)[methodName](
-        reqBytes,
+      let trailers: Record<string, string> = {}
+
+      const call = client.makeUnaryRequest<Buffer, Buffer>(
+        grpcPath,
+        ident,
+        ident,
+        Buffer.from(reqBytes),
         buildMetadata(req.metadata),
         deadline ? { deadline } : {},
-        (err: grpc.ServiceError | null, response: Uint8Array, trailer: grpc.Metadata) => {
+        (err: grpc.ServiceError | null, response?: Buffer) => {
           const status: GrpcStatus = err
             ? { code: err.code ?? grpc.status.UNKNOWN, codeName: STATUS_NAMES[err.code ?? 2] ?? 'UNKNOWN', details: err.details ?? err.message }
             : grpcStatusCode(grpc.status.OK)
@@ -209,12 +218,19 @@ export async function grpcUnary(req: GrpcRequest): Promise<GrpcResponse> {
             messages,
             status,
             metadata: {},
-            trailers: trailer ? metadataToRecord(trailer) : {},
+            trailers,
             timings: { total: Date.now() - start },
           })
-        }
+        },
       )
-      void call
+
+      // Capture trailers — the 'status' event fires before the callback for unary.
+      call.on('status', (s: grpc.StatusObject) => {
+        trailers = metadataToRecord(s.metadata)
+      })
+      call.on('error', (e: Error) => {
+        reject(e)
+      })
     })
   } finally {
     client.close()
@@ -230,13 +246,14 @@ export interface StreamCallbacks {
 export interface StreamHandle {
   sendMessage: (jsonStr: string) => void
   cancel: () => void
+  /** Half-close the client side of a client-stream or bidi-stream (Task 11). */
+  end: () => void
 }
 
 export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): Promise<StreamHandle> {
   const root = await getRoot(req)
-  const { reqType, respType, clientStream, serverStream } = resolveTypes(root, req.serviceMethod)
+  const { reqType, respType, clientStream, serverStream, grpcPath } = resolveTypes(root, req.serviceMethod)
 
-  const [, methodName] = parseServiceMethod(req.serviceMethod)
   const creds = buildCredentials(req.tls)
   const client = new grpc.Client(req.endpoint, creds)
   const meta = buildMetadata(req.metadata)
@@ -247,6 +264,9 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
 
   const callOpts = deadline ? { deadline } : {}
 
+  // Identity (pass-through) codecs — payloads are already encoded protobuf bytes.
+  const ident = (b: Buffer): Buffer => b
+
   let ended = false
   const finish = (status: GrpcStatus, trailers: Record<string, string>) => {
     if (ended) return
@@ -255,8 +275,8 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
     client.close()
   }
 
-  function handleRecvStream(stream: grpc.ClientReadableStream<Uint8Array>): void {
-    stream.on('data', (chunk: Uint8Array) => {
+  function handleRecvStream(stream: grpc.ClientReadableStream<Buffer>): void {
+    stream.on('data', (chunk: Buffer) => {
       try {
         const json = JSON.stringify(messageToJson(root, respType, chunk), null, 2)
         callbacks.onMessage({ json, timestamp: Date.now(), direction: 'recv' })
@@ -272,46 +292,55 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
     })
   }
 
+  // ── Server-streaming ──────────────────────────────────────────────────────
   if (!clientStream && serverStream) {
     const reqBytes = jsonToMessage(root, reqType, JSON.parse(req.messageJson))
-    const call = (client as unknown as Record<string, (...args: unknown[]) => grpc.ClientReadableStream<Uint8Array>>)[methodName](reqBytes, meta, callOpts)
+    const call = client.makeServerStreamRequest<Buffer, Buffer>(grpcPath, ident, ident, Buffer.from(reqBytes), meta, callOpts)
     handleRecvStream(call)
     return {
-      sendMessage: () => { /* no-op */ },
+      sendMessage: () => { /* no-op: server-streaming sends only the initial request */ },
       cancel: () => { call.cancel(); if (!ended) { ended = true; client.close() } },
+      end: () => { /* no-op: server-stream has no client-side half-close */ },
     }
   }
 
+  // ── Client-streaming ──────────────────────────────────────────────────────
   if (clientStream && !serverStream) {
-    const call = (client as unknown as Record<string, (...args: unknown[]) => grpc.ClientWritableStream<Uint8Array>>)[methodName](
+    const call = client.makeClientStreamRequest<Buffer, Buffer>(
+      grpcPath,
+      ident,
+      ident,
       meta,
       callOpts,
-      (err: grpc.ServiceError | null, resp: Uint8Array, trailer: grpc.Metadata) => {
+      (err: grpc.ServiceError | null, resp?: Buffer) => {
         const status: GrpcStatus = err
-          ? { code: err.code ?? 2, codeName: STATUS_NAMES[err.code ?? 2] ?? 'UNKNOWN', details: err.details }
+          ? { code: err.code ?? 2, codeName: STATUS_NAMES[err.code ?? 2] ?? 'UNKNOWN', details: err.details ?? '' }
           : grpcStatusCode(grpc.status.OK)
         if (resp) {
           callbacks.onMessage({ json: JSON.stringify(messageToJson(root, respType, resp), null, 2), timestamp: Date.now(), direction: 'recv' })
         }
-        finish(status, trailer ? metadataToRecord(trailer) : {})
-      }
+        finish(status, {})
+      },
     )
     return {
       sendMessage: (jsonStr: string) => {
         const bytes = jsonToMessage(root, reqType, JSON.parse(jsonStr))
-        call.write(bytes)
+        call.write(Buffer.from(bytes))
       },
       cancel: () => { call.cancel(); if (!ended) { ended = true; client.close() } },
+      end: () => { call.end() },
     }
   }
 
-  const call = (client as unknown as Record<string, (...args: unknown[]) => grpc.ClientDuplexStream<Uint8Array, Uint8Array>>)[methodName](meta, callOpts)
-  handleRecvStream(call as unknown as grpc.ClientReadableStream<Uint8Array>)
+  // ── Bidi-streaming ────────────────────────────────────────────────────────
+  const call = client.makeBidiStreamRequest<Buffer, Buffer>(grpcPath, ident, ident, meta, callOpts)
+  handleRecvStream(call)
   return {
     sendMessage: (jsonStr: string) => {
       const bytes = jsonToMessage(root, reqType, JSON.parse(jsonStr))
-      call.write(bytes)
+      call.write(Buffer.from(bytes))
     },
     cancel: () => { call.cancel(); if (!ended) { ended = true; client.close() } },
+    end: () => { call.end() },
   }
 }
