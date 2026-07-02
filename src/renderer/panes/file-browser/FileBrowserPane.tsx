@@ -69,6 +69,51 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const [inlinePrompt, setInlinePrompt] = useState<{ label: string; onSubmit: (value: string) => void } | null>(null)
   const [inlinePromptValue, setInlinePromptValue] = useState('')
 
+  // PERF-4: local selection state — updated synchronously on each keystroke/click,
+  // persisted to pane state (and thus disk) debounced at ~300ms.
+  // This prevents one disk write + full-app re-render per arrow key repeat.
+  const [leftSelLocal, setLeftSelLocal] = useState<string[]>(pane.leftSelection)
+  const [rightSelLocal, setRightSelLocal] = useState<string[]>(pane.rightSelection)
+  // Always point at the latest pane so the debounce closure doesn't go stale
+  const paneRef = useRef(pane)
+  paneRef.current = pane
+  // Pending selection state and debounce timer for the flush
+  const pendingSelRef = useRef<{ left: string[]; right: string[]; side: 'left' | 'right' }>({
+    left: pane.leftSelection, right: pane.rightSelection, side: pane.focusedSide
+  })
+  const selDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sync local selection from pane when path or pane identity changes (e.g. navigation).
+  // Also cancel any pending flush so stale selections from the old path aren't persisted.
+  useEffect(() => {
+    if (selDebounceRef.current) {
+      clearTimeout(selDebounceRef.current)
+      selDebounceRef.current = null
+    }
+    setLeftSelLocal(pane.leftSelection)
+    setRightSelLocal(pane.rightSelection)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pane.id, pane.leftPath, pane.rightPath])
+
+  // Schedule a debounced persist of the current selection to pane state
+  const scheduleSel = useCallback((nextLeft: string[], nextRight: string[], side: 'left' | 'right') => {
+    pendingSelRef.current = { left: nextLeft, right: nextRight, side }
+    if (selDebounceRef.current) clearTimeout(selDebounceRef.current)
+    selDebounceRef.current = setTimeout(() => {
+      selDebounceRef.current = null
+      const { left, right, side: s } = pendingSelRef.current
+      onUpdate({ ...paneRef.current, leftSelection: left, rightSelection: right, focusedSide: s })
+    }, 300)
+  }, [onUpdate])
+
+  // Cancel pending selection debounce — call before any immediate onUpdate that touches selection
+  const cancelSelDebounce = () => {
+    if (selDebounceRef.current) {
+      clearTimeout(selDebounceRef.current)
+      selDebounceRef.current = null
+    }
+  }
+
   // Hide WebContentsViews (OS-layer, above all CSS z-index) when a dialog is open
   useEffect(() => {
     window.dispatchEvent(new Event(inlinePrompt ? 'ananke:modal-open' : 'ananke:modal-close'))
@@ -83,15 +128,17 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const { leftEntries, rightEntries, refreshBoth, refreshActive } = useDirectoryEntries(pane)
   const { fileJobLine, setFileJobLine, startJob } = useFileJob(refreshBoth)
 
-  const leftSel = new Set(pane.leftSelection)
-  const rightSel = new Set(pane.rightSelection)
+  // Derive Set views from local state for FileList `selected` prop (fast, no disk hit)
+  const leftSel = new Set(leftSelLocal)
+  const rightSel = new Set(rightSelLocal)
 
   const fileBrowserDests = allPanes.filter(
     (p): p is FileBrowserPaneState => p.type === 'file-browser' && p.id !== pane.id
   )
 
+  // selectedPaths reads from local state so operations (delete, copy…) see the latest selection
   const selectedPaths =
-    pane.focusedSide === 'left' ? [...pane.leftSelection] : [...pane.rightSelection]
+    pane.focusedSide === 'left' ? [...leftSelLocal] : [...rightSelLocal]
 
   const activePath = pane.focusedSide === 'left' ? pane.leftPath : pane.rightPath
 
@@ -166,29 +213,35 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
 
   const doDelete = useCallback(async () => {
     if (!selectedPaths.length) return
+    cancelSelDebounce()
     await window.ananke.fs.quickOp('delete', '', selectedPaths)
     refreshBoth()
+    setLeftSelLocal([])
+    setRightSelLocal([])
     onUpdate({ ...pane, leftSelection: [], rightSelection: [] })
   }, [pane, onUpdate, refreshBoth, selectedPaths])
 
   const onFileContextMenu = useCallback(
     (side: 'left' | 'right', e: React.MouseEvent, entry: ListDirEntry) => {
       e.preventDefault()
-      const sel = side === 'left' ? pane.leftSelection : pane.rightSelection
+      const sel = side === 'left' ? leftSelLocal : rightSelLocal
       if (!sel.includes(entry.path)) {
-        onUpdate({
-          ...pane,
-          focusedSide: side,
-          ...(side === 'left'
-            ? { leftSelection: [entry.path] }
-            : { rightSelection: [entry.path] })
-        })
+        // Immediate selection change: cancel pending debounce and persist now
+        cancelSelDebounce()
+        const newSel = [entry.path]
+        if (side === 'left') {
+          setLeftSelLocal(newSel)
+          onUpdate({ ...pane, focusedSide: side, leftSelection: newSel, rightSelection: rightSelLocal })
+        } else {
+          setRightSelLocal(newSel)
+          onUpdate({ ...pane, focusedSide: side, leftSelection: leftSelLocal, rightSelection: newSel })
+        }
       } else {
         onUpdate({ ...pane, focusedSide: side })
       }
       setCtxMenu({ x: e.clientX, y: e.clientY, path: entry.path, side })
     },
-    [pane, onUpdate]
+    [pane, onUpdate, leftSelLocal, rightSelLocal]
   )
 
   useEffect(() => {
@@ -507,12 +560,9 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 onRenameCancel={() => setRenaming(null)}
                 onPathChange={(p) => navigateTo('left', p)}
                 onSelect={(paths, add) => {
-                  const next = togglePaths(pane.leftSelection, paths, add)
-                  onUpdate({
-                    ...pane,
-                    focusedSide: 'left',
-                    leftSelection: next
-                  })
+                  const next = togglePaths(leftSelLocal, paths, add)
+                  setLeftSelLocal(next)
+                  scheduleSel(next, rightSelLocal, 'left')
                 }}
                 onActivate={(entry) => {
                   if (leftFind.active) setLeftFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
@@ -561,12 +611,9 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 onRenameCancel={() => setRenaming(null)}
                 onPathChange={(p) => navigateTo('right', p)}
                 onSelect={(paths, add) => {
-                  const next = togglePaths(pane.rightSelection, paths, add)
-                  onUpdate({
-                    ...pane,
-                    focusedSide: 'right',
-                    rightSelection: next
-                  })
+                  const next = togglePaths(rightSelLocal, paths, add)
+                  setRightSelLocal(next)
+                  scheduleSel(leftSelLocal, next, 'right')
                 }}
                 onActivate={(entry) => {
                   if (rightFind.active) setRightFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
@@ -587,9 +634,9 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
           </div>
           <div className="fb-status-bar">
             {pane.focusedSide === 'left' ? (
-              `${pane.leftSelection.length} selected · ${visibleLeftEntries.length} items`
+              `${leftSelLocal.length} selected · ${visibleLeftEntries.length} items`
             ) : (
-              `${pane.rightSelection.length} selected · ${visibleRightEntries.length} items`
+              `${rightSelLocal.length} selected · ${visibleRightEntries.length} items`
             )}
           </div>
         </div>

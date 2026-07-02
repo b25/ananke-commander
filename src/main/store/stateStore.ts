@@ -8,6 +8,7 @@ import type { AppSettings, AppStateSnapshot, PaneState, RecentlyClosedEntry, Wor
 import { DEFAULT_SETTINGS } from '../../shared/contracts.js'
 import { TomlConfigService, tomlToSnapshot } from '../tomlConfig.js'
 import { normalizeWorkspaces } from './workspaceMigration.js'
+import { activePaneUnchanged } from './stateStoreUtils.js'
 
 function createDefaultWorkspace(): WorkspaceState {
   const paneId = randomUUID()
@@ -173,6 +174,8 @@ export class StateStore {
   }
 
   setActiveWorkspacePane(workspaceId: string, activePaneId: string | null): void {
+    // PERF-1: skip the synchronous store write + TOML rewrite when the pane is already active
+    if (activePaneUnchanged(this.store.get('workspaces'), workspaceId, activePaneId)) return
     this.store.set('workspaces', this.store.get('workspaces').map((ws) => ws.id === workspaceId ? { ...ws, activePaneId } : ws))
     this.scheduleTomlFlush()
   }
