@@ -289,6 +289,15 @@ async function createWindow(): Promise<void> {
   stateStore = new StateStore()
   stateStore.setMainWindow(win)
 
+  // PERF-13: Prune orphaned browser-history buckets at startup (once, after both
+  // stateStore and browserHistoryService are ready). Collects every paneId across
+  // all workspaces and removes any persisted bucket whose paneId no longer exists.
+  {
+    const snapshot = stateStore.getSnapshot()
+    const liveIds = new Set(snapshot.workspaces.flatMap(ws => ws.panes.map(p => p.id)))
+    getBrowserPanes().pruneHistoryOrphans(liveIds)
+  }
+
   registerIpcHandlers()
 
   await win.loadURL(appEntryUrl())
