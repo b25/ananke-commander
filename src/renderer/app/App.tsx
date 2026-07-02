@@ -211,7 +211,12 @@ export function App() {
 
   // Browser panes stay mounted even when collapsed so the WebContentsView is not destroyed.
   // All other pane types are unmounted when collapsed (saves memory/CPU).
-  const displayWsForCanvas = displayWs ? { ...displayWs, panes: displayWs.panes.filter(p => !activeCollapsedIds.has(p.id) || p.type === 'browser') } : displayWs
+  // PERF-14: memoize so CanvasWorkspace/TaskbarStrip receive a stable object reference when
+  // neither displayWs nor activeCollapsedIds has changed (avoids identity-based prop churn).
+  const displayWsForCanvas = useMemo(
+    () => displayWs ? { ...displayWs, panes: displayWs.panes.filter(p => !activeCollapsedIds.has(p.id) || p.type === 'browser') } : displayWs,
+    [displayWs, activeCollapsedIds]
+  )
 
   useEffect(() => {
     if (drawer === 'none') return

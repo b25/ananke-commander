@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { FileBrowserPaneState, ListDirEntry, PaneState } from '../../../shared/contracts'
 import { joinPath } from '../../lib/pathUtils'
@@ -181,12 +181,23 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     }
   }
 
-  const visibleLeftEntries = leftFind.active
-    ? applyFilterAndSort(toFindResultEntries(leftFind.results, pane.leftPath), true, leftFilterActive, leftFilterText, leftSort)
-    : applyFilterAndSort(leftEntries, showHidden, leftFilterActive, leftFilterText, leftSort)
-  const visibleRightEntries = rightFind.active
-    ? applyFilterAndSort(toFindResultEntries(rightFind.results, pane.rightPath), true, rightFilterActive, rightFilterText, rightSort)
-    : applyFilterAndSort(rightEntries, showHidden, rightFilterActive, rightFilterText, rightSort)
+  // PERF-8: memoize both sorted/filtered listings — applyFilterAndSort does a locale-aware O(n log n)
+  // sort on every render; memoizing avoids re-sorting on unrelated state changes.
+  const visibleLeftEntries = useMemo(
+    () => leftFind.active
+      ? applyFilterAndSort(toFindResultEntries(leftFind.results, pane.leftPath), true, leftFilterActive, leftFilterText, leftSort)
+      : applyFilterAndSort(leftEntries, showHidden, leftFilterActive, leftFilterText, leftSort),
+    // leftFind.results / leftFind.active change when a find completes; pane.leftPath needed for
+    // toFindResultEntries path stripping; leftEntries, showHidden, leftFilter*, leftSort are the
+    // regular-mode inputs.
+    [leftFind.active, leftFind.results, pane.leftPath, leftEntries, showHidden, leftFilterActive, leftFilterText, leftSort]
+  )
+  const visibleRightEntries = useMemo(
+    () => rightFind.active
+      ? applyFilterAndSort(toFindResultEntries(rightFind.results, pane.rightPath), true, rightFilterActive, rightFilterText, rightSort)
+      : applyFilterAndSort(rightEntries, showHidden, rightFilterActive, rightFilterText, rightSort),
+    [rightFind.active, rightFind.results, pane.rightPath, rightEntries, showHidden, rightFilterActive, rightFilterText, rightSort]
+  )
 
   const activateEntry = useCallback(
     async (side: 'left' | 'right', entry: ListDirEntry) => {
