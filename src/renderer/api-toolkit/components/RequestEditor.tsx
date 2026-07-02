@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { Tab } from '../store'
 import type { HttpMethod, AuthConfig } from '../../../shared/api-toolkit-contracts'
@@ -25,21 +25,37 @@ export function RequestEditor({ tab }: Props) {
   const [curlInput, setCurlInput] = useState('')
   const [curlError, setCurlError] = useState<string | null>(null)
 
+  // Ref that always holds the latest handlers + guards for the keyboard-shortcut listener.
+  // Updated synchronously on every render so the effect (registered once with deps=[])
+  // never captures stale request/tab state — fixes the CORR-3 stale-closure bug where
+  // edits to headers, body, params, or auth were invisible to the ⌘Enter handler.
+  // send/handleSave are hoisted function declarations so referencing them here is safe.
+  const kbRef = useRef<{
+    protocol: string
+    sending: boolean
+    url: string
+    send: () => Promise<void>
+    handleSave: () => Promise<void>
+  } | null>(null)
+  kbRef.current = { protocol: tab.protocol, sending, url: req.url, send, handleSave }
+
   // Cmd+S / Ctrl+S to save; Cmd+Enter / Ctrl+Enter to send
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const cur = kbRef.current
+      if (!cur) return
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
-        void handleSave()
+        void cur.handleSave()
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
-        if (tab.protocol === 'http' && !sending && req.url) void send()
+        if (cur.protocol === 'http' && !cur.sending && cur.url) void cur.send()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [tab.id, tab.collectionId, tab.protocol, sending, req.url])
+  }, []) // Stable: registered once per mount; always reads fresh state via kbRef.
 
   async function handleSave() {
     if (saving) return
