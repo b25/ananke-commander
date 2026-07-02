@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import type { Tab } from '../store'
 import type { HttpMethod, AuthConfig } from '../../../shared/api-toolkit-contracts'
@@ -15,7 +16,23 @@ interface Props {
 }
 
 export function RequestEditor({ tab }: Props) {
-  const { setHttpMethod, setHttpUrl, setHttpParams, setHttpHeaders, setHttpBody, setHttpAuth, updateTab, saveTabToCollection, collections, addItemToCollection, environments, activeEnvironmentId, addHistoryEntry } = useStore()
+  const { setHttpMethod, setHttpUrl, setHttpParams, setHttpHeaders, setHttpBody, setHttpAuth, updateTab, saveTabToCollection, collections, addItemToCollection, environments, activeEnvironmentId, addHistoryEntry } = useStore(
+    useShallow((s) => ({
+      setHttpMethod: s.setHttpMethod,
+      setHttpUrl: s.setHttpUrl,
+      setHttpParams: s.setHttpParams,
+      setHttpHeaders: s.setHttpHeaders,
+      setHttpBody: s.setHttpBody,
+      setHttpAuth: s.setHttpAuth,
+      updateTab: s.updateTab,
+      saveTabToCollection: s.saveTabToCollection,
+      collections: s.collections,
+      addItemToCollection: s.addItemToCollection,
+      environments: s.environments,
+      activeEnvironmentId: s.activeEnvironmentId,
+      addHistoryEntry: s.addHistoryEntry,
+    }))
+  )
   const req = tab.httpRequest
   const [innerTab, setInnerTab] = useState<'params' | 'headers' | 'body' | 'auth'>('params')
   const [sending, setSending] = useState(false)
@@ -322,7 +339,7 @@ export function RequestEditor({ tab }: Props) {
 }
 
 function BodyEditor({ tab }: { tab: Tab }) {
-  const { setHttpBody } = useStore()
+  const setHttpBody = useStore((s) => s.setHttpBody)
   const body = tab.httpRequest.body
 
   return (
@@ -359,7 +376,7 @@ function BodyEditor({ tab }: { tab: Tab }) {
 }
 
 function AuthEditor({ tab }: { tab: Tab }) {
-  const { setHttpAuth } = useStore()
+  const setHttpAuth = useStore((s) => s.setHttpAuth)
   const auth: AuthConfig = tab.httpRequest.auth
 
   return (

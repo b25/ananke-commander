@@ -1,4 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import type { Collection, CollectionItem, RequestItem } from '../../../shared/api-toolkit-contracts'
 import { ConfirmModal } from '../../components/ConfirmModal'
@@ -63,7 +64,17 @@ const TreeItem = memo(function TreeItem({
 })
 
 export function CollectionTree() {
-  const { collections, openTab, setActiveTab, addItemToCollection, updateCollectionItem, removeCollectionItem, importPostmanCollection } = useStore()
+  const { collections, openTab, setActiveTab, addItemToCollection, updateCollectionItem, removeCollectionItem, importPostmanCollection } = useStore(
+    useShallow((s) => ({
+      collections: s.collections,
+      openTab: s.openTab,
+      setActiveTab: s.setActiveTab,
+      addItemToCollection: s.addItemToCollection,
+      updateCollectionItem: s.updateCollectionItem,
+      removeCollectionItem: s.removeCollectionItem,
+      importPostmanCollection: s.importPostmanCollection,
+    }))
+  )
   const [ctx, setCtx] = useState<CtxMenu | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
   const [notification, setNotification] = useState<string | null>(null)

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { loadResponseViewPrefs } from './lib/responseViewPrefs'
 import { useStore, useActiveTab } from './store'
 import type { Tab } from './store'
@@ -15,7 +16,18 @@ import { ensureIpcWired } from './ipcWiring'
 ensureIpcWired()
 
 export function App() {
-  const { tabs, activeTabId, openTab, closeTab, setActiveTab, setCollections, setEnvironments, setHistory } = useStore()
+  const { tabs, activeTabId, openTab, closeTab, setActiveTab, setCollections, setEnvironments, setHistory } = useStore(
+    useShallow((s) => ({
+      tabs: s.tabs,
+      activeTabId: s.activeTabId,
+      openTab: s.openTab,
+      closeTab: s.closeTab,
+      setActiveTab: s.setActiveTab,
+      setCollections: s.setCollections,
+      setEnvironments: s.setEnvironments,
+      setHistory: s.setHistory,
+    }))
+  )
   const activeTab = useActiveTab()
   const initialized = useRef(false)
 
@@ -215,7 +227,7 @@ function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
 
 export function ProtocolToggle() {
   const activeTab = useActiveTab()
-  const { updateTab } = useStore()
+  const updateTab = useStore((s) => s.updateTab)
 
   if (!activeTab) return null
 

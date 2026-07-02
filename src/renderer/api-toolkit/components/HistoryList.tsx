@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import { ConfirmModal } from '../../components/ConfirmModal'
 
@@ -14,7 +15,13 @@ function relativeTime(ts: number): string {
 }
 
 export function HistoryList() {
-  const { history, openTab, clearHistory } = useStore()
+  const { history, openTab, clearHistory } = useStore(
+    useShallow((s) => ({
+      history: s.history,
+      openTab: s.openTab,
+      clearHistory: s.clearHistory,
+    }))
+  )
   const [filter, setFilter] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
