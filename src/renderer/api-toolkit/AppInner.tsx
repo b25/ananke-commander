@@ -8,9 +8,14 @@ import { ResponseViewer } from './components/ResponseViewer'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ScrollableTabStrip } from './components/ScrollableTabStrip'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { ensureIpcWired } from './ipcWiring'
+
+// Subscribe to global IPC events once at module load — before any pane mounts.
+// Multiple panes share the singleton store; no per-pane subscription is needed.
+ensureIpcWired()
 
 export function App() {
-  const { tabs, activeTabId, openTab, closeTab, setActiveTab, setCollections, setEnvironments, setHistory, addHistoryEntry } = useStore()
+  const { tabs, activeTabId, openTab, closeTab, setActiveTab, setCollections, setEnvironments, setHistory } = useStore()
   const activeTab = useActiveTab()
   const initialized = useRef(false)
 
@@ -38,43 +43,6 @@ export function App() {
     if (!activeTabId && tabs.length > 0) {
       setActiveTab(tabs[0].id)
     }
-  }, [])
-
-  // Wire up mock server hit events
-  useEffect(() => {
-    const off = window.ananke.apiToolkit.mock.onRouteHit((routeId, hitCount) => {
-      useStore.getState().updateRouteHitCount(routeId, hitCount)
-    })
-    return () => { off() }
-  }, [])
-
-  // Wire up gRPC stream IPC events
-  useEffect(() => {
-    const off1 = window.ananke.apiToolkit.grpc.onStreamMessage((streamId, msg) => {
-      useStore.getState().addGrpcStreamMessage(streamId, msg)
-    })
-    const off2 = window.ananke.apiToolkit.grpc.onStreamEnd((streamId, status, trailers) => {
-      useStore.getState().endGrpcStream(streamId, status, trailers)
-      // Persist to history (in-memory + durable storage)
-      const tab = useStore.getState().tabs.find((t) => t.id === streamId)
-      if (tab) {
-        const entry = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          protocol: 'grpc' as const,
-          name: tab.grpcRequest.serviceMethod || 'gRPC call',
-          grpcRequest: tab.grpcRequest,
-          grpcResponse: tab.grpcResponse ?? undefined,
-          duration: 0,
-        }
-        addHistoryEntry(entry)
-        void window.ananke.apiToolkit.storage.addHistory(entry)
-      }
-    })
-    const off3 = window.ananke.apiToolkit.grpc.onStreamError((streamId, err) => {
-      useStore.getState().updateTab(streamId, { error: err, loading: false, grpcStreamActive: false })
-    })
-    return () => { off1(); off2(); off3() }
   }, [])
 
   const effectiveTabId = activeTabId ?? tabs[0]?.id

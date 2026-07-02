@@ -25,6 +25,13 @@ export function RequestEditor({ tab }: Props) {
   const [curlInput, setCurlInput] = useState('')
   const [curlError, setCurlError] = useState<string | null>(null)
 
+  // Ref pointing to this editor's root container div — used to scope the keyboard
+  // shortcut listener so only the pane that contains the focused element responds.
+  // Events from inputs/buttons inside this container bubble up to containerRef.current;
+  // events from a SECOND mounted editor instance do not cross container boundaries,
+  // preventing ⌘Enter/⌘S from firing twice when two API-toolkit panes are open (CORR-10).
+  const containerRef = useRef<HTMLDivElement>(null)
+
   // Ref that always holds the latest handlers + guards for the keyboard-shortcut listener.
   // Updated synchronously on every render so the effect (registered once with deps=[])
   // never captures stale request/tab state — fixes the CORR-3 stale-closure bug where
@@ -39,8 +46,12 @@ export function RequestEditor({ tab }: Props) {
   } | null>(null)
   kbRef.current = { protocol: tab.protocol, sending, url: req.url, send, handleSave }
 
-  // Cmd+S / Ctrl+S to save; Cmd+Enter / Ctrl+Enter to send
+  // Cmd+S / Ctrl+S to save; Cmd+Enter / Ctrl+Enter to send.
+  // Listener is attached to the editor's own container div (not window) so only the
+  // pane whose DOM subtree contains the focused element handles the shortcut.
   useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
     const handler = (e: KeyboardEvent) => {
       const cur = kbRef.current
       if (!cur) return
@@ -53,8 +64,8 @@ export function RequestEditor({ tab }: Props) {
         if (cur.protocol === 'http' && !cur.sending && cur.url) void cur.send()
       }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    el.addEventListener('keydown', handler)
+    return () => el.removeEventListener('keydown', handler)
   }, []) // Stable: registered once per mount; always reads fresh state via kbRef.
 
   async function handleSave() {
@@ -145,7 +156,7 @@ export function RequestEditor({ tab }: Props) {
 
   if (tab.protocol === 'grpc') {
     return (
-      <div className="request-editor" style={{ flex: '0 0 auto', maxHeight: '50%', overflow: 'hidden' }}>
+      <div ref={containerRef} className="request-editor" style={{ flex: '0 0 auto', maxHeight: '50%', overflow: 'hidden' }}>
         <div className="url-bar" style={{ paddingBottom: 4 }}>
           <span className="method-badge method-grpc" style={{ fontSize: 10 }}>gRPC</span>
           <span style={{ flex: 1, color: 'var(--text-2)', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
@@ -179,7 +190,7 @@ export function RequestEditor({ tab }: Props) {
   }
 
   return (
-    <div className="request-editor" style={{ flex: '0 0 auto' }}>
+    <div ref={containerRef} className="request-editor" style={{ flex: '0 0 auto' }}>
       {/* URL bar */}
       <div className="url-bar">
         <select
