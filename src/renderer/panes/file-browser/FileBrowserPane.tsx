@@ -489,6 +489,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         onUpdate,
         showPrompt,
         showConfirm,
+        closeConfirm: () => setConfirmModal(null),
         setCopyOpen,
         setMoveOpen,
         setArchiveOpen

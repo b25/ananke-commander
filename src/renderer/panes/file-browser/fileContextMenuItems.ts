@@ -27,6 +27,7 @@ type Args = {
   onUpdate: (next: FileBrowserPaneState) => void
   showPrompt: (label: string, onSubmit: (value: string) => void) => void
   showConfirm: (opts: ShowConfirmOpts) => void
+  closeConfirm: () => void
   setCopyOpen: (open: boolean) => void
   setMoveOpen: (open: boolean) => void
   setArchiveOpen: (open: boolean) => void
@@ -46,6 +47,7 @@ export function fileContextMenuItems({
   onUpdate,
   showPrompt,
   showConfirm,
+  closeConfirm,
   setCopyOpen,
   setMoveOpen,
   setArchiveOpen
@@ -115,6 +117,7 @@ export function fileContextMenuItems({
           tone: 'destructive',
           confirmLabel: 'Delete',
           onConfirm: () => {
+            closeConfirm()
             void (async () => {
               await window.ananke.fs.quickOp('delete', '', ctxSelection)
               refreshBoth()

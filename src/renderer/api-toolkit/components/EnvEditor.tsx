@@ -33,7 +33,7 @@ export function EnvEditor() {
   const { environments, activeEnvironmentId, setEnvironments, setActiveEnvironment } = useStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{
-    title: string; message?: string; tone?: 'default' | 'destructive'; confirmLabel?: string; onConfirm: () => void
+    title: string; message?: string; tone?: 'default' | 'destructive'; requireTyped?: string; confirmLabel?: string; onConfirm: () => void
   } | null>(null)
 
   // Inline prompt (window.prompt doesn't work in Electron's sandboxed renderer)
@@ -75,10 +75,12 @@ export function EnvEditor() {
   }
 
   function deleteEnv(id: string) {
+    const envName = environments.find((e) => e.id === id)?.name ?? 'delete'
     setConfirmModal({
       title: 'Delete Environment',
-      message: 'Delete this environment and all its variables?',
+      message: `Delete environment "${envName}" and all its variables?`,
       tone: 'destructive',
+      requireTyped: envName,
       confirmLabel: 'Delete',
       onConfirm: () => {
         setConfirmModal(null)
@@ -199,6 +201,7 @@ export function EnvEditor() {
           title={confirmModal.title}
           message={confirmModal.message}
           tone={confirmModal.tone}
+          requireTyped={confirmModal.requireTyped}
           confirmLabel={confirmModal.confirmLabel}
           onConfirm={confirmModal.onConfirm}
           onCancel={() => setConfirmModal(null)}

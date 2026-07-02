@@ -35,7 +35,7 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
   const [sessions, setSessions] = useState<TerminalSessionMeta[]>([])
   const histRef = useRef<HTMLDivElement>(null)
   const [confirmModal, setConfirmModal] = useState<{
-    title: string; message?: string; tone?: 'default' | 'destructive'; confirmLabel?: string; onConfirm: () => void
+    title: string; message?: string; tone?: 'default' | 'destructive'; requireTyped?: string; confirmLabel?: string; onConfirm: () => void
   } | null>(null)
 
   useEffect(() => {
@@ -169,6 +169,7 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
                       title: 'Clear All History',
                       message: 'Delete all saved terminal sessions? This cannot be undone.',
                       tone: 'destructive',
+                      requireTyped: 'clear',
                       confirmLabel: 'Clear',
                       onConfirm: () => {
                         setConfirmModal(null)
@@ -189,6 +190,7 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
           title={confirmModal.title}
           message={confirmModal.message}
           tone={confirmModal.tone}
+          requireTyped={confirmModal.requireTyped}
           confirmLabel={confirmModal.confirmLabel}
           onConfirm={confirmModal.onConfirm}
           onCancel={() => setConfirmModal(null)}

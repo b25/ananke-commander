@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '../store'
+import { ConfirmModal } from '../../components/ConfirmModal'
 
 const ROW_HEIGHT = 29
 
@@ -16,6 +17,7 @@ export function HistoryList() {
   const { history, openTab, clearHistory } = useStore()
   const [filter, setFilter] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   function restore(entryIdx: number) {
     const entry = history[entryIdx]
@@ -53,7 +55,7 @@ export function HistoryList() {
           <span
             className="sidebar-action-btn"
             title="Clear history"
-            onClick={() => { clearHistory(); void window.ananke.apiToolkit.storage.clearHistory() }}
+            onClick={() => setConfirmOpen(true)}
             style={{ fontSize: 10 }}
           >
             ✕
@@ -122,6 +124,21 @@ export function HistoryList() {
             )
           })}
         </div>
+      )}
+      {confirmOpen && (
+        <ConfirmModal
+          title="Clear History"
+          message="Delete all API request history? This cannot be undone."
+          tone="destructive"
+          confirmLabel="Clear"
+          requireTyped="clear"
+          onConfirm={() => {
+            setConfirmOpen(false)
+            clearHistory()
+            void window.ananke.apiToolkit.storage.clearHistory()
+          }}
+          onCancel={() => setConfirmOpen(false)}
+        />
       )}
     </div>
   )

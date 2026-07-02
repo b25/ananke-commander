@@ -68,7 +68,7 @@ export function CollectionTree() {
   const importRef = useRef<HTMLInputElement>(null)
   const [notification, setNotification] = useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{
-    title: string; message?: string; tone?: 'default' | 'destructive'; confirmLabel?: string; onConfirm: () => void
+    title: string; message?: string; tone?: 'default' | 'destructive'; requireTyped?: string; confirmLabel?: string; onConfirm: () => void
   } | null>(null)
 
   // Inline prompt (window.prompt doesn't work in Electron's sandboxed renderer)
@@ -181,6 +181,7 @@ export function CollectionTree() {
       title: 'Delete Collection',
       message: `Delete collection "${col.name}" and all its requests?`,
       tone: 'destructive',
+      requireTyped: col.name,
       confirmLabel: 'Delete',
       onConfirm: () => {
         setConfirmModal(null)
@@ -392,6 +393,7 @@ export function CollectionTree() {
           title={confirmModal.title}
           message={confirmModal.message}
           tone={confirmModal.tone}
+          requireTyped={confirmModal.requireTyped}
           confirmLabel={confirmModal.confirmLabel}
           onConfirm={confirmModal.onConfirm}
           onCancel={() => setConfirmModal(null)}

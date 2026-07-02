@@ -79,7 +79,7 @@ export function ConfirmModal({
           aria-labelledby="confirm-modal-title"
           aria-describedby={message ? 'confirm-modal-msg' : undefined}
           onClick={(e) => e.stopPropagation()}
-          style={{ minWidth: 340, maxWidth: 480 }}
+          style={{ minWidth: 340, maxWidth: 480 /* intentional modal sizing constraints; no design-token equivalent exists */ }}
         >
           <h2
             id="confirm-modal-title"
