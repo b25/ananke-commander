@@ -147,6 +147,7 @@ export function App() {
 
   const activeScreen = ws ? offsetToScreenIndex(ws.canvasOffset, vpW, vpH) : 0
   const activeCollapsedIds = useMemo(() => new Set(ws?.screenCollapsed?.[activeScreen] ?? []), [ws, activeScreen])
+  const collapsedIdsArr = useMemo(() => Array.from(activeCollapsedIds), [activeCollapsedIds])
   const { col: screenCol, row: screenRow } = screenIndexToColRow(activeScreen)
   const screenPanesCount = ws ? ws.panes.filter((p) => paneOnScreen(p, screenCol, screenRow)).length : 0
   const activeLayoutId = ws?.screenLayouts?.[activeScreen] ?? bestLayout(screenPanesCount).id
@@ -302,7 +303,7 @@ export function App() {
           onCanvasOffsetChange={handleCanvasOffsetChange}
           onViewportResize={handleViewportResize}
           allPanes={displayWs.panes}
-          collapsedIds={Array.from(activeCollapsedIds)}
+          collapsedIds={collapsedIdsArr}
           onRestorePane={(id) => void handleRestorePane(id)}
           onCloseCollapsed={(id) => void handleCloseCollapsed(id)}
           onAddPane={(type) => void addPane(type)} />

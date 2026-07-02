@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import type { Environment, Variable } from '../../../shared/api-toolkit-contracts'
 import { ConfirmModal } from '../../components/ConfirmModal'
@@ -30,7 +31,14 @@ function VariableRow({
 }
 
 export function EnvEditor() {
-  const { environments, activeEnvironmentId, setEnvironments, setActiveEnvironment } = useStore()
+  const { environments, activeEnvironmentId, setEnvironments, setActiveEnvironment } = useStore(
+    useShallow((s) => ({
+      environments: s.environments,
+      activeEnvironmentId: s.activeEnvironmentId,
+      setEnvironments: s.setEnvironments,
+      setActiveEnvironment: s.setActiveEnvironment,
+    }))
+  )
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{
     title: string; message?: string; tone?: 'default' | 'destructive'; requireTyped?: string; confirmLabel?: string; onConfirm: () => void

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import type { MockRoute } from '../../../shared/api-toolkit-contracts'
 import { MockRouteEditor } from './MockRouteEditor'
@@ -8,7 +9,16 @@ export function MockProxyPanel() {
   const {
     mockData, mockRunning, mockActualPort,
     saveMockData, startMock, stopMock,
-  } = useStore()
+  } = useStore(
+    useShallow((s) => ({
+      mockData: s.mockData,
+      mockRunning: s.mockRunning,
+      mockActualPort: s.mockActualPort,
+      saveMockData: s.saveMockData,
+      startMock: s.startMock,
+      stopMock: s.stopMock,
+    }))
+  )
 
   const [portInput, setPortInput] = useState(String(mockData.port))
   const [startError, setStartError] = useState('')
