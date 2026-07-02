@@ -263,6 +263,8 @@ const api = {
         ipcRenderer.send('at:grpc:stream:send', streamId, jsonStr),
       streamCancel: (streamId: string): void =>
         ipcRenderer.send('at:grpc:stream:cancel', streamId),
+      streamEndSend: (streamId: string): void =>
+        ipcRenderer.send('at:grpc:stream:endSend', streamId),
       onStreamMessage: (cb: (streamId: string, msg: GrpcMessage) => void) => {
         const fn = (_e: Electron.IpcRendererEvent, streamId: string, msg: GrpcMessage) => cb(streamId, msg)
         ipcRenderer.on('at:grpc:stream:message', fn)

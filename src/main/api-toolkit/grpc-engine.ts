@@ -306,6 +306,7 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
 
   // ── Client-streaming ──────────────────────────────────────────────────────
   if (clientStream && !serverStream) {
+    let clientStreamTrailers: Record<string, string> = {}
     const call = client.makeClientStreamRequest<Buffer, Buffer>(
       grpcPath,
       ident,
@@ -319,9 +320,13 @@ export async function grpcStream(req: GrpcRequest, callbacks: StreamCallbacks): 
         if (resp) {
           callbacks.onMessage({ json: JSON.stringify(messageToJson(root, respType, resp), null, 2), timestamp: Date.now(), direction: 'recv' })
         }
-        finish(status, {})
+        finish(status, clientStreamTrailers)
       },
     )
+    // Capture real trailers from the server status event (mirrors unary path).
+    call.on('status', (s: grpc.StatusObject) => {
+      clientStreamTrailers = metadataToRecord(s.metadata)
+    })
     return {
       sendMessage: (jsonStr: string) => {
         const bytes = jsonToMessage(root, reqType, JSON.parse(jsonStr))

@@ -255,6 +255,7 @@ export const IPC = {
   GRPC_STREAM_START: 'at:grpc:stream:start',
   GRPC_STREAM_SEND: 'at:grpc:stream:send',
   GRPC_STREAM_CANCEL: 'at:grpc:stream:cancel',
+  GRPC_STREAM_END_SEND: 'at:grpc:stream:endSend',
   GRPC_STREAM_MESSAGE: 'at:grpc:stream:message',
   GRPC_STREAM_END: 'at:grpc:stream:end',
   GRPC_STREAM_ERROR: 'at:grpc:stream:error',

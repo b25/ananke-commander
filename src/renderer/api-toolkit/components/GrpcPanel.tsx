@@ -270,6 +270,7 @@ export function GrpcPanel({ tab }: Props) {
                 tabId={tab.id}
                 reqSchema={reqSchema}
                 activeVars={environments.find((e) => e.id === activeEnvironmentId)?.variables.filter((v) => v.enabled) ?? []}
+                showDoneSending={true}
               />
             )}
           </div>
@@ -291,15 +292,22 @@ export function GrpcPanel({ tab }: Props) {
   )
 }
 
-function StreamSendBar({ tabId, reqSchema, activeVars }: { tabId: string; reqSchema: MessageSchema | null; activeVars: Variable[] }) {
+function StreamSendBar({ tabId, reqSchema, activeVars, showDoneSending = false }: { tabId: string; reqSchema: MessageSchema | null; activeVars: Variable[]; showDoneSending?: boolean }) {
   const [json, setJson] = useState('{}')
   const [formVal, setFormVal] = useState<Record<string, unknown>>({})
   const [jsonMode, setJsonMode] = useState(false)
+  const [doneSent, setDoneSent] = useState(false)
 
   function send() {
     // Resolve {{env}} variables before sending, mirroring the unary / stream-start path.
     const msg = subStr(jsonMode ? json : JSON.stringify(formVal, null, 2), activeVars)
     window.ananke.apiToolkit.grpc.streamSend(tabId, msg)
+  }
+
+  function doneSending() {
+    if (doneSent) return
+    setDoneSent(true)
+    window.ananke.apiToolkit.grpc.streamEndSend(tabId)
   }
 
   return (
@@ -310,7 +318,18 @@ function StreamSendBar({ tabId, reqSchema, activeVars }: { tabId: string; reqSch
           <input type="checkbox" checked={jsonMode} onChange={(e) => setJsonMode(e.target.checked)} />
           JSON
         </label>
-        <button className="send-btn" style={{ padding: '2px 12px', fontSize: 10 }} onClick={send}>Send</button>
+        <button className="send-btn" style={{ padding: '2px 12px', fontSize: 10 }} onClick={send} disabled={doneSent}>Send</button>
+        {showDoneSending && (
+          <button
+            className="send-btn"
+            style={{ padding: '2px 12px', fontSize: 10, opacity: doneSent ? 0.45 : 1 }}
+            onClick={doneSending}
+            disabled={doneSent}
+            title="Half-close the client write side — the server will send its response"
+          >
+            {doneSent ? 'Done ✓' : 'Done sending'}
+          </button>
+        )}
       </div>
       {jsonMode ? (
         <textarea className="code-editor" style={{ minHeight: 60 }} value={json} onChange={(e) => setJson(e.target.value)} />

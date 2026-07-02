@@ -23,6 +23,7 @@ package test;
 service TestService {
   rpc Hello (HelloRequest)            returns (HelloResponse);
   rpc ServerStream (HelloRequest)     returns (stream HelloResponse);
+  rpc ClientStream (stream HelloRequest) returns (HelloResponse);
 }
 message HelloRequest  { string name     = 1; }
 message HelloResponse { string greeting = 1; }
@@ -72,6 +73,15 @@ async function startServer(): Promise<{ port: number; server: grpc.Server }> {
         responseSerialize: ident,
         responseDeserialize: ident,
       },
+      clientStream: {
+        path: '/test.TestService/ClientStream',
+        requestStream: true,
+        responseStream: false,
+        requestSerialize: ident,
+        requestDeserialize: ident,
+        responseSerialize: ident,
+        responseDeserialize: ident,
+      },
     } as unknown as grpc.ServiceDefinition
 
     const impl: grpc.UntypedServiceImplementation = {
@@ -95,6 +105,23 @@ async function startServer(): Promise<{ port: number; server: grpc.Server }> {
         )
         call.write(respBytes)
         call.end()
+      },
+
+      clientStream(
+        call: grpc.ServerReadableStream<Buffer, Buffer>,
+        callback: grpc.sendUnaryData<Buffer>,
+      ) {
+        const names: string[] = []
+        call.on('data', (chunk: Buffer) => {
+          const req = HelloRequest.decode(chunk)
+          names.push(String((req as unknown as Record<string, unknown>).name ?? ''))
+        })
+        call.on('end', () => {
+          const respBytes = Buffer.from(
+            HelloResponse.encode(HelloResponse.create({ greeting: `collected:${names.join(',')}` })).finish(),
+          )
+          callback(null, respBytes)
+        })
       },
     }
 
@@ -122,6 +149,43 @@ test('grpcUnary: calls Hello and gets back the greeting', async () => {
     assert.equal(resp.messages.length, 1)
     const parsed = JSON.parse(resp.messages[0].json) as { greeting: string }
     assert.equal(parsed.greeting, 'hello world')
+  } finally {
+    await new Promise<void>((resolve) => server.tryShutdown(() => resolve()))
+  }
+})
+
+test('grpcStream: client-streaming aggregates messages and responds after end()', async () => {
+  const { port, server } = await startServer()
+  try {
+    const req = makeReq(port, 'test.TestService/ClientStream', '{}')
+    const messages: string[] = []
+    let endStatus: number | null = null
+
+    await new Promise<void>((resolve, reject) => {
+      grpcStream(req, {
+        onMessage: (msg) => messages.push(msg.json),
+        onEnd: (status) => {
+          endStatus = status.code
+          if (status.code !== 0) {
+            reject(new Error(`stream ended with ${status.codeName}: ${status.details}`))
+          } else {
+            resolve()
+          }
+        },
+        onError: (err) => reject(new Error(err)),
+      }).then((handle) => {
+        // sendMessage accepts JSON strings; the engine re-encodes them as protobuf.
+        handle.sendMessage(JSON.stringify({ name: 'alice' }))
+        handle.sendMessage(JSON.stringify({ name: 'bob' }))
+        // Half-close: server receives EOF and fires its 'end' handler.
+        handle.end()
+      }).catch(reject)
+    })
+
+    assert.equal(endStatus, 0, 'expected OK status')
+    assert.equal(messages.length, 1, 'expected exactly one response message')
+    const parsed = JSON.parse(messages[0]) as { greeting: string }
+    assert.equal(parsed.greeting, 'collected:alice,bob')
   } finally {
     await new Promise<void>((resolve) => server.tryShutdown(() => resolve()))
   }

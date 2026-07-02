@@ -20,7 +20,7 @@ export function registerGrpcIpc(): void {
     }
   })
 
-  const activeStreams = new Map<string, { cancel: () => void; sendMessage: (j: string) => void }>()
+  const activeStreams = new Map<string, { cancel: () => void; sendMessage: (j: string) => void; end: () => void }>()
 
   ipcMain.on(IPC.GRPC_STREAM_START, async (event, streamId: string, req: GrpcRequest) => {
     const send = (channel: string, ...args: unknown[]) =>
@@ -44,4 +44,7 @@ export function registerGrpcIpc(): void {
     activeStreams.get(streamId)?.cancel()
     activeStreams.delete(streamId)
   })
+
+  ipcMain.on(IPC.GRPC_STREAM_END_SEND, (_e, streamId: string) =>
+    activeStreams.get(streamId)?.end())
 }
