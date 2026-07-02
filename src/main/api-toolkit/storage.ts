@@ -1,7 +1,8 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'node:fs'
+import { mkdirSync, existsSync, readdirSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Collection, CollectionItem, Environment, HistoryEntry } from '../../shared/api-toolkit-contracts.js'
+import { readJson, writeJson } from './storage-io.js'
 
 function dataDir(): string {
   const dir = join(app.getPath('userData'), 'api-toolkit-data')
@@ -13,18 +14,6 @@ function dir(sub: string): string {
   const d = join(dataDir(), sub)
   if (!existsSync(d)) mkdirSync(d, { recursive: true })
   return d
-}
-
-function readJson<T>(path: string, fallback: T): T {
-  try {
-    return JSON.parse(readFileSync(path, 'utf8')) as T
-  } catch {
-    return fallback
-  }
-}
-
-function writeJson(path: string, data: unknown): void {
-  writeFileSync(path, JSON.stringify(data, null, 2), 'utf8')
 }
 
 // ─── Collections ────────────────────────────────────────────────────────────

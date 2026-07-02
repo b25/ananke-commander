@@ -1,7 +1,8 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { MockServerData } from '../../shared/api-toolkit-contracts.js'
+import { readJson, writeJson } from './storage-io.js'
 
 const DEFAULT: MockServerData = { port: 3001, routes: [] }
 
@@ -12,13 +13,9 @@ function dataFile(): string {
 }
 
 export function readMockData(): MockServerData {
-  try {
-    return JSON.parse(readFileSync(dataFile(), 'utf8')) as MockServerData
-  } catch {
-    return { ...DEFAULT }
-  }
+  return readJson<MockServerData>(dataFile(), { ...DEFAULT })
 }
 
 export function writeMockData(data: MockServerData): void {
-  writeFileSync(dataFile(), JSON.stringify(data, null, 2), 'utf8')
+  writeJson(dataFile(), data)
 }
