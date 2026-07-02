@@ -17,7 +17,7 @@ interface Props {
 type SourceMode = 'text' | 'file' | 'reflection'
 
 export function GrpcPanel({ tab }: Props) {
-  const { setGrpcEndpoint, setGrpcServiceMethod, setGrpcMessageJson, setGrpcMetadata, setGrpcTls, setGrpcDiscovery, updateTab, environments, activeEnvironmentId } = useStore()
+  const { setGrpcEndpoint, setGrpcServiceMethod, setGrpcMessageJson, setGrpcMetadata, setGrpcTls, setGrpcDiscovery, updateTab, environments, activeEnvironmentId, addHistoryEntry } = useStore()
   const req = tab.grpcRequest
   const [sourceMode, setSourceMode] = useState<SourceMode>((req.protoSource.type as SourceMode) ?? 'text')
   const [protoText, setProtoText] = useState(req.protoSource.type === 'text' ? req.protoSource.content : '')
@@ -90,9 +90,21 @@ export function GrpcPanel({ tab }: Props) {
         window.ananke.apiToolkit.grpc.streamStart(tab.id, { ...resolvedReq, messageJson: resolvedReq.messageJson })
       }
     } else {
+      const startTs = Date.now()
       updateTab(tab.id, { loading: true, error: null, grpcResponse: null })
       window.ananke.apiToolkit.grpc.unary(resolvedReq).then((resp) => {
         updateTab(tab.id, { grpcResponse: resp, loading: false })
+        const entry = {
+          id: crypto.randomUUID(),
+          timestamp: startTs,
+          protocol: 'grpc' as const,
+          name: resolvedReq.serviceMethod || 'gRPC call',
+          grpcRequest: resolvedReq,
+          grpcResponse: resp,
+          duration: resp.timings.total,
+        }
+        addHistoryEntry(entry)
+        void window.ananke.apiToolkit.storage.addHistory(entry)
       }).catch((e: unknown) => {
         updateTab(tab.id, { error: String(e), loading: false })
       })
