@@ -59,7 +59,10 @@ export function WorkspaceRail({ workspaces, activeId, onSelect, onAdd, onClone, 
               }}
             />
           ) : (
-            i + 1
+            <>
+              <span className="ws-pill__idx">{i + 1}</span>
+              <span className="ws-pill__name">{ws.name}</span>
+            </>
           )}
         </button>
       ))}
@@ -73,6 +76,19 @@ export function WorkspaceRail({ workspaces, activeId, onSelect, onAdd, onClone, 
           style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 'var(--z-menu)' }}
           onClick={(e) => e.stopPropagation()}
         >
+          <button
+            type="button"
+            className="ctx-menu__item"
+            role="menuitem"
+            onClick={() => {
+              const wsId = ctxMenu.wsId
+              const ws = workspaces.find(w => w.id === wsId)
+              if (ws) { setEditingId(wsId); setEditingName(ws.name) }
+              closeMenu()
+            }}
+          >
+            Rename Workspace
+          </button>
           <button
             type="button"
             className="ctx-menu__item"

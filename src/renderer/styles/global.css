@@ -76,7 +76,26 @@ select {
   color: var(--muted);
   font-size: var(--text-xs);
   padding: var(--space-xs);
-  word-break: break-all;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  gap: 1px;
+}
+
+.ws-pill__idx {
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.6;
+}
+
+.ws-pill__name {
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ws-pill.active {
@@ -1742,12 +1761,17 @@ select {
   box-sizing: border-box;
 }
 
-/* WS-UI-01: Workspace rename input */
+/* WS-UI-01: Workspace rename input — widened for usability (UX-17) */
 .ws-pill-rename {
-  width: 48px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 120px;
+  min-width: 120px;
   font-size: 10px;
-  padding: 1px 2px;
+  padding: 1px 4px;
   border-radius: var(--radius-sm);
+  z-index: 1;
 }
 
 /* WS-UI-02: Delete workspace danger item */
