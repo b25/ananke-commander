@@ -15,6 +15,7 @@ import { TerminalManager } from './pty/terminalManager.js'
 import { BrowserPaneManager } from './browser/browserPaneManager.js'
 import { TerminalSessionStore } from './pty/terminalSessionStore.js'
 import { isExternalUrlAllowed } from './security/browserSecurity.js'
+import { isMainWindowNavigationAllowed } from './security/mainWindowNavigation.js'
 import { assertMaxBytes, IPC_LIMITS } from './ipc/ipcLimits.js'
 import * as archive from './archive/archiveService.js'
 import { saveMarkdownToVault, listVaultNotes, readVaultNote, deleteVaultNote } from './notes/notesService.js'
@@ -254,6 +255,17 @@ async function createWindow(): Promise<void> {
     }
   })
   const allowDevTools = !app.isPackaged
+
+  // SEC-1: Lock down main-window navigation. The main window's webContents
+  // carry the privileged preload (fs, pty, shell). Block any top-frame
+  // navigation to origins other than app:// (or the vite dev server in dev).
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!isMainWindowNavigationAllowed(url, !app.isPackaged)) {
+      event.preventDefault()
+    }
+  })
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
   attachMainWindowStatePersistence(win, allowDevTools)
   mainWindow = win
 
