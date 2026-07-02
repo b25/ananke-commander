@@ -412,7 +412,7 @@ select {
   justify-content: center;
   padding: var(--space-sm);
   font-size: var(--text-xs);
-  color: var(--danger, #e05252);
+  color: var(--danger);
   font-family: var(--font-mono);
   text-align: center;
   word-break: break-word;
@@ -728,8 +728,8 @@ select {
   gap: 6px;
   padding: 4px 10px;
   font-size: 11px;
-  color: var(--text-2);
-  background: var(--bg-2);
+  color: var(--muted);
+  background: var(--pane);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   user-select: none;
@@ -1086,7 +1086,7 @@ select {
 }
 
 .ctx-menu__item:hover {
-  background: var(--header);
+  background: var(--hover);
   border-color: transparent;
 }
 
@@ -1265,9 +1265,9 @@ select {
   padding: 6px 10px;
   font-size: 11px;
   line-height: 1.35;
-  color: var(--warning, #e8a838);
-  background: color-mix(in srgb, var(--warning, #e8a838) 12%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--warning, #e8a838) 35%, transparent);
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
 }
 
 .browser-loading-bar {
@@ -1736,7 +1736,7 @@ select {
 
 /* WS-UI-02: Delete workspace danger item */
 .ctx-menu__item--danger {
-  color: var(--danger, #e06c75);
+  color: var(--danger);
 }
 .ctx-menu__item--danger:disabled {
   opacity: 0.4;
