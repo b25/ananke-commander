@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { showToast } from '../../components/useToast'
 
 /**
  * Owns the background copy/move job: status line, the active job id, and the main-process
@@ -31,7 +32,7 @@ export function useFileJob(refreshBoth: () => void) {
       if (id !== activeJobId.current) return
       activeJobId.current = null
       setFileJobLine(null)
-      if (message !== 'Cancelled') alert(message)
+      if (message !== 'Cancelled') showToast(message)
       void refreshBothRef.current()
     })
     return () => {
@@ -49,7 +50,7 @@ export function useFileJob(refreshBoth: () => void) {
     } catch (e) {
       activeJobId.current = null
       setFileJobLine(null)
-      alert(e instanceof Error ? e.message : String(e))
+      showToast(e instanceof Error ? e.message : String(e))
     }
   }, [])
 

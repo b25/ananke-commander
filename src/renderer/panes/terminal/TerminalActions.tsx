@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Terminal } from '@xterm/xterm'
 import type { TerminalSessionMeta } from '../../../shared/contracts'
+import { ConfirmModal } from '../../components/ConfirmModal'
+import { showToast } from '../../components/useToast'
 
 function extractTerminalText(term: Terminal): string {
   const lines: string[] = []
@@ -32,6 +34,9 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
   const [histOpen, setHistOpen] = useState(false)
   const [sessions, setSessions] = useState<TerminalSessionMeta[]>([])
   const histRef = useRef<HTMLDivElement>(null)
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string; message?: string; tone?: 'default' | 'destructive'; confirmLabel?: string; onConfirm: () => void
+  } | null>(null)
 
   useEffect(() => {
     if (histOpen) {
@@ -54,39 +59,44 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
   const saveToVault = async () => {
     const term = termRef.current
     if (!term || saving) return
-    setSaving(true)
-    try {
-      const snap = await window.ananke.state.get()
-      const { vaultPath, subfolder } = snap.settings.obsidian
-      if (!vaultPath) { alert('Set Obsidian vault path in Settings first.'); return }
-      const text = extractTerminalText(term)
-      if (!text.trim()) { alert('Terminal is empty.'); return }
-      const lineCount = text.split('\n').length
-      const shortCwd = cwd.split('/').pop() || 'terminal'
-      if (!confirm(`Save ${lineCount} lines from "${shortCwd}" to Obsidian vault?`)) return
-      const date = new Date().toISOString()
-      const wsIdx = snap.workspaces.findIndex(w => w.id === snap.activeWorkspaceId)
-      const wsName = snap.workspaces[wsIdx]?.name || 'Workspace'
-      const wsLabel = `${wsIdx + 1}-${wsName}`
-      const safeTitle = `terminal-${wsLabel}-${shortCwd}-${date.slice(0, 10)}-${date.slice(11, 16).replace(':', '')}`
-        .replace(/[/\\:*?"<>|]/g, '-')
-      const body = [
-        '---',
-        `title: "Terminal: ${shortCwd}"`,
-        `workspace: "${wsLabel}"`,
-        `cwd: ${cwd}`,
-        `date: ${date}`,
-        `tags: [terminal-capture]`,
-        '---',
-        '',
-        '```',
-        text,
-        '```'
-      ].join('\n')
-      await window.ananke.notes.saveVault(vaultPath, subfolder, safeTitle, body)
-    } finally {
-      setSaving(false)
-    }
+    const snap = await window.ananke.state.get()
+    const { vaultPath, subfolder } = snap.settings.obsidian
+    if (!vaultPath) { showToast('Set Obsidian vault path in Settings first.'); return }
+    const text = extractTerminalText(term)
+    if (!text.trim()) { showToast('Terminal is empty.', 'warn'); return }
+    const lineCount = text.split('\n').length
+    const shortCwd = cwd.split('/').pop() || 'terminal'
+    const date = new Date().toISOString()
+    const wsIdx = snap.workspaces.findIndex(w => w.id === snap.activeWorkspaceId)
+    const wsName = snap.workspaces[wsIdx]?.name || 'Workspace'
+    const wsLabel = `${wsIdx + 1}-${wsName}`
+    const safeTitle = `terminal-${wsLabel}-${shortCwd}-${date.slice(0, 10)}-${date.slice(11, 16).replace(':', '')}`
+      .replace(/[/\\:*?"<>|]/g, '-')
+    const body = [
+      '---',
+      `title: "Terminal: ${shortCwd}"`,
+      `workspace: "${wsLabel}"`,
+      `cwd: ${cwd}`,
+      `date: ${date}`,
+      `tags: [terminal-capture]`,
+      '---',
+      '',
+      '```',
+      text,
+      '```'
+    ].join('\n')
+
+    setConfirmModal({
+      title: 'Save to Vault',
+      message: `Save ${lineCount} lines from "${shortCwd}" to Obsidian vault?`,
+      confirmLabel: 'Save',
+      onConfirm: () => {
+        setConfirmModal(null)
+        setSaving(true)
+        void window.ananke.notes.saveVault(vaultPath, subfolder, safeTitle, body)
+          .finally(() => setSaving(false))
+      }
+    })
   }
 
   const deleteSession = async (id: string) => {
@@ -154,9 +164,17 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
                   type="button"
                   className="browser-menu__item"
                   style={{ color: 'var(--danger)' }}
-                  onClick={async () => {
-                    await window.ananke.termHistory.clear()
-                    setSessions([])
+                  onClick={() => {
+                    setConfirmModal({
+                      title: 'Clear All History',
+                      message: 'Delete all saved terminal sessions? This cannot be undone.',
+                      tone: 'destructive',
+                      confirmLabel: 'Clear',
+                      onConfirm: () => {
+                        setConfirmModal(null)
+                        void window.ananke.termHistory.clear().then(() => setSessions([]))
+                      }
+                    })
                   }}
                 >
                   Clear All History
@@ -166,6 +184,16 @@ export function TerminalActions({ paneId, termRef, cwd, onViewSession }: Props) 
           </div>
         )}
       </div>
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          tone={confirmModal.tone}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   )
 }

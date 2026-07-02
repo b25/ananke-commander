@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { NotesPaneState } from '../../../shared/contracts'
 import { PaneHeader } from '../../layout/PaneHeader'
+import { ConfirmModal } from '../../components/ConfirmModal'
+import { showToast } from '../../components/useToast'
 
 type VaultNote = { filename: string; modified: number }
 
@@ -34,6 +36,9 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   const [vaultPath, setVaultPath] = useState('')
   const [wsName, setWsName] = useState('')
   const [wsLabel, setWsLabel] = useState('')
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string; message?: string; tone?: 'default' | 'destructive'; confirmLabel?: string; onConfirm: () => void
+  } | null>(null)
 
   useEffect(() => {
     setLocalBody(pane.body)
@@ -111,7 +116,7 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
 
   const saveNote = async () => {
     if (!vaultPath) {
-      alert('Set Obsidian vault path in Settings first.')
+      showToast('Set Obsidian vault path in Settings first.')
       return
     }
     const title = localTitle.trim() || 'Untitled'
@@ -219,7 +224,15 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
                     <span className="notes-list__item-name">{note.filename.replace(/\.md$/, '')}</span>
                     <span className="notes-list__item-date">{formatDate(note.modified)}</span>
                   </button>
-                  <button type="button" className="notes-toolbar__btn notes-list__delete-btn" title="Delete note" onClick={() => { if (confirm(`Delete "${note.filename}"?`)) void deleteNote(note.filename) }}>
+                  <button type="button" className="notes-toolbar__btn notes-list__delete-btn" title="Delete note" onClick={() => {
+                    setConfirmModal({
+                      title: 'Delete Note',
+                      message: `Delete "${note.filename}"?`,
+                      tone: 'destructive',
+                      confirmLabel: 'Delete',
+                      onConfirm: () => { setConfirmModal(null); void deleteNote(note.filename) }
+                    })
+                  }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                   </button>
                 </div>
@@ -264,6 +277,16 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
           </div>
         )}
       </div>
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          tone={confirmModal.tone}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   )
 }

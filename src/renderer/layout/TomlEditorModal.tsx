@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppStateSnapshot } from '../../shared/contracts'
+import { ConfirmModal } from '../components/ConfirmModal'
 
 interface Props {
   onClose: (newSnap?: AppStateSnapshot) => void
@@ -14,6 +15,7 @@ export function TomlEditorModal({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
 
   const [findMode, setFindMode] = useState<'none' | 'find' | 'replace'>('none')
   const [findQuery, setFindQuery] = useState('')
@@ -108,7 +110,7 @@ export function TomlEditorModal({ onClose }: Props) {
   }, [text, saving, onClose])
 
   const handleCancel = useCallback(() => {
-    if (dirty && !confirm('Discard unsaved changes?')) return
+    if (dirty) { setConfirmClose(true); return }
     onClose()
   }, [dirty, onClose])
 
@@ -219,6 +221,18 @@ export function TomlEditorModal({ onClose }: Props) {
           <button type="button" onClick={handleCancel}>Cancel</button>
         </div>
       </div>
+      {confirmClose && (
+        <ConfirmModal
+          title="Discard Changes"
+          message="You have unsaved changes to workspace.toml. Discard and close?"
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          tone="destructive"
+          onConfirm={() => { setConfirmClose(false); onClose() }}
+          onCancel={() => setConfirmClose(false)}
+          noSuspend={true}
+        />
+      )}
     </div>
   )
 }

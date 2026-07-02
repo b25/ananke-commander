@@ -9,6 +9,8 @@ import {
   paneJsonPrettyPrint,
   saveBrowserJsonPrettyPrint,
 } from './browserJsonPrettyPrintPrefs'
+import { ConfirmModal } from '../../components/ConfirmModal'
+import { showToast } from '../../components/useToast'
 
 type Props = {
   pane: BrowserPaneState
@@ -29,6 +31,9 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
   const [findText, setFindText] = useState('')
   const [navError, setNavError] = useState<string | null>(null)
   const [jsonPrettyPrint, setJsonPrettyPrint] = useState(() => paneJsonPrettyPrint(pane))
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string; message?: string; tone?: 'default' | 'destructive'; confirmLabel?: string; onConfirm: () => void
+  } | null>(null)
   const findRef = useRef<HTMLInputElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
   const focusBeforeFindRef = useRef<HTMLElement | null>(null)
@@ -260,7 +265,7 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
     const snap = await window.ananke.state.get()
     const { vaultPath, subfolder } = snap.settings.obsidian
     if (!vaultPath) {
-      alert('Set Obsidian vault path in Settings first.')
+      showToast('Set Obsidian vault path in Settings first.')
       return
     }
     const info = await window.ananke.browser.getPageInfo(id)
@@ -271,7 +276,6 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
     const wsName = snap.workspaces[wsIdx]?.name || 'Workspace'
     const wsLabel = `${wsIdx + 1}-${wsName}`
     const safeTitle = (info.title || 'Untitled').replace(/[/\\:*?"<>|]/g, '-')
-    if (!confirm(`Save "${info.title || 'Untitled'}" to Obsidian vault?`)) return
     const body = [
       '---',
       `title: "${info.title}"`,
@@ -285,8 +289,17 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
       '',
       content
     ].join('\n')
-    await window.ananke.notes.saveVault(vaultPath, subfolder, safeTitle, body)
-    alert(`Saved to vault: ${subfolder}/${safeTitle}.md`)
+
+    setConfirmModal({
+      title: 'Save to Vault',
+      message: `Save "${info.title || 'Untitled'}" to Obsidian vault?`,
+      confirmLabel: 'Save',
+      onConfirm: () => {
+        setConfirmModal(null)
+        void window.ananke.notes.saveVault(vaultPath, subfolder, safeTitle, body)
+          .then(() => showToast(`Saved to vault: ${subfolder}/${safeTitle}.md`, 'info'))
+      }
+    })
   }
 
   const looksLikeUrl = (input: string): boolean => {
@@ -385,6 +398,16 @@ export function BrowserPlaceholderPane({ pane, isActive, isCollapsed, canvasOffs
         {loading && <div className="browser-loading-bar" />}
         <div ref={hostRef} className="browser-host" />
       </div>
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          tone={confirmModal.tone}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   )
 }

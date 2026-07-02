@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { Collection, CollectionItem, RequestItem } from '../../../shared/api-toolkit-contracts'
+import { ConfirmModal } from '../../components/ConfirmModal'
 
 function MethodBadge({ protocol, method }: { protocol: 'http' | 'grpc'; method?: string }) {
   if (protocol === 'grpc') return <span className="method-badge method-grpc">gRPC</span>
@@ -66,6 +67,9 @@ export function CollectionTree() {
   const [ctx, setCtx] = useState<CtxMenu | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
   const [notification, setNotification] = useState<string | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string; message?: string; tone?: 'default' | 'destructive'; confirmLabel?: string; onConfirm: () => void
+  } | null>(null)
 
   // Inline prompt (window.prompt doesn't work in Electron's sandboxed renderer)
   const [inlinePrompt, setInlinePrompt] = useState<{
@@ -158,16 +162,33 @@ export function CollectionTree() {
     })
   }
 
-  async function deleteItem(col: Collection, item: CollectionItem) {
+  function deleteItem(col: Collection, item: CollectionItem) {
     const label = item.type === 'folder' ? `folder "${item.name}" and all its contents` : `"${item.name}"`
-    if (!window.confirm(`Delete ${label}?`)) return
-    await removeCollectionItem(col.id, item.id)
+    setConfirmModal({
+      title: 'Delete Item',
+      message: `Delete ${label}?`,
+      tone: 'destructive',
+      confirmLabel: 'Delete',
+      onConfirm: () => {
+        setConfirmModal(null)
+        void removeCollectionItem(col.id, item.id)
+      }
+    })
   }
 
-  async function deleteCollection(col: Collection) {
-    if (!window.confirm(`Delete collection "${col.name}"?`)) return
-    await window.ananke.apiToolkit.storage.deleteCollection(col.id)
-    useStore.getState().setCollections(useStore.getState().collections.filter((c) => c.id !== col.id))
+  function deleteCollection(col: Collection) {
+    setConfirmModal({
+      title: 'Delete Collection',
+      message: `Delete collection "${col.name}" and all its requests?`,
+      tone: 'destructive',
+      confirmLabel: 'Delete',
+      onConfirm: () => {
+        setConfirmModal(null)
+        void window.ananke.apiToolkit.storage.deleteCollection(col.id).then(() => {
+          useStore.getState().setCollections(useStore.getState().collections.filter((c) => c.id !== col.id))
+        })
+      }
+    })
   }
 
   async function exportCollection(col: Collection) {
@@ -343,7 +364,7 @@ export function CollectionTree() {
                 Export as Postman…
               </button>
               <div className="ctx-menu__sep" />
-              <button className="ctx-menu__item ctx-menu__item--danger" onClick={() => { void deleteCollection(ctx.col); setCtx(null) }}>
+              <button className="ctx-menu__item ctx-menu__item--danger" onClick={() => { deleteCollection(ctx.col); setCtx(null) }}>
                 Delete Collection
               </button>
             </>
@@ -359,12 +380,22 @@ export function CollectionTree() {
                 Rename
               </button>
               <div className="ctx-menu__sep" />
-              <button className="ctx-menu__item ctx-menu__item--danger" onClick={() => { void deleteItem(ctx.col, ctx.item); setCtx(null) }}>
+              <button className="ctx-menu__item ctx-menu__item--danger" onClick={() => { deleteItem(ctx.col, ctx.item); setCtx(null) }}>
                 Delete
               </button>
             </>
           )}
         </div>
+      )}
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          tone={confirmModal.tone}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
       )}
     </div>
   )

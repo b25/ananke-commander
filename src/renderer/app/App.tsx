@@ -10,6 +10,7 @@ import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { SettingsDrawer } from '../layout/SettingsDrawer'
 import { TomlEditorModal } from '../layout/TomlEditorModal'
 import { DiagOverlay } from '../layout/DiagOverlay'
+import { ConfirmModal } from '../components/ConfirmModal'
 import { bestLayout } from '../lib/layouts'
 import { useWorkspaceStability } from './useWorkspaceStability'
 import { useWorkspaceActions } from './useWorkspaceActions'
@@ -60,6 +61,27 @@ export function App() {
     setAddError(message)
     addErrorTimer.current = setTimeout(() => setAddError(null), 4000)
   }, [])
+
+  // Global toast channel — `ananke:toast` events from any renderer component land here
+  const [toastMsg, setToastMsg] = useState<{ message: string; tone: 'error' | 'warn' | 'info' } | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dismissToast = useCallback(() => {
+    if (toastTimer.current) { clearTimeout(toastTimer.current); toastTimer.current = null }
+    setToastMsg(null)
+  }, [])
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { message, tone = 'error' } = (e as CustomEvent<{ message: string; tone?: string }>).detail
+      if (toastTimer.current) clearTimeout(toastTimer.current)
+      setToastMsg({ message, tone: tone as 'error' | 'warn' | 'info' })
+      toastTimer.current = setTimeout(() => setToastMsg(null), 5000)
+    }
+    window.addEventListener('ananke:toast', handler)
+    return () => window.removeEventListener('ananke:toast', handler)
+  }, [])
+
+  // Workspace delete confirm modal state
+  const [wsConfirm, setWsConfirm] = useState<{ id: string; name: string; paneCount: number } | null>(null)
   const refresh = useCallback(async () => { setSnap(await window.ananke.state.get()) }, [])
   useEffect(() => { void refresh() }, [refresh])
 
@@ -188,8 +210,8 @@ export function App() {
         onRename={(id, name) => void runState(() => window.ananke.state.renameWorkspace(id, name))}
         onDelete={(id) => {
           const t = snap.workspaces.find(w => w.id === id)
-          if (!t || !confirm(`Delete "${t.name}"? ${t.panes.length} pane(s) will be lost.`)) return
-          void runState(() => window.ananke.state.deleteWorkspace(id))
+          if (!t) return
+          setWsConfirm({ id, name: t.name, paneCount: t.panes.length })
         }} />
       <div className="main-stage">
         {tomlError && (
@@ -202,6 +224,15 @@ export function App() {
           <div className="app-error-banner app-error-banner--warn" role="alert">
             ⚠ {addError}
             <button type="button" aria-label="Dismiss warning" onClick={dismissAddError}>✕</button>
+          </div>
+        )}
+        {toastMsg && (
+          <div
+            className={`app-error-banner${toastMsg.tone === 'warn' ? ' app-error-banner--warn' : toastMsg.tone === 'info' ? ' app-error-banner--info' : ''}`}
+            role="alert"
+          >
+            {toastMsg.tone === 'error' ? '⛔' : toastMsg.tone === 'info' ? 'ℹ' : '⚠'} {toastMsg.message}
+            <button type="button" aria-label="Dismiss notification" onClick={dismissToast}>✕</button>
           </div>
         )}
         <div className="toolbar toolbar-thin">
@@ -262,6 +293,22 @@ export function App() {
         </aside>
       )}
       {tomlEditorOpen && <TomlEditorModal onClose={(s) => void closeTomlEditor(s)} />}
+      {wsConfirm && (
+        <ConfirmModal
+          title="Delete Workspace"
+          message={`Delete "${wsConfirm.name}"? ${wsConfirm.paneCount} pane(s) will be lost. This cannot be undone.`}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          tone="destructive"
+          requireTyped={wsConfirm.name}
+          onConfirm={() => {
+            const id = wsConfirm.id
+            setWsConfirm(null)
+            void runState(() => window.ananke.state.deleteWorkspace(id))
+          }}
+          onCancel={() => setWsConfirm(null)}
+        />
+      )}
     </div>
   )
 }

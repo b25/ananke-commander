@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import type { MockRoute } from '../../../shared/api-toolkit-contracts'
 import { MockRouteEditor } from './MockRouteEditor'
+import { ConfirmModal } from '../../components/ConfirmModal'
 
 export function MockProxyPanel() {
   const {
@@ -154,57 +155,67 @@ function RouteRow({ route, onEdit, onToggle, onDelete }: {
 }) {
   const statusClass = `status-${Math.floor(route.statusCode / 100)}xx`
   const methodKey = route.method === '*' ? 'ANY' : route.method
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   return (
-    <div
-      style={{
-        display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-        borderBottom: '1px solid var(--border)', cursor: 'pointer',
-        opacity: route.enabled ? 1 : 0.45,
-        background: 'transparent',
-      }}
-      onClick={onEdit}
-    >
-      <span
-        className={`method-badge method-${route.method === '*' ? 'GET' : route.method}`}
-        style={{ fontSize: 8, minWidth: 32, textAlign: 'center', opacity: route.method === '*' ? 0.7 : 1 }}
-      >
-        {methodKey}
-      </span>
-      <span style={{ flex: 1, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {route.urlPattern}
-      </span>
-      <span className={`status-pill ${statusClass}`} style={{ fontSize: 9, padding: '1px 5px' }}>
-        {route.statusCode}
-      </span>
-      {route.hitCount > 0 && (
-        <span style={{ fontSize: 9, color: 'var(--text-2)', fontFamily: 'var(--font-mono)', minWidth: 28 }}>
-          {route.hitCount}×
-        </span>
-      )}
-      {route.delay > 0 && (
-        <span style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-          {route.delay}ms
-        </span>
-      )}
-      <button
-        style={iconBtnStyle}
-        title={route.enabled ? 'Disable' : 'Enable'}
-        onClick={(e) => { e.stopPropagation(); onToggle() }}
-      >
-        {route.enabled ? '●' : '○'}
-      </button>
-      <button
-        style={{ ...iconBtnStyle, color: 'var(--text-3)' }}
-        title="Delete"
-        onClick={(e) => {
-          e.stopPropagation()
-          if (window.confirm(`Delete route "${route.name || route.urlPattern}"?`)) onDelete()
+    <>
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
+          borderBottom: '1px solid var(--border)', cursor: 'pointer',
+          opacity: route.enabled ? 1 : 0.45,
+          background: 'transparent',
         }}
+        onClick={onEdit}
       >
-        ×
-      </button>
-    </div>
+        <span
+          className={`method-badge method-${route.method === '*' ? 'GET' : route.method}`}
+          style={{ fontSize: 8, minWidth: 32, textAlign: 'center', opacity: route.method === '*' ? 0.7 : 1 }}
+        >
+          {methodKey}
+        </span>
+        <span style={{ flex: 1, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {route.urlPattern}
+        </span>
+        <span className={`status-pill ${statusClass}`} style={{ fontSize: 9, padding: '1px 5px' }}>
+          {route.statusCode}
+        </span>
+        {route.hitCount > 0 && (
+          <span style={{ fontSize: 9, color: 'var(--text-2)', fontFamily: 'var(--font-mono)', minWidth: 28 }}>
+            {route.hitCount}×
+          </span>
+        )}
+        {route.delay > 0 && (
+          <span style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+            {route.delay}ms
+          </span>
+        )}
+        <button
+          style={iconBtnStyle}
+          title={route.enabled ? 'Disable' : 'Enable'}
+          onClick={(e) => { e.stopPropagation(); onToggle() }}
+        >
+          {route.enabled ? '●' : '○'}
+        </button>
+        <button
+          style={{ ...iconBtnStyle, color: 'var(--text-3)' }}
+          title="Delete"
+          onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }}
+        >
+          ×
+        </button>
+      </div>
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete Route"
+          message={`Delete route "${route.name || route.urlPattern}"?`}
+          confirmLabel="Delete"
+          tone="destructive"
+          onConfirm={() => { setConfirmDelete(false); onDelete() }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+    </>
   )
 }
 

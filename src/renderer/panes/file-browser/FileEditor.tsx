@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useModal } from '../../lib/useModal'
+import { ConfirmModal } from '../../components/ConfirmModal'
 
 type FileEditorProps = {
   path: string
@@ -14,9 +15,10 @@ export function FileEditor({ path, text, readOnly, onSave, onClose }: FileEditor
   const heading = readOnly ? `Viewing: ${path}` : `Editing: ${path}`
   const [draft, setDraft] = useState(text)
   const isDirty = useMemo(() => !readOnly && draft !== text, [draft, readOnly, text])
+  const [confirmClose, setConfirmClose] = useState(false)
 
   const requestClose = () => {
-    if (isDirty && !confirm('Discard unsaved changes?')) return
+    if (isDirty) { setConfirmClose(true); return }
     onClose()
   }
 
@@ -70,6 +72,18 @@ export function FileEditor({ path, text, readOnly, onSave, onClose }: FileEditor
           )}
         </div>
       </div>
+      {confirmClose && (
+        <ConfirmModal
+          title="Discard Changes"
+          message="You have unsaved changes. Discard and close?"
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          tone="destructive"
+          onConfirm={() => { setConfirmClose(false); onClose() }}
+          onCancel={() => setConfirmClose(false)}
+          noSuspend={true}
+        />
+      )}
     </div>
   )
 }

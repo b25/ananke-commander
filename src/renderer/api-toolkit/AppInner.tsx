@@ -7,6 +7,7 @@ import { RequestEditor } from './components/RequestEditor'
 import { ResponseViewer } from './components/ResponseViewer'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ScrollableTabStrip } from './components/ScrollableTabStrip'
+import { ConfirmModal } from '../components/ConfirmModal'
 
 export function App() {
   const { tabs, activeTabId, openTab, closeTab, setActiveTab, setCollections, setEnvironments, setHistory, addHistoryEntry } = useStore()
@@ -165,63 +166,78 @@ function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
   onNew: () => void
 }) {
   const compact = tabs.length > 5
+  const [pendingClose, setPendingClose] = useState<{ id: string; name: string } | null>(null)
 
   return (
-    <ScrollableTabStrip
-      scrollKey={activeTabId}
-      compact={compact}
-      trackClassName="tabbar-track"
-      ariaLabel="Open requests"
-      trailing={
-        <button type="button" className="tab-new-btn" onClick={onNew} title="New request" aria-label="New request">
-          +
-        </button>
-      }
-    >
-      {tabs.map((tab) => {
-        const isActive = tab.id === activeTabId
-        return (
-          <div
-            key={tab.id}
-            role="tab"
-            tabIndex={0}
-            aria-selected={isActive}
-            data-scroll-active={isActive ? 'true' : undefined}
-            className={`tab ${isActive ? 'active' : ''}`}
-            onClick={() => onSelect(tab.id)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onSelect(tab.id)
-              }
-            }}
-          >
-            {tab.protocol === 'grpc' && <span className="method-badge method-grpc">gRPC</span>}
-            {tab.protocol === 'http' && tab.httpRequest.method && (
-              <span className={`method-badge method-${tab.httpRequest.method}`}>
-                {tab.httpRequest.method}
-              </span>
-            )}
-            <span className="tab-name" title={tab.name}>{tab.name}</span>
-            {tab.dirty && <span className="tab-dirty" aria-label="Unsaved changes">●</span>}
-            <button
-              type="button"
-              className="tab-close"
-              aria-label={`Close ${tab.name}`}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (tab.dirty && tab.collectionId) {
-                  if (!window.confirm(`"${tab.name}" has unsaved changes. Close anyway?`)) return
+    <>
+      <ScrollableTabStrip
+        scrollKey={activeTabId}
+        compact={compact}
+        trackClassName="tabbar-track"
+        ariaLabel="Open requests"
+        trailing={
+          <button type="button" className="tab-new-btn" onClick={onNew} title="New request" aria-label="New request">
+            +
+          </button>
+        }
+      >
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId
+          return (
+            <div
+              key={tab.id}
+              role="tab"
+              tabIndex={0}
+              aria-selected={isActive}
+              data-scroll-active={isActive ? 'true' : undefined}
+              className={`tab ${isActive ? 'active' : ''}`}
+              onClick={() => onSelect(tab.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onSelect(tab.id)
                 }
-                onClose(tab.id)
               }}
             >
-              ×
-            </button>
-          </div>
-        )
-      })}
-    </ScrollableTabStrip>
+              {tab.protocol === 'grpc' && <span className="method-badge method-grpc">gRPC</span>}
+              {tab.protocol === 'http' && tab.httpRequest.method && (
+                <span className={`method-badge method-${tab.httpRequest.method}`}>
+                  {tab.httpRequest.method}
+                </span>
+              )}
+              <span className="tab-name" title={tab.name}>{tab.name}</span>
+              {tab.dirty && <span className="tab-dirty" aria-label="Unsaved changes">●</span>}
+              <button
+                type="button"
+                className="tab-close"
+                aria-label={`Close ${tab.name}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (tab.dirty && tab.collectionId) {
+                    setPendingClose({ id: tab.id, name: tab.name })
+                  } else {
+                    onClose(tab.id)
+                  }
+                }}
+              >
+                ×
+              </button>
+            </div>
+          )
+        })}
+      </ScrollableTabStrip>
+      {pendingClose && (
+        <ConfirmModal
+          title="Unsaved Changes"
+          message={`"${pendingClose.name}" has unsaved changes. Close anyway?`}
+          confirmLabel="Close anyway"
+          cancelLabel="Keep open"
+          tone="destructive"
+          onConfirm={() => { const id = pendingClose.id; setPendingClose(null); onClose(id) }}
+          onCancel={() => setPendingClose(null)}
+        />
+      )}
+    </>
   )
 }
 

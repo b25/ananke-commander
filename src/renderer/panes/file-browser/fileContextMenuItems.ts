@@ -1,6 +1,16 @@
 import type { FileBrowserPaneState, ListDirEntry } from '../../../shared/contracts'
 import { joinPath } from '../../lib/pathUtils'
 import type { ContextMenuItem } from './ContextMenu'
+import { showToast } from '../../components/useToast'
+
+type ShowConfirmOpts = {
+  title: string
+  message?: string
+  tone?: 'default' | 'destructive'
+  requireTyped?: string
+  confirmLabel?: string
+  onConfirm: () => void
+}
 
 type CtxMenu = { x: number; y: number; path: string; side: 'left' | 'right' }
 
@@ -16,6 +26,7 @@ type Args = {
   refreshBoth: () => void
   onUpdate: (next: FileBrowserPaneState) => void
   showPrompt: (label: string, onSubmit: (value: string) => void) => void
+  showConfirm: (opts: ShowConfirmOpts) => void
   setCopyOpen: (open: boolean) => void
   setMoveOpen: (open: boolean) => void
   setArchiveOpen: (open: boolean) => void
@@ -34,6 +45,7 @@ export function fileContextMenuItems({
   refreshBoth,
   onUpdate,
   showPrompt,
+  showConfirm,
   setCopyOpen,
   setMoveOpen,
   setArchiveOpen
@@ -68,7 +80,7 @@ export function fileContextMenuItems({
         showPrompt('New file name:', (name) => {
           void window.ananke.fs.createFile(joinPath(ctxActivePath, name))
             .then(() => refreshActive())
-            .catch((err: Error) => alert(err.message))
+            .catch((err: Error) => showToast(err.message))
         })
       }
     },
@@ -90,22 +102,29 @@ export function fileContextMenuItems({
       label: 'Set Execute Permission', onClick: () => {
         void window.ananke.fs.chmod(ctxMenu.path, '755')
           .then(() => refreshActive())
-          .catch((err: Error) => alert(err.message))
+          .catch((err: Error) => showToast(err.message))
       }
     }] : []),
     { label: '', separator: true, onClick: () => {} },
     {
       label: 'Delete', shortcut: 'F8', danger: true, onClick: () => {
         if (!ctxSelection.length) return
-        if (!confirm(`Delete ${ctxSelection.length} item(s)?`)) return
-        void (async () => {
-          await window.ananke.fs.quickOp('delete', '', ctxSelection)
-          refreshBoth()
-          onUpdate({
-            ...pane,
-            ...(ctxSide === 'left' ? { leftSelection: [] } : { rightSelection: [] })
-          })
-        })()
+        showConfirm({
+          title: 'Delete Items',
+          message: `Delete ${ctxSelection.length} item(s)? This cannot be undone.`,
+          tone: 'destructive',
+          confirmLabel: 'Delete',
+          onConfirm: () => {
+            void (async () => {
+              await window.ananke.fs.quickOp('delete', '', ctxSelection)
+              refreshBoth()
+              onUpdate({
+                ...pane,
+                ...(ctxSide === 'left' ? { leftSelection: [] } : { rightSelection: [] })
+              })
+            })()
+          }
+        })
       }
     },
   ]

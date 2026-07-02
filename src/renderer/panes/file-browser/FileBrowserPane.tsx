@@ -18,6 +18,20 @@ import { useDirectoryEntries } from './useDirectoryEntries'
 import { useFileJob } from './useFileJob'
 import { useFileBrowserNavigation } from './useFileBrowserNavigation'
 import { shouldShellHandleShortcut } from '../../lib/keyboardShortcuts'
+import { ConfirmModal } from '../../components/ConfirmModal'
+import { showToast } from '../../components/useToast'
+
+/** File extensions that open without a system-app confirmation prompt. */
+const SAFE_EXTS = new Set(['.txt','.md','.pdf','.jpg','.jpeg','.png','.gif','.svg','.webp','.bmp','.html','.htm','.css','.json','.xml','.csv','.log','.toml','.yaml','.yml'])
+
+type ConfirmState = {
+  title: string
+  message?: string
+  tone?: 'default' | 'destructive'
+  requireTyped?: string
+  confirmLabel?: string
+  onConfirm: () => void
+}
 
 type FindState = {
   active: boolean
@@ -68,6 +82,10 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   // Inline prompt state (replaces window.prompt which doesn't work in Electron)
   const [inlinePrompt, setInlinePrompt] = useState<{ label: string; onSubmit: (value: string) => void } | null>(null)
   const [inlinePromptValue, setInlinePromptValue] = useState('')
+
+  // Confirm modal state (replaces window.confirm)
+  const [confirmModal, setConfirmModal] = useState<ConfirmState | null>(null)
+  const showConfirm = useCallback((opts: ConfirmState) => { setConfirmModal(opts) }, [])
 
   // PERF-4: local selection state — updated synchronously on each keystroke/click,
   // persisted to pane state (and thus disk) debounced at ~300ms.
@@ -170,9 +188,6 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     ? applyFilterAndSort(toFindResultEntries(rightFind.results, pane.rightPath), true, rightFilterActive, rightFilterText, rightSort)
     : applyFilterAndSort(rightEntries, showHidden, rightFilterActive, rightFilterText, rightSort)
 
-  // Safe file extensions that don't need open confirmation
-  const SAFE_EXTS = new Set(['.txt','.md','.pdf','.jpg','.jpeg','.png','.gif','.svg','.webp','.bmp','.html','.htm','.css','.json','.xml','.csv','.log','.toml','.yaml','.yml'])
-
   const activateEntry = useCallback(
     async (side: 'left' | 'right', entry: ListDirEntry) => {
       if (entry.isDirectory) {
@@ -182,12 +197,23 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       // Confirm before opening non-safe file types
       const ext = entry.name.includes('.') ? '.' + entry.name.split('.').pop()!.toLowerCase() : ''
       if (!SAFE_EXTS.has(ext)) {
-        if (!confirm(`Open "${entry.name}" with system default app?`)) return
+        showConfirm({
+          title: 'Open with System App',
+          message: `Open "${entry.name}" with the system default application?`,
+          confirmLabel: 'Open',
+          onConfirm: () => {
+            setConfirmModal(null)
+            void window.ananke.shell.openPath(entry.path).then(err => {
+              if (err) showToast(err)
+            })
+          }
+        })
+        return
       }
       const err = await window.ananke.shell.openPath(entry.path)
-      if (err) alert(err)
+      if (err) showToast(err)
     },
-    [navigateTo]
+    [navigateTo, showConfirm]
   )
 
   const openEditor = useCallback(
@@ -201,7 +227,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         const text = await window.ananke.fs.readUtf8(filePath)
         setEditorState({ path: filePath, text, readOnly })
       } catch (err) {
-        alert(err instanceof Error ? err.message : String(err))
+        showToast(err instanceof Error ? err.message : String(err))
       }
     },
     [selectedPaths, pane.focusedSide, leftEntries, rightEntries]
@@ -214,7 +240,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         await window.ananke.fs.writeUtf8(editorState.path, newText)
         setEditorState(null)
       } catch (err) {
-        alert(err instanceof Error ? err.message : String(err))
+        showToast(err instanceof Error ? err.message : String(err))
       }
     },
     [editorState]
@@ -295,14 +321,19 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         showPrompt('New folder name:', (name) => {
           void window.ananke.fs.quickOp('mkdir', joinPath(activePath, name))
             .then(() => refreshActive())
-            .catch((err: Error) => alert(err.message))
+            .catch((err: Error) => showToast(err.message))
         })
       }
       if (e.key === 'F8') {
         e.preventDefault()
         if (!selectedPaths.length) return
-        if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
-        void doDelete()
+        showConfirm({
+          title: 'Delete Items',
+          message: `Delete ${selectedPaths.length} item(s)? This cannot be undone.`,
+          tone: 'destructive',
+          confirmLabel: 'Delete',
+          onConfirm: () => { setConfirmModal(null); void doDelete() }
+        })
       }
       if (e.key === 'F2' && selectedPaths.length === 1) {
         e.preventDefault()
@@ -345,7 +376,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         showPrompt('New file name:', (name) => {
           void window.ananke.fs.createFile(joinPath(activePath, name))
             .then(() => refreshActive())
-            .catch((err: Error) => alert(err.message))
+            .catch((err: Error) => showToast(err.message))
         })
       }
       // Alt+Right: navigate forward in history
@@ -362,7 +393,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isActive, selectedPaths, doDelete, openEditor, activePath, refreshActive, pane, leftEntries, rightEntries, onUpdate, navigateTo, historyBack, historyForward])
+  }, [isActive, selectedPaths, doDelete, openEditor, activePath, refreshActive, pane, leftEntries, rightEntries, onUpdate, navigateTo, historyBack, historyForward, showConfirm])
 
   useEffect(() => {
     if (!isActive) return
@@ -374,14 +405,19 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       else if (detail === 'F6') setMoveOpen(true)
       else if (detail === 'F8') {
         if (!selectedPaths.length) return
-        if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
-        void doDelete()
+        showConfirm({
+          title: 'Delete Items',
+          message: `Delete ${selectedPaths.length} item(s)? This cannot be undone.`,
+          tone: 'destructive',
+          confirmLabel: 'Delete',
+          onConfirm: () => { setConfirmModal(null); void doDelete() }
+        })
       }
       else if (detail === 'Arc') setArchiveOpen(true)
     }
     window.addEventListener('global-action', onGlobalAction)
     return () => window.removeEventListener('global-action', onGlobalAction)
-  }, [isActive, openEditor, selectedPaths, doDelete])
+  }, [isActive, openEditor, selectedPaths, doDelete, showConfirm])
 
   useEffect(() => {
     if (!isActive) return
@@ -431,7 +467,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
       setRenaming(null)
       refreshBoth()
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err))
+      showToast(err instanceof Error ? err.message : String(err))
     } finally {
       renamingInFlight.current = false
     }
@@ -452,6 +488,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
         refreshBoth,
         onUpdate,
         showPrompt,
+        showConfirm,
         setCopyOpen,
         setMoveOpen,
         setArchiveOpen
@@ -474,20 +511,25 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
               showPrompt('New folder name:', (name) => {
                 void window.ananke.fs.quickOp('mkdir', joinPath(activePath, name))
                   .then(() => refreshActive())
-                  .catch((err: Error) => alert(err.message))
+                  .catch((err: Error) => showToast(err.message))
               })
             }}
             onNewFile={() => {
               showPrompt('New file name:', (name) => {
                 void window.ananke.fs.createFile(joinPath(activePath, name))
                   .then(() => refreshActive())
-                  .catch((err: Error) => alert(err.message))
+                  .catch((err: Error) => showToast(err.message))
               })
             }}
             onDelete={() => {
               if (!selectedPaths.length) return
-              if (!confirm(`Delete ${selectedPaths.length} item(s)?`)) return
-              void doDelete()
+              showConfirm({
+                title: 'Delete Items',
+                message: `Delete ${selectedPaths.length} item(s)? This cannot be undone.`,
+                tone: 'destructive',
+                confirmLabel: 'Delete',
+                onConfirm: () => { setConfirmModal(null); void doDelete() }
+              })
             }}
             onArchive={() => setArchiveOpen(true)}
             onToggleHidden={() => setShowHidden(h => !h)}
@@ -511,7 +553,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
               if (selectedPaths.length !== 1) return
               void window.ananke.fs.chmod(selectedPaths[0], '755')
                 .then(() => refreshActive())
-                .catch((err: Error) => alert(err.message))
+                .catch((err: Error) => showToast(err.message))
             } : undefined}
           />
         }
@@ -712,6 +754,18 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
           onClose={() => setEditorState(null)}
         />,
         document.body
+      )}
+
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          tone={confirmModal.tone}
+          requireTyped={confirmModal.requireTyped}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
       )}
     </div>
   )

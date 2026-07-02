@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BrowserPaneState } from '../../../shared/contracts'
+import { showToast } from '../../components/useToast'
 
 type HistoryEntry = { url: string; timestamp: number }
 
@@ -110,7 +111,7 @@ export function BrowserActions({ navHistory, pane, onUpdate }: Props) {
                   void (async () => {
                     const result = await window.ananke.browser.navigate(pane.id, entry.url)
                     if (result.status === 'blocked') {
-                      alert(`Navigation blocked (only http/https URLs are allowed).\n\n${entry.url}`)
+                      showToast(`Navigation blocked: only http/https URLs are allowed (${entry.url})`, 'warn')
                       return
                     }
                     onUpdate({ ...pane, url: entry.url })

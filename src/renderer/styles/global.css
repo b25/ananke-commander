@@ -1959,6 +1959,11 @@ select {
   background: color-mix(in srgb, #f5c200 20%, var(--pane));
 }
 
+.app-error-banner--info {
+  background: color-mix(in srgb, var(--accent) 15%, var(--pane));
+  border-bottom-color: var(--accent);
+}
+
 /* ── Toolbar thin buttons ──────────────────────────────── */
 
 .btn-thin {

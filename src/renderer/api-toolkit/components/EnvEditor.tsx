@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import type { Environment, Variable } from '../../../shared/api-toolkit-contracts'
+import { ConfirmModal } from '../../components/ConfirmModal'
 
 function VariableRow({
   v,
@@ -31,6 +32,9 @@ function VariableRow({
 export function EnvEditor() {
   const { environments, activeEnvironmentId, setEnvironments, setActiveEnvironment } = useStore()
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string; message?: string; tone?: 'default' | 'destructive'; confirmLabel?: string; onConfirm: () => void
+  } | null>(null)
 
   // Inline prompt (window.prompt doesn't work in Electron's sandboxed renderer)
   const [inlinePrompt, setInlinePrompt] = useState<{
@@ -71,12 +75,20 @@ export function EnvEditor() {
   }
 
   function deleteEnv(id: string) {
-    if (!window.confirm('Delete this environment?')) return
-    window.ananke.apiToolkit.storage.deleteEnvironment(id)
-    const next = environments.filter((e) => e.id !== id)
-    setEnvironments(next)
-    if (activeEnvironmentId === id) setActiveEnvironment(next[0]?.id ?? null)
-    if (editingId === id) setEditingId(null)
+    setConfirmModal({
+      title: 'Delete Environment',
+      message: 'Delete this environment and all its variables?',
+      tone: 'destructive',
+      confirmLabel: 'Delete',
+      onConfirm: () => {
+        setConfirmModal(null)
+        window.ananke.apiToolkit.storage.deleteEnvironment(id)
+        const next = environments.filter((e) => e.id !== id)
+        setEnvironments(next)
+        if (activeEnvironmentId === id) setActiveEnvironment(next[0]?.id ?? null)
+        if (editingId === id) setEditingId(null)
+      }
+    })
   }
 
   function updateVar(env: Environment, idx: number, patch: Partial<Variable>) {
@@ -182,6 +194,16 @@ export function EnvEditor() {
           )}
         </div>
       ))}
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          tone={confirmModal.tone}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   )
 }
