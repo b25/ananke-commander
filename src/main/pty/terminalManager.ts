@@ -76,7 +76,15 @@ export class TerminalManager {
   }
 
   spawn(paneId: string, cols: number, rows: number, cwd?: string, cmd?: string, argsOverride?: string[]): void {
-    this.dispose(paneId)
+    // Idempotent: if a live PTY already exists for this pane, resize to the new
+    // dimensions and return — do NOT kill and respawn the shell.  This handles
+    // the case where the renderer re-issues spawn() after an unmount/remount or
+    // after a cwd change propagates through the prop chain.
+    if (this.procs.has(paneId)) {
+      const existing = this.procs.get(paneId)!
+      try { existing.resize(Math.max(1, cols || 80), Math.max(1, rows || 24)) } catch { /* ignore */ }
+      return
+    }
     const packagedAllow = new Set(['gitui', 'lazygit'])
     const useCustom = Boolean(cmd && (!app.isPackaged || packagedAllow.has(cmd)))
     const shell = useCustom ? (cmd ?? defaultShell()) : defaultShell()

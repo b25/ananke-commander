@@ -177,7 +177,15 @@ export function useXterm(
     }
 
     return () => {
-      spawnedPanes.delete(paneId)
+      // NOTE: deliberately do NOT delete paneId from spawnedPanes here.
+      // The underlying PTY process in the main process lives on across React
+      // unmount/remount cycles (screen switches, collapse/expand).  Removing
+      // the pane from spawnedPanes would cause doSpawnIfNeeded to issue a
+      // fresh pty.spawn() on the next mount, killing the live shell via
+      // TerminalManager.dispose().  The main-process spawn() is now idempotent
+      // (guards on this.procs.has(paneId)), but keeping spawnedPanes intact is
+      // the renderer-side invariant that prevents even attempting the IPC call.
+      // spawnedPanes is only cleared when the PTY exits (onExit handler above).
       cancelAnimationFrame(resizeFrame)
       ro.disconnect()
       sub.dispose()
@@ -194,7 +202,12 @@ export function useXterm(
       termRef.current = null
       fitRef.current = null
     }
-  }, [paneId, cwd])
+    // cwd is intentionally excluded from deps: changes (e.g. from OSC-title
+    // persistence after `cd`) must NOT re-run this effect and re-spawn.  The
+    // cwd value is only needed at initial spawn time; the shell tracks its own
+    // working directory from that point on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paneId])
 
   useEffect(() => {
     const t = termRef.current
