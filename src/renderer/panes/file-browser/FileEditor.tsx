@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useModal } from '../../lib/useModal'
 
 type FileEditorProps = {
   path: string
@@ -9,6 +10,7 @@ type FileEditorProps = {
 }
 
 export function FileEditor({ path, text, readOnly, onSave, onClose }: FileEditorProps) {
+  useModal()
   const heading = readOnly ? `Viewing: ${path}` : `Editing: ${path}`
   const [draft, setDraft] = useState(text)
   const isDirty = useMemo(() => !readOnly && draft !== text, [draft, readOnly, text])

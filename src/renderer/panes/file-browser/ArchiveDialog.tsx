@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useModal } from '../../lib/useModal'
 
 type Props = {
   onClose: () => void
@@ -9,6 +10,7 @@ type Props = {
 }
 
 export function ArchiveDialog({ onClose, onPack, onUnpack, suggestedPackPath, defaultUnpackDir }: Props) {
+  useModal()
   const [mode, setMode] = useState<'pack' | 'unpack'>('pack')
   const [format, setFormat] = useState<'zip' | 'tgz'>('zip')
   const [path, setPath] = useState(suggestedPackPath)

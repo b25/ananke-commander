@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
 import type { FileBrowserPaneState } from '../../../shared/contracts'
+import { useModal } from '../../lib/useModal'
 
 type Props = {
   mode: 'copy' | 'move'
@@ -14,6 +15,7 @@ type Props = {
 
 /** F5/F6 destination picker: choose another file-browser pane to copy/move the selection into. */
 export function CopyMoveDialog({ mode, activePath, selectedCount, dests, destPaneId, onDestChange, onCancel, onConfirm }: Props) {
+  useModal()
   return createPortal(
     <div className="modal-backdrop" role="presentation" onClick={onCancel}>
       <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()}>

@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import { useModal } from '../../lib/useModal'
 
 type Props = {
   label: string
@@ -10,6 +11,7 @@ type Props = {
 
 /** Inline single-field prompt (replaces window.prompt, which doesn't work in Electron). */
 export function InlinePromptDialog({ label, value, onChange, onSubmit, onCancel }: Props) {
+  useModal()
   return createPortal(
     <div className="modal-backdrop" role="presentation" onClick={onCancel}>
       <div className="modal" role="dialog" onClick={(e) => e.stopPropagation()} style={{ minWidth: 320 }}>
