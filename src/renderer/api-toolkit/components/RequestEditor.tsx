@@ -354,7 +354,15 @@ function AuthEditor({ tab }: { tab: Tab }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div>
-        <select className="select" value={auth.type} onChange={(e) => setHttpAuth(tab.id, { type: e.target.value } as AuthConfig)}>
+        <select className="select" value={auth.type} onChange={(e) => {
+          const t = e.target.value
+          const defaults: AuthConfig =
+            t === 'basic'  ? { type: 'basic',  username: '', password: '' } :
+            t === 'bearer' ? { type: 'bearer', token: '' } :
+            t === 'apiKey' ? { type: 'apiKey', key: '', value: '', in: 'header' } :
+            { type: 'none' }
+          setHttpAuth(tab.id, defaults)
+        }}>
           {['none', 'basic', 'bearer', 'apiKey'].map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
       </div>
