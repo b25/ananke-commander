@@ -11,6 +11,7 @@ type Params = {
   closePane: (paneId: string) => void
   handleLayoutSelect: (layoutId: string) => void
   screenPanesCount: number
+  onShowShortcuts?: () => void
 }
 
 /**
@@ -27,12 +28,21 @@ export function useAppKeyboardShortcuts({
   setSnap,
   closePane,
   handleLayoutSelect,
-  screenPanesCount
+  screenPanesCount,
+  onShowShortcuts
 }: Params): void {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!shouldShellHandleShortcut(e)) return
       const mod = e.ctrlKey || e.metaKey
+
+      // ? (Shift+/): show keyboard shortcuts overlay
+      if (e.key === '?' && !mod && onShowShortcuts) {
+        e.preventDefault()
+        onShowShortcuts()
+        return
+      }
+
 
       // Cmd/Ctrl + 1–9: switch workspace
       if (snap && mod) {
@@ -89,5 +99,5 @@ export function useAppKeyboardShortcuts({
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [snap, ws, setSnap, closePane, handleLayoutSelect, screenPanesCount])
+  }, [snap, ws, setSnap, closePane, handleLayoutSelect, screenPanesCount, onShowShortcuts])
 }

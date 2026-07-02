@@ -2190,6 +2190,88 @@ select {
   border: none;
 }
 
+/* ── Empty-screen CTA (UX-18) ─────────────────────── */
+
+.empty-screen-cta {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  pointer-events: auto;
+  z-index: var(--z-base);
+}
+
+.empty-screen-cta__icon {
+  font-size: 36px;
+  opacity: 0.18;
+  line-height: 1;
+}
+
+.empty-screen-cta__heading {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+.empty-screen-cta__sub {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+/* ── Shortcuts Overlay (UX-18) ─────────────────────── */
+
+.shortcuts-modal {
+  min-width: 460px;
+}
+
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-md);
+}
+
+.shortcuts-table tr + tr td {
+  border-top: 1px solid var(--border);
+}
+
+.shortcuts-table td {
+  padding: var(--space-xs) var(--space-sm);
+  vertical-align: middle;
+}
+
+.shortcuts-key {
+  white-space: nowrap;
+  width: 1%;
+}
+
+.shortcuts-key kbd {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--header);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  color: var(--text);
+}
+
+.shortcuts-desc {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  padding-left: var(--space-md);
+}
+
+.shortcuts-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* ── Terminal History Inline Viewer ───────────────── */
 
 .term-history-inline {

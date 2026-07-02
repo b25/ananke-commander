@@ -10,6 +10,7 @@ import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { SettingsDrawer } from '../layout/SettingsDrawer'
 import { TomlEditorModal } from '../layout/TomlEditorModal'
 import { DiagOverlay } from '../layout/DiagOverlay'
+import { ShortcutsOverlay } from '../layout/ShortcutsOverlay'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { bestLayout } from '../lib/layouts'
 import { useWorkspaceStability } from './useWorkspaceStability'
@@ -37,6 +38,7 @@ export function App() {
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
   const [tomlEditorOpen, setTomlEditorOpen] = useState(false)
   const [diagOpen, setDiagOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const openTomlEditor = useCallback(async () => {
     await window.ananke.config.pauseWatch()
@@ -200,7 +202,7 @@ export function App() {
     closePane
   })
 
-  useAppKeyboardShortcuts({ snap, ws, setSnap, closePane, handleLayoutSelect, screenPanesCount })
+  useAppKeyboardShortcuts({ snap, ws, setSnap, closePane, handleLayoutSelect, screenPanesCount, onShowShortcuts: () => setShortcutsOpen(true) })
 
   const copyDebugInfo = useCallback(() => {
     if (!ws) return
@@ -302,7 +304,8 @@ export function App() {
           allPanes={displayWs.panes}
           collapsedIds={Array.from(activeCollapsedIds)}
           onRestorePane={(id) => void handleRestorePane(id)}
-          onCloseCollapsed={(id) => void handleCloseCollapsed(id)} />
+          onCloseCollapsed={(id) => void handleCloseCollapsed(id)}
+          onAddPane={(type) => void addPane(type)} />
         {diagOpen && (
           <DiagOverlay
             ws={ws}
@@ -355,6 +358,7 @@ export function App() {
           onCancel={() => setRepairConfirm(null)}
         />
       )}
+      {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
       {tomlEditorOpen && <TomlEditorModal onClose={(s) => void closeTomlEditor(s)} />}
       {wsConfirm && (
         <ConfirmModal
