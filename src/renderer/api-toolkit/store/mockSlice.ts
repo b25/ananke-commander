@@ -3,17 +3,16 @@ import type { MockServerData } from '../../../shared/api-toolkit-contracts'
 import type { AppStore, MockSlice } from './types'
 
 let mockPersistTimer: ReturnType<typeof setTimeout> | null = null
-let pendingMockPersist: MockServerData | null = null
 
-function scheduleMockPersist(data: MockServerData): void {
-  pendingMockPersist = data
+// Accept a getter so the timer reads the CURRENT state at fire time, not a stale
+// snapshot captured when the debounce was scheduled.  This prevents a route hit
+// (which schedules write X) from overwriting a user edit (write Y) that arrives
+// within the 300 ms window.
+function scheduleMockPersist(getMockData: () => MockServerData): void {
   if (mockPersistTimer) clearTimeout(mockPersistTimer)
   mockPersistTimer = setTimeout(() => {
-    const toPersist = pendingMockPersist
-    pendingMockPersist = null
     mockPersistTimer = null
-    if (!toPersist) return
-    window.ananke.apiToolkit.mock.saveData(toPersist).catch(console.error)
+    window.ananke.apiToolkit.mock.saveData(getMockData()).catch(console.error)
   }, 300)
 }
 
@@ -48,7 +47,7 @@ export const createMockSlice: StateCreator<AppStore, [], [], MockSlice> = (set, 
         r.id === routeId ? { ...r, hitCount } : r
       )
       const mockData = { ...s.mockData, routes }
-      scheduleMockPersist(mockData)
+      scheduleMockPersist(() => get().mockData)
       return { mockData }
     }),
 })
