@@ -374,15 +374,13 @@ function BodyEditor({ tab }: { tab: Tab }) {
   }
 
   function toggleMultipartKind(idx: number) {
-    const p = (body.parts ?? [])[idx]
+    const parts = body.parts ?? []
+    const p = parts[idx]
     if (!p) return
-    if (p.kind === 'text') {
-      const updated: MultipartPart = { key: p.key, kind: 'file', filePath: '', enabled: p.enabled }
-      updateMultipartPart(idx, updated)
-    } else {
-      const updated: MultipartPart = { key: p.key, kind: 'text', value: '', enabled: p.enabled }
-      updateMultipartPart(idx, updated)
-    }
+    const replacement: MultipartPart = p.kind === 'text'
+      ? { key: p.key, kind: 'file', filePath: '', enabled: p.enabled }
+      : { key: p.key, kind: 'text', value: '', enabled: p.enabled }
+    setHttpBody(tab.id, { ...body, parts: parts.map((part, i) => i === idx ? replacement : part) })
   }
 
   const isTextOrRaw = body.mode !== 'none' && body.mode !== 'form' && body.mode !== 'urlencoded' && body.mode !== 'binary' && body.mode !== 'multipart'

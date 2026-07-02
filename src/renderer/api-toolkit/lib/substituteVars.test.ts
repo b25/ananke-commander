@@ -55,6 +55,49 @@ test('applyVarsToGrpcRequest returns the same object when there are no vars', ()
   assert.equal(applyVarsToGrpcRequest(req, []), req)
 })
 
+test('applyVarsToHttpRequest resolves multipart text-part value and file-part filePath (Wave F fix 1)', () => {
+  const req = {
+    method: 'POST',
+    url: 'https://example.com/upload',
+    params: [],
+    headers: [],
+    body: {
+      mode: 'multipart',
+      formFields: [{ key: 'legacy', value: '{{legacyVal}}', enabled: true }],
+      parts: [
+        { key: 'token', kind: 'text', value: '{{token}}', enabled: true },
+        { key: 'file',  kind: 'file', filePath: '/tmp/{{filename}}', enabled: true },
+      ],
+    },
+    auth: { type: 'none' },
+    timeout: 30000,
+  } as unknown as HttpRequest
+  const out = applyVarsToHttpRequest(req, [v('token', 'secret'), v('filename', 'upload.csv'), v('legacyVal', 'lv')])
+  const parts = (out.body as { parts: { key: string; kind: string; value?: string; filePath?: string; enabled: boolean }[] }).parts
+  assert.equal(parts[0].value, 'secret', 'text part value should be substituted')
+  assert.equal(parts[1].filePath, '/tmp/upload.csv', 'file part filePath should be substituted')
+  // backward-compat: formFields still substituted
+  const fields = (out.body as { formFields: { key: string; value: string }[] }).formFields
+  assert.equal(fields[0].value, 'lv', 'formFields backward-compat still substituted')
+})
+
+test('applyVarsToHttpRequest leaves multipart parts verbatim when vars is empty', () => {
+  const req = {
+    method: 'POST',
+    url: 'https://x.com',
+    params: [],
+    headers: [],
+    body: {
+      mode: 'multipart',
+      parts: [{ key: 'k', kind: 'text', value: '{{v}}', enabled: true }],
+    },
+    auth: { type: 'none' },
+    timeout: 30000,
+  } as unknown as HttpRequest
+  const out = applyVarsToHttpRequest(req, [])
+  assert.equal(out, req) // same reference — early-return path
+})
+
 test('applyVarsToHttpRequest resolves url, params, headers, and raw body', () => {
   const req = {
     method: 'POST',

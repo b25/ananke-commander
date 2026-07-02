@@ -19,7 +19,7 @@ export function applyVarsToHttpRequest(req: HttpRequest, vars: Variable[]): Http
     body:
       req.body.mode === 'raw' || req.body.mode === 'json'
         ? { ...req.body, raw: subStr(req.body.raw ?? '', vars) }
-        : req.body.mode === 'form' || req.body.mode === 'urlencoded' || req.body.mode === 'multipart'
+        : req.body.mode === 'form' || req.body.mode === 'urlencoded'
           ? {
               ...req.body,
               formFields: (req.body.formFields ?? []).map((f) => ({
@@ -28,7 +28,21 @@ export function applyVarsToHttpRequest(req: HttpRequest, vars: Variable[]): Http
                 value: subStr(f.value, vars)
               }))
             }
-          : req.body,
+          : req.body.mode === 'multipart'
+            ? {
+                ...req.body,
+                formFields: (req.body.formFields ?? []).map((f) => ({
+                  ...f,
+                  key: subStr(f.key, vars),
+                  value: subStr(f.value, vars)
+                })),
+                parts: (req.body.parts ?? []).map((p) =>
+                  p.kind === 'text'
+                    ? { ...p, key: subStr(p.key, vars), value: subStr(p.value, vars) }
+                    : { ...p, key: subStr(p.key, vars), filePath: subStr(p.filePath, vars) }
+                )
+              }
+            : req.body,
   }
 }
 
