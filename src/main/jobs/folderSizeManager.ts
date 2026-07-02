@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,9 +9,12 @@ export class FolderSizeManager {
   private win: BrowserWindow
   private worker: Worker | null = null
   private activeRequests = new Map<string, string>() // requestId -> dirPath
+  private readonly workerFactory: () => Worker
 
-  constructor(win: BrowserWindow) {
+  constructor(win: BrowserWindow, workerFactory?: () => Worker) {
     this.win = win
+    const workerPath = this.getWorkerPath()
+    this.workerFactory = workerFactory ?? (() => new Worker(workerPath))
   }
 
   private getWorkerPath(): string {
@@ -46,11 +49,40 @@ export class FolderSizeManager {
         })
       }
     })
+
+    worker.on('error', (err: Error) => {
+      // Worker threw an unhandled exception / failed to load its bundle.
+      // Null it out so the next start() spawns a fresh one.
+      if (this.worker === worker) this.worker = null
+      if (this.activeRequests.size > 0 && !this.win.isDestroyed()) {
+        for (const [requestId, dirPath] of this.activeRequests) {
+          this.win.webContents.send('fs:folderSize:error', { requestId, dirPath, message: err.message })
+        }
+        this.activeRequests.clear()
+      }
+    })
+
+    worker.on('exit', (code: number) => {
+      // After an 'error' event Node also emits 'exit'; the error handler already
+      // cleared activeRequests and nulled this.worker, so both guards are no-ops
+      // in that path — no double-emit.
+      if (this.worker === worker) this.worker = null   // force respawn on next start()
+      if (code !== 0 && this.activeRequests.size > 0 && !this.win.isDestroyed()) {
+        for (const [requestId, dirPath] of this.activeRequests) {
+          this.win.webContents.send('fs:folderSize:error', {
+            requestId,
+            dirPath,
+            message: `Worker exited unexpectedly (code ${code})`
+          })
+        }
+        this.activeRequests.clear()
+      }
+    })
   }
 
   private ensureWorker(): Worker {
     if (!this.worker) {
-      this.worker = new Worker(this.getWorkerPath())
+      this.worker = this.workerFactory()
       this.attachWorkerListeners(this.worker)
     }
     return this.worker

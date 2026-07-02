@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,9 +9,12 @@ export class FileJobManager {
   private win: BrowserWindow
   private worker: Worker | null = null
   private runningJobId: string | null = null
+  private readonly workerFactory: () => Worker
 
-  constructor(win: BrowserWindow) {
+  constructor(win: BrowserWindow, workerFactory?: () => Worker) {
     this.win = win
+    const workerPath = this.getWorkerPath()
+    this.workerFactory = workerFactory ?? (() => new Worker(workerPath))
   }
 
   private getWorkerPath(): string {
@@ -36,11 +39,41 @@ export class FileJobManager {
         })
       }
     })
+
+    worker.on('error', (err: Error) => {
+      // Worker threw an unhandled exception / failed to load its bundle.
+      // Null it out so the next runJob() spawns a fresh one.
+      if (this.worker === worker) this.worker = null
+      if (this.runningJobId !== null) {
+        const jobId = this.runningJobId
+        this.runningJobId = null
+        if (!this.win.isDestroyed()) {
+          this.win.webContents.send('file-job:error', { jobId, message: err.message })
+        }
+      }
+    })
+
+    worker.on('exit', (code: number) => {
+      // After an 'error' event Node also emits 'exit'; the error handler already
+      // cleared runningJobId and nulled this.worker, so both guards below are
+      // no-ops in that path — no double-emit.
+      if (this.worker === worker) this.worker = null   // force respawn on next job
+      if (code !== 0 && this.runningJobId !== null) {
+        const jobId = this.runningJobId
+        this.runningJobId = null
+        if (!this.win.isDestroyed()) {
+          this.win.webContents.send('file-job:error', {
+            jobId,
+            message: `Worker exited unexpectedly (code ${code})`
+          })
+        }
+      }
+    })
   }
 
   private ensureWorker(): Worker {
     if (!this.worker) {
-      this.worker = new Worker(this.getWorkerPath())
+      this.worker = this.workerFactory()
       this.attachWorkerListeners(this.worker)
     }
     return this.worker
