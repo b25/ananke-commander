@@ -4,7 +4,13 @@ import type { HttpRequest, HttpResponse, AuthConfig, KeyValue } from '../../shar
 
 const activeFetches = new Map<string, AbortController>()
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024 // 10 MB safety cap
-const SENSITIVE_HEADERS = new Set(['authorization', 'cookie', 'x-api-key'])
+export const SENSITIVE_HEADERS = new Set([
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'proxy-authorization',
+  'x-api-key'
+])
 
 function buildHeaders(req: HttpRequest): Record<string, string> {
   const out: Record<string, string> = {}

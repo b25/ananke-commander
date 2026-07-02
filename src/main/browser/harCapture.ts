@@ -1,5 +1,33 @@
 import type { WebContents } from 'electron'
 
+/**
+ * Header names (lowercase) that must never appear in a saved/shared HAR.
+ * Mirrors the set in http-client.ts (SENSITIVE_HEADERS) — kept local so
+ * harCapture.ts has no runtime dependency on the HTTP-client module.
+ */
+const SENSITIVE_HEADERS = new Set([
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'proxy-authorization',
+  'x-api-key'
+])
+
+/**
+ * Replace values of sensitive headers (Authorization, Cookie, Set-Cookie,
+ * Proxy-Authorization, x-api-key) with [REDACTED]. Header names are preserved
+ * so the HAR still shows which headers were present.
+ */
+export function redactHeaders(
+  headers: Array<{ name: string; value: string }>
+): Array<{ name: string; value: string }> {
+  return headers.map(({ name, value }) =>
+    SENSITIVE_HEADERS.has(name.toLowerCase())
+      ? { name, value: '[REDACTED]' }
+      : { name, value }
+  )
+}
+
 interface HarEntry {
   startedDateTime: string
   time: number
@@ -136,7 +164,7 @@ export class HarCapture {
         startTime: Date.now(),
         method: req.request.method,
         url: req.request.url,
-        headers: Object.entries(req.request.headers).map(([name, value]) => ({ name, value })),
+        headers: redactHeaders(Object.entries(req.request.headers).map(([name, value]) => ({ name, value }))),
         postData: req.request.postData,
         entryIndex: -1
       })
@@ -182,7 +210,7 @@ export class HarCapture {
           status: resp.response.status,
           statusText: resp.response.statusText,
           httpVersion: resp.response.protocol || 'HTTP/1.1',
-          headers: Object.entries(resp.response.headers).map(([name, value]) => ({ name, value })),
+          headers: redactHeaders(Object.entries(resp.response.headers).map(([name, value]) => ({ name, value }))),
           content: {
             size: -1,
             mimeType: resp.response.mimeType
