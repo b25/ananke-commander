@@ -45,10 +45,10 @@
 
   /* Typography: Size */
   --text-2xs: 10px;
-  --text-xs: 10px;
-  --text-sm: 10px;
-  --text-md: 10px;
-  --text-lg: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
 
   /* Typography: Weight (D-07) */
   --weight-normal: 400;
