@@ -103,6 +103,12 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   const subfolder = () => wsName.replace(/[/\\:*?"<>|]/g, '-') || 'default'
 
   const loadNote = async (filename: string) => {
+    // Flush any pending body debounce BEFORE switching notes so the outgoing
+    // note's edits are persisted and the stale timer cannot clobber the
+    // incoming note's body.  paneRef.current still points to the OLD note at
+    // this moment (it is updated via paneRef.current = pane each render), so
+    // flushBodyUpdate() correctly attributes the write to the outgoing note.
+    flushBodyUpdate()
     if (!vaultPath) return
     const content = await window.ananke.notes.readVault(vaultPath, subfolder(), filename)
     if (content === null) return
@@ -136,6 +142,9 @@ export function NotesPane({ pane, isActive, notesUndoMax, onUpdate, onClose }: P
   }
 
   const newNote = () => {
+    // Same as loadNote: flush the outgoing note's pending body edits before
+    // clearing the editor state for the new (blank) note.
+    flushBodyUpdate()
     const title = 'New Note'
     setLocalBody('')
     undoStack.current = []

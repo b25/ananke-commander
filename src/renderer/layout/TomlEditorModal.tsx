@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppStateSnapshot } from '../../shared/contracts'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { useModal } from '../lib/useModal'
 
 interface Props {
   onClose: (newSnap?: AppStateSnapshot) => void
@@ -11,6 +12,9 @@ function escapeRegex(s: string): string {
 }
 
 export function TomlEditorModal({ onClose }: Props) {
+  // Suspend native WebContentsView browser panes via the ananke:modal-open/
+  // close event channel so they cannot paint over this modal.
+  useModal()
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
