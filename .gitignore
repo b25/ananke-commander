@@ -8,3 +8,6 @@ dist
 .env
 .env.*
 .planning/
+
+# SDD execution scratch (task briefs/reports/ledger)
+.superpowers/
