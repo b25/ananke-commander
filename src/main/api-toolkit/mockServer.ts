@@ -4,13 +4,17 @@ import type { MockRoute } from '../../shared/api-toolkit-contracts.js'
 
 type HitCallback = (routeId: string, hitCount: number) => void
 
-function matchPattern(pattern: string, reqPath: string): boolean {
+export function matchPattern(pattern: string, reqPath: string): boolean {
   // Strip query string
   const path = reqPath.split('?')[0]
   if (!pattern.includes('*')) return pattern === path
-  // ** → .*, * → [^/]*
+  // Escape all regex metacharacters EXCEPT * (which we treat as a glob wildcard).
+  // Mirrors the approach used by globToRegex in registerFsIpc.ts, extended with ?
+  // so that none of . + ^ $ ? { } ( ) | [ ] \ can form unintended regex syntax.
+  const escaped = pattern.replace(/[.+^$?{}()|[\]\\]/g, '\\$&')
+  // Translate glob wildcards: ** → .* (cross-segment), * → [^/]* (single segment)
   const re = new RegExp(
-    '^' + pattern.replace(/\*\*/g, '\x00').replace(/\*/g, '[^/]*').replace(/\x00/g, '.*') + '$'
+    '^' + escaped.replace(/\*\*/g, '\x00').replace(/\*/g, '[^/]*').replace(/\x00/g, '.*') + '$'
   )
   return re.test(path)
 }
@@ -81,6 +85,18 @@ class MockServer {
   }
 
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
+    try {
+      this._handleRequestInner(req, res)
+    } catch (err) {
+      console.error('[MockServer] Unhandled error in request handler:', err)
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+        res.end(JSON.stringify({ error: 'Internal mock server error' }))
+      }
+    }
+  }
+
+  private _handleRequestInner(req: IncomingMessage, res: ServerResponse): void {
     const method = (req.method ?? 'GET').toUpperCase()
     const url = req.url ?? '/'
 
