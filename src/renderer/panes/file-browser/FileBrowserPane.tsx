@@ -148,7 +148,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   }
   const { navigateTo, historyBack, historyForward, leftFocusName, rightFocusName } = useFileBrowserNavigation(pane, onUpdate)
 
-  const { leftEntries, rightEntries, refreshBoth, refreshActive } = useDirectoryEntries(pane)
+  const { leftEntries, rightEntries, leftError, rightError, refreshBoth, refreshActive } = useDirectoryEntries(pane)
   const { fileJobLine, setFileJobLine, startJob } = useFileJob(refreshBoth)
 
   // Derive Set views from local state for FileList `selected` prop (fast, no disk hit)
@@ -596,36 +596,42 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                   onClose={() => setLeftFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })}
                 />
               )}
-              <FileList
-                path={pane.leftPath}
-                entries={visibleLeftEntries}
-                selected={leftSel}
-                focused={focusedSideLocal === 'left'}
-                focusName={leftFocusName}
-                renaming={renaming?.side === 'left' ? renaming : null}
-                sort={leftSort}
-                onSortChange={setLeftSort}
-                filterActive={leftFilterActive}
-                filterText={leftFilterText}
-                onFilterChange={setLeftFilterText}
-                onFilterOpen={() => setLeftFilterActive(true)}
-                onFilterClose={() => { setLeftFilterActive(false); setLeftFilterText('') }}
-                onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
-                onRenameCommit={commitRename}
-                onRenameCancel={() => setRenaming(null)}
-                onPathChange={(p) => navigateTo('left', p)}
-                onSelect={(paths, add) => {
-                  const next = togglePaths(leftSelLocal, paths, add)
-                  setLeftSelLocal(next)
-                  setFocusedSideLocal('left')
-                  scheduleSel(next, rightSelLocal, 'left')
-                }}
-                onActivate={(entry) => {
-                  if (leftFind.active) setLeftFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
-                  void activateEntry('left', entry)
-                }}
-                onContextMenu={(e, entry) => onFileContextMenu('left', e, entry)}
-              />
+              {leftError ? (
+                <div className="dir-error-state" role="alert">
+                  Cannot read directory: {leftError}
+                </div>
+              ) : (
+                <FileList
+                  path={pane.leftPath}
+                  entries={visibleLeftEntries}
+                  selected={leftSel}
+                  focused={focusedSideLocal === 'left'}
+                  focusName={leftFocusName}
+                  renaming={renaming?.side === 'left' ? renaming : null}
+                  sort={leftSort}
+                  onSortChange={setLeftSort}
+                  filterActive={leftFilterActive}
+                  filterText={leftFilterText}
+                  onFilterChange={setLeftFilterText}
+                  onFilterOpen={() => setLeftFilterActive(true)}
+                  onFilterClose={() => { setLeftFilterActive(false); setLeftFilterText('') }}
+                  onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
+                  onRenameCommit={commitRename}
+                  onRenameCancel={() => setRenaming(null)}
+                  onPathChange={(p) => navigateTo('left', p)}
+                  onSelect={(paths, add) => {
+                    const next = togglePaths(leftSelLocal, paths, add)
+                    setLeftSelLocal(next)
+                    setFocusedSideLocal('left')
+                    scheduleSel(next, rightSelLocal, 'left')
+                  }}
+                  onActivate={(entry) => {
+                    if (leftFind.active) setLeftFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
+                    void activateEntry('left', entry)
+                  }}
+                  onContextMenu={(e, entry) => onFileContextMenu('left', e, entry)}
+                />
+              )}
             </div>
             <div className="file-list-panel">
               <PathBar
@@ -648,36 +654,42 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                   onClose={() => setRightFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })}
                 />
               )}
-              <FileList
-                path={pane.rightPath}
-                entries={visibleRightEntries}
-                selected={rightSel}
-                focused={focusedSideLocal === 'right'}
-                focusName={rightFocusName}
-                renaming={renaming?.side === 'right' ? renaming : null}
-                sort={rightSort}
-                onSortChange={setRightSort}
-                filterActive={rightFilterActive}
-                filterText={rightFilterText}
-                onFilterChange={setRightFilterText}
-                onFilterOpen={() => setRightFilterActive(true)}
-                onFilterClose={() => { setRightFilterActive(false); setRightFilterText('') }}
-                onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
-                onRenameCommit={commitRename}
-                onRenameCancel={() => setRenaming(null)}
-                onPathChange={(p) => navigateTo('right', p)}
-                onSelect={(paths, add) => {
-                  const next = togglePaths(rightSelLocal, paths, add)
-                  setRightSelLocal(next)
-                  setFocusedSideLocal('right')
-                  scheduleSel(leftSelLocal, next, 'right')
-                }}
-                onActivate={(entry) => {
-                  if (rightFind.active) setRightFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
-                  void activateEntry('right', entry)
-                }}
-                onContextMenu={(e, entry) => onFileContextMenu('right', e, entry)}
-              />
+              {rightError ? (
+                <div className="dir-error-state" role="alert">
+                  Cannot read directory: {rightError}
+                </div>
+              ) : (
+                <FileList
+                  path={pane.rightPath}
+                  entries={visibleRightEntries}
+                  selected={rightSel}
+                  focused={focusedSideLocal === 'right'}
+                  focusName={rightFocusName}
+                  renaming={renaming?.side === 'right' ? renaming : null}
+                  sort={rightSort}
+                  onSortChange={setRightSort}
+                  filterActive={rightFilterActive}
+                  filterText={rightFilterText}
+                  onFilterChange={setRightFilterText}
+                  onFilterOpen={() => setRightFilterActive(true)}
+                  onFilterClose={() => { setRightFilterActive(false); setRightFilterText('') }}
+                  onRenameChange={(name) => setRenaming(r => r ? { ...r, name } : null)}
+                  onRenameCommit={commitRename}
+                  onRenameCancel={() => setRenaming(null)}
+                  onPathChange={(p) => navigateTo('right', p)}
+                  onSelect={(paths, add) => {
+                    const next = togglePaths(rightSelLocal, paths, add)
+                    setRightSelLocal(next)
+                    setFocusedSideLocal('right')
+                    scheduleSel(leftSelLocal, next, 'right')
+                  }}
+                  onActivate={(entry) => {
+                    if (rightFind.active) setRightFind({ active: false, pattern: '', recursive: true, results: [], status: 'idle' })
+                    void activateEntry('right', entry)
+                  }}
+                  onContextMenu={(e, entry) => onFileContextMenu('right', e, entry)}
+                />
+              )}
             </div>
           </div>
           {ctxMenu && (

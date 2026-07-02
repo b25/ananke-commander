@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import type { AppStateSnapshot } from '../../shared/contracts'
+import { showToast } from '../components/useToast'
 
 export type StateSyncRunner = (
   producer: () => Promise<AppStateSnapshot | void>
@@ -20,6 +21,7 @@ export function useStateSync(setSnap: (next: AppStateSnapshot) => void): StateSy
         if (next) setSnap(next)
       } catch (e) {
         console.error('[state] update failed', e)
+        showToast("Couldn't save workspace change")
       }
     },
     [setSnap]

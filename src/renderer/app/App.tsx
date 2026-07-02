@@ -18,6 +18,7 @@ import { useStateSync } from './useStateSync'
 import { useAppKeyboardShortcuts } from './useAppKeyboardShortcuts'
 import { usePaneRenderer } from './usePaneRenderer'
 import { buildDebugInfo } from '../lib/debugInfo'
+import { showToast } from '../components/useToast'
 import { applyFractions } from '../lib/paneGeometry'
 import {
   offsetToScreenIndex,
@@ -101,7 +102,10 @@ export function App() {
   const prevDrawer = useRef(drawer)
   useEffect(() => {
     if (prevDrawer.current === 'settings' && drawer !== 'settings' && snap) {
-      void window.ananke.state.set({ settings: snap.settings }).catch((e) => console.error('[state] settings save failed', e))
+      void window.ananke.state.set({ settings: snap.settings }).catch((e) => {
+        console.error('[state] settings save failed', e)
+        showToast('Settings could not be saved')
+      })
     }
     prevDrawer.current = drawer
   }, [drawer, snap])
