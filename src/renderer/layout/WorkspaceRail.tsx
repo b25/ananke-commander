@@ -70,7 +70,7 @@ export function WorkspaceRail({ workspaces, activeId, onSelect, onAdd, onClone, 
           className="ctx-menu"
           role="menu"
           aria-label="Workspace actions"
-          style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 1000 }}
+          style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 'var(--z-menu)' }}
           onClick={(e) => e.stopPropagation()}
         >
           <button

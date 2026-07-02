@@ -350,7 +350,7 @@ export function CollectionTree() {
       {ctx && (
         <div
           className="ctx-menu"
-          style={{ position: 'fixed', top: ctx.y, left: ctx.x, zIndex: 9999, minWidth: 160 }}
+          style={{ position: 'fixed', top: ctx.y, left: ctx.x, zIndex: 'var(--z-menu)', minWidth: 160 }}
           onClick={(e) => e.stopPropagation()}
         >
           {ctx.kind === 'collection' && (

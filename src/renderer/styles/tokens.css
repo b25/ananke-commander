@@ -64,4 +64,14 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
+
+  /* Z-index layers (UX-15) — coherent stack; menus are below modal so
+     a modal backdrop always blocks interaction with floating menus.
+     base < elevated < drawer < menu < modal < diag */
+  --z-base: 1;       /* floating panes, within-pane stacking */
+  --z-elevated: 10;  /* toolbars, collapsed strip, within-pane overlays */
+  --z-drawer: 100;   /* side drawers */
+  --z-menu: 200;     /* context menus, popovers — intentionally below modal */
+  --z-modal: 500;    /* modal backdrop + modal content (blocks menus/drawers) */
+  --z-diag: 600;     /* diagnostic / always-on-top overlays */
 }

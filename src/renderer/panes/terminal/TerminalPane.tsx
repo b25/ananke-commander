@@ -130,7 +130,7 @@ export function TerminalPane({ pane, isActive, scrollback, fontSize, fontFamily,
         />
         {ctxMenu && (
           <div
-            style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 200 }}
+            style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 'var(--z-menu)' }}
             className="ctx-menu"
             onMouseLeave={() => setCtxMenu(null)}
           >

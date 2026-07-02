@@ -63,7 +63,7 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
     position: 'fixed',
     left: x,
     top: y,
-    zIndex: 1000,
+    zIndex: 'var(--z-menu)',
   }
 
   return (

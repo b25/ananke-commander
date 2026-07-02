@@ -108,7 +108,7 @@ select {
   background: var(--header);
   font-size: var(--text-sm);
   position: relative;
-  z-index: 10;
+  z-index: var(--z-elevated);
   flex-shrink: 0;
 }
 
@@ -144,7 +144,7 @@ select {
   align-items: center;
   gap: var(--space-sm);
   padding: 0 var(--space-sm);
-  height: 16px;
+  min-height: 22px;
   flex-shrink: 0;
   background: var(--header);
   border-bottom: 1px solid var(--border);
@@ -163,12 +163,14 @@ select {
 }
 
 .pane-close-btn {
-  height: 16px;
-  padding: 0 var(--space-sm);
+  min-height: 22px;
+  padding: 3px var(--space-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
+  /* Gap before close btn so misclicks on adjacent actions don't close the pane */
+  margin-left: var(--space-sm);
 }
 
 .pane-type-icon {
@@ -559,14 +561,16 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  min-width: 22px;
+  min-height: 22px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  padding: 0;
+  /* 3px padding expands hit area; -3px margin cancels layout growth (UX-11) */
+  padding: 3px;
+  margin: -3px;
   transition: background 0.1s, border-color 0.1s;
 }
 
@@ -750,14 +754,16 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  min-width: 22px;
+  min-height: 22px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  padding: 0;
+  /* 3px padding expands hit area; -3px margin cancels layout growth (UX-11) */
+  padding: 3px;
+  margin: -3px;
   transition: background 0.1s, border-color 0.1s;
 }
 
@@ -831,7 +837,7 @@ select {
   width: 320px;
   background: var(--rail);
   border-left: 1px solid var(--border);
-  z-index: 100;
+  z-index: var(--z-drawer);
   display: flex;
   flex-direction: column;
   font-size: var(--text-sm);
@@ -854,7 +860,7 @@ select {
   position: fixed;
   inset: 0;
   background: var(--overlay-bg);
-  z-index: 200;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1139,7 +1145,7 @@ select {
   background: var(--header);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  z-index: 5;
+  z-index: var(--z-elevated);
 }
 
 .collapsed-pill {
@@ -1212,8 +1218,13 @@ select {
 
 .collapsed-pill__close {
   flex-shrink: 0;
-  padding: 0 2px;
-  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 3px 5px;
+  font-size: var(--text-2xs); /* 10px — up from 9px for legibility */
   border: none;
   background: transparent;
   color: var(--muted);
@@ -1551,7 +1562,7 @@ select {
 }
 
 .api-toolkit-tab {
-  padding: 3px 14px;
+  padding: 6px 14px; /* was 3px — bumped for ≥22px hit area (UX-11) */
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -1880,7 +1891,7 @@ select {
   border-radius: var(--radius-md);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   padding: 4px;
-  z-index: 200;
+  z-index: var(--z-menu);
   min-width: 200px;
   display: flex;
   flex-direction: column;
@@ -2016,7 +2027,7 @@ select {
   position: absolute;
   top: 8px;
   right: 8px;
-  z-index: 200;
+  z-index: var(--z-diag);
   width: 480px;
   max-height: calc(100vh - 80px);
   overflow-y: auto;
@@ -2130,9 +2141,9 @@ select {
 
 .term-history__delete {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  padding: 0;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 3px;
   border: none;
   background: none;
   color: var(--muted);

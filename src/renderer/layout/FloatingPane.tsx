@@ -16,7 +16,7 @@ export function FloatingPane({ x, y, width, height, isActive, isCollapsed, ariaL
       role="group"
       aria-label={ariaLabel}
       className={`floating-pane${isActive ? ' active' : ''}`}
-      style={{ position: 'absolute', left: x, top: y, width, height, zIndex: isActive ? 10 : 1, display: isCollapsed ? 'none' : undefined }}
+      style={{ position: 'absolute', left: x, top: y, width, height, zIndex: isActive ? 'var(--z-elevated)' : 'var(--z-base)', display: isCollapsed ? 'none' : undefined }}
       onMouseDown={isCollapsed || isActive ? undefined : onActivate}
     >
       {children}
