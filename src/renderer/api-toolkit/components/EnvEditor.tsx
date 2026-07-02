@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import type { Environment, Variable } from '../../../shared/api-toolkit-contracts'
 import { ConfirmModal } from '../../components/ConfirmModal'
@@ -30,7 +31,14 @@ function VariableRow({
 }
 
 export function EnvEditor() {
-  const { environments, activeEnvironmentId, setEnvironments, setActiveEnvironment } = useStore()
+  const { environments, activeEnvironmentId, setEnvironments, setActiveEnvironment } = useStore(
+    useShallow((s) => ({
+      environments: s.environments,
+      activeEnvironmentId: s.activeEnvironmentId,
+      setEnvironments: s.setEnvironments,
+      setActiveEnvironment: s.setActiveEnvironment,
+    }))
+  )
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{
     title: string; message?: string; tone?: 'default' | 'destructive'; requireTyped?: string; confirmLabel?: string; onConfirm: () => void
@@ -139,7 +147,7 @@ export function EnvEditor() {
       {/* Selector row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
         <select
-          className="select"
+          className="atk-select"
           style={{ flex: 1, fontSize: 10 }}
           value={activeEnvironmentId ?? ''}
           onChange={(e) => setActiveEnvironment(e.target.value || null)}
@@ -154,7 +162,7 @@ export function EnvEditor() {
       {environments.length === 0 && !inlinePrompt && (
         <div style={{ padding: '24px 16px', color: 'var(--text-2)', fontSize: 10, textAlign: 'center' }}>
           No environments.<br />
-          <button type="button" className="text-accent" style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }} onClick={newEnv}>Create one</button>
+          <button type="button" className="atk-text-accent" style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }} onClick={newEnv}>Create one</button>
         </div>
       )}
 

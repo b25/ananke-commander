@@ -316,6 +316,10 @@ const api = {
         ipcRenderer.invoke('at:dialog:openProto'),
       openFile: (): Promise<string | null> =>
         ipcRenderer.invoke('at:dialog:openFile'),
+      /** Pick a file and return its path + base name, without reading its contents.
+       *  For binary / multipart body editors — the actual read happens in main at send time. */
+      openFilePath: (): Promise<{ path: string; name: string } | null> =>
+        ipcRenderer.invoke('at:dialog:openFilePath'),
       saveFile: (content: string, defaultName: string): Promise<boolean> =>
         ipcRenderer.invoke('at:dialog:saveFile', content, defaultName),
     },

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PaneState, WorkspaceState } from '../../shared/contracts'
+import type { PaneState, PaneType, WorkspaceState } from '../../shared/contracts'
 import { offsetToScreenIndex, paneScreenIndex } from '../lib/screenIndex'
 import { shouldMountPaneContent } from '../lib/shouldMountPane'
 import { FloatingPane } from './FloatingPane'
+import { NewPanePicker } from './NewPanePicker'
 import { PanePlaceholder } from './PanePlaceholder'
 import { TaskbarStrip } from './TaskbarStrip'
 
@@ -16,9 +17,10 @@ interface Props {
   collapsedIds?: string[]
   onRestorePane?: (paneId: string) => void
   onCloseCollapsed?: (paneId: string) => void
+  onAddPane?: (type: PaneType) => void
 }
 
-export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOffsetChange, onViewportResize, allPanes = [], collapsedIds = [], onRestorePane, onCloseCollapsed }: Props) {
+export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOffsetChange, onViewportResize, allPanes = [], collapsedIds = [], onRestorePane, onCloseCollapsed, onAddPane }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [viewportSize, setViewportSize] = useState({ width: 800, height: 600 })
   const offsetRef = useRef(workspace.canvasOffset)
@@ -103,6 +105,14 @@ export function CanvasWorkspace({ workspace, renderPane, onActivate, onCanvasOff
         onClose={(id) => onCloseCollapsed?.(id)}
       />
       <div ref={containerRef} className="canvas-panning-area" onScroll={(e) => { e.currentTarget.scrollTop = 0; e.currentTarget.scrollLeft = 0 }}>
+        {screenPanes.length === 0 && onAddPane && (
+          <div className="empty-screen-cta" aria-label="Empty screen — add a pane to get started">
+            <div className="empty-screen-cta__icon" aria-hidden>⬜</div>
+            <p className="empty-screen-cta__heading">This screen is empty</p>
+            <p className="empty-screen-cta__sub">Choose a pane type to get started</p>
+            <NewPanePicker onSelect={onAddPane} />
+          </div>
+        )}
         <div style={{ position: 'absolute', top: 0, left: 0, width: canvasW, height: canvasH, transform: `translate(${-ox}px, ${-oy}px)`, willChange: 'transform' }}>
           {workspace.panes.map((pane) => {
             const mountCtx = {

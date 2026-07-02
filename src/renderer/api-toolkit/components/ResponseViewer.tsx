@@ -121,15 +121,15 @@ function HttpResponseView({
       {innerTab === 'body' && (
         <ResponseBodyViewport>
           {tab.loading && !tab.grpcStreamActive ? (
-            <div className="empty-state">
-              <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
+            <div className="atk-empty-state">
+              <div className="atk-spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
               <span>Sending…</span>
             </div>
           ) : tab.error && !resp ? (
             <div className="error-box" style={{ margin: 16 }}>{tab.error}</div>
           ) : !resp ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">→</div>
+            <div className="atk-empty-state">
+              <div className="atk-empty-state-icon">→</div>
               <span>Send a request to see the response</span>
             </div>
           ) : viewRaw ? (
@@ -162,10 +162,10 @@ function HttpResponseView({
       )}
 
       {innerTab === 'headers' && !resp && (
-        <div className="empty-state"><span>No response yet</span></div>
+        <div className="atk-empty-state"><span>No response yet</span></div>
       )}
       {innerTab === 'timing' && !resp && (
-        <div className="empty-state"><span>No response yet</span></div>
+        <div className="atk-empty-state"><span>No response yet</span></div>
       )}
     </div>
   )
@@ -186,7 +186,7 @@ function GrpcResponseView({ tab }: { tab: Tab }) {
           </span>
           {status.details && <span style={{ fontSize: 10, color: 'var(--text-1)' }}>{status.details}</span>}
           {tab.grpcStreamActive && (
-            <><div className="spinner" /><span style={{ fontSize: 10, color: 'var(--text-2)' }}>streaming</span></>
+            <><div className="atk-spinner" /><span style={{ fontSize: 10, color: 'var(--text-2)' }}>streaming</span></>
           )}
         </div>
       )}
@@ -212,8 +212,8 @@ function GrpcResponseView({ tab }: { tab: Tab }) {
       {innerTab === 'messages' && (
         <div className="response-body" style={{ padding: 0 }}>
           {messages.length === 0 && !tab.grpcStreamActive && (
-            <div className="empty-state">
-              <div className="empty-state-icon">↓</div>
+            <div className="atk-empty-state">
+              <div className="atk-empty-state-icon">↓</div>
               <span>No response yet</span>
             </div>
           )}

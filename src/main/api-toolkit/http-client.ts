@@ -1,5 +1,7 @@
-import { fetch as undiciFetch, type RequestInit, type Response } from 'undici'
+import { fetch as undiciFetch, FormData as UndiciFormData, type RequestInit, type Response } from 'undici'
 import { randomBytes } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { basename } from 'node:path'
 import type { HttpRequest, HttpResponse, AuthConfig, KeyValue } from '../../shared/api-toolkit-contracts.js'
 
 const activeFetches = new Map<string, AbortController>()
@@ -74,40 +76,45 @@ function urlSearchParamsFromFields(fields: KeyValue[] | undefined): URLSearchPar
   return params
 }
 
-function buildMultipartBody(fields: KeyValue[]): { body: string; contentType: string } {
-  const boundary = `----ananke-${randomBytes(16).toString('hex')}`
-  const lines: string[] = []
-  for (const kv of fields) {
-    if (!kv.enabled) continue
-    lines.push(
-      `--${boundary}\r\n`,
-      `Content-Disposition: form-data; name="${kv.key.replace(/"/g, '\\"')}"\r\n\r\n`,
-      `${kv.value}\r\n`
-    )
-  }
-  lines.push(`--${boundary}--\r\n`)
-  return {
-    body: lines.join(''),
-    contentType: `multipart/form-data; boundary=${boundary}`
-  }
-}
-
-function buildBody(req: HttpRequest): { body: string | URLSearchParams | Buffer | null; contentType?: string } {
+async function buildBody(req: HttpRequest): Promise<{ body: string | URLSearchParams | Buffer | UndiciFormData | null; contentType?: string }> {
   switch (req.body.mode) {
     case 'none':
       return { body: null }
     case 'raw':
     case 'json':
       return { body: req.body.raw ?? null }
-    case 'binary':
-      return { body: req.body.raw != null ? Buffer.from(req.body.raw, 'utf8') : null }
+    case 'binary': {
+      if (!req.body.filePath) return { body: null }
+      const buf = await readFile(req.body.filePath)
+      return { body: buf }
+    }
     case 'urlencoded':
       return { body: urlSearchParamsFromFields(req.body.formFields) }
     case 'form':
       return { body: urlSearchParamsFromFields(req.body.formFields) }
     case 'multipart': {
-      const { body, contentType } = buildMultipartBody(req.body.formFields ?? [])
-      return { body, contentType }
+      const fd = new UndiciFormData()
+      const parts = req.body.parts
+      if (parts && parts.length > 0) {
+        for (const p of parts) {
+          if (!p.enabled) continue
+          if (p.kind === 'text') {
+            fd.append(p.key, p.value)
+          } else {
+            const buf = await readFile(p.filePath)
+            // Use Node.js global Blob (available since Node 18)
+            const blob = new Blob([buf])
+            fd.append(p.key, blob, basename(p.filePath))
+          }
+        }
+      } else {
+        // Backward compat: text-only formFields
+        for (const kv of req.body.formFields ?? []) {
+          if (kv.enabled) fd.append(kv.key, kv.value)
+        }
+      }
+      // Content-Type (with boundary) is set automatically by the fetch layer when body is FormData
+      return { body: fd }
     }
     default:
       return { body: req.body.raw ?? null }
@@ -217,7 +224,7 @@ export async function sendHttp(
   try {
     const url = buildUrl(req)
     const headers = buildHeaders(req)
-    const built = buildBody(req)
+    const built = await buildBody(req)
     if (built.contentType) {
       headers['Content-Type'] = built.contentType
     }

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { AppStateSnapshot, WorkspaceState } from '../../shared/contracts'
 import { bestLayout } from '../lib/layouts'
 import { shouldShellHandleShortcut } from '../lib/keyboardShortcuts'
+import { showToast } from '../components/useToast'
 
 type Params = {
   snap: AppStateSnapshot | null
@@ -10,6 +11,7 @@ type Params = {
   closePane: (paneId: string) => void
   handleLayoutSelect: (layoutId: string) => void
   screenPanesCount: number
+  onShowShortcuts?: () => void
 }
 
 /**
@@ -26,12 +28,21 @@ export function useAppKeyboardShortcuts({
   setSnap,
   closePane,
   handleLayoutSelect,
-  screenPanesCount
+  screenPanesCount,
+  onShowShortcuts
 }: Params): void {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!shouldShellHandleShortcut(e)) return
       const mod = e.ctrlKey || e.metaKey
+
+      // ? (Shift+/): show keyboard shortcuts overlay
+      if (e.key === '?' && !mod && onShowShortcuts) {
+        e.preventDefault()
+        onShowShortcuts()
+        return
+      }
+
 
       // Cmd/Ctrl + 1–9: switch workspace
       if (snap && mod) {
@@ -48,10 +59,23 @@ export function useAppKeyboardShortcuts({
 
       if (!ws) return
 
-      // Cmd/Ctrl + W: close active pane
+      // Cmd/Ctrl + W: close active pane — shows an Undo toast so the close is recoverable
       if (mod && e.key === 'w' && ws.activePaneId) {
         e.preventDefault()
-        void closePane(ws.activePaneId)
+        const closedPaneId = ws.activePaneId
+        const wsId = ws.id
+        void closePane(closedPaneId)
+        showToast('Pane closed', 'info', {
+          label: 'Undo',
+          onClick: () => {
+            void window.ananke.state.getRecentlyClosed().then((entries) => {
+              const entry = entries.find((rc) => rc.snapshot.id === closedPaneId)
+              if (entry) {
+                void window.ananke.state.restoreClosed(wsId, entry.id).then(setSnap)
+              }
+            })
+          }
+        })
         return
       }
 
@@ -75,5 +99,5 @@ export function useAppKeyboardShortcuts({
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [snap, ws, setSnap, closePane, handleLayoutSelect, screenPanesCount])
+  }, [snap, ws, setSnap, closePane, handleLayoutSelect, screenPanesCount, onShowShortcuts])
 }

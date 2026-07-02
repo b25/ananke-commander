@@ -10,6 +10,7 @@ import { RecentlyClosedPanel } from '../layout/RecentlyClosedPanel'
 import { SettingsDrawer } from '../layout/SettingsDrawer'
 import { TomlEditorModal } from '../layout/TomlEditorModal'
 import { DiagOverlay } from '../layout/DiagOverlay'
+import { ShortcutsOverlay } from '../layout/ShortcutsOverlay'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { bestLayout } from '../lib/layouts'
 import { useWorkspaceStability } from './useWorkspaceStability'
@@ -18,7 +19,7 @@ import { useStateSync } from './useStateSync'
 import { useAppKeyboardShortcuts } from './useAppKeyboardShortcuts'
 import { usePaneRenderer } from './usePaneRenderer'
 import { buildDebugInfo } from '../lib/debugInfo'
-import { showToast } from '../components/useToast'
+import { showToast, type ToastAction } from '../components/useToast'
 import { applyFractions } from '../lib/paneGeometry'
 import {
   offsetToScreenIndex,
@@ -37,6 +38,7 @@ export function App() {
   const [drawer, setDrawer] = useState<'none' | 'settings' | 'recent'>('none')
   const [tomlEditorOpen, setTomlEditorOpen] = useState(false)
   const [diagOpen, setDiagOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const openTomlEditor = useCallback(async () => {
     await window.ananke.config.pauseWatch()
@@ -69,7 +71,7 @@ export function App() {
   }, [])
 
   // Global toast channel — `ananke:toast` events from any renderer component land here
-  const [toastMsg, setToastMsg] = useState<{ message: string; tone: 'error' | 'warn' | 'info' } | null>(null)
+  const [toastMsg, setToastMsg] = useState<{ message: string; tone: 'error' | 'warn' | 'info'; action?: ToastAction } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dismissToast = useCallback(() => {
     if (toastTimer.current) { clearTimeout(toastTimer.current); toastTimer.current = null }
@@ -77,9 +79,9 @@ export function App() {
   }, [])
   useEffect(() => {
     const handler = (e: Event) => {
-      const { message, tone = 'error' } = (e as CustomEvent<{ message: string; tone?: string }>).detail
+      const { message, tone = 'error', action } = (e as CustomEvent<{ message: string; tone?: string; action?: ToastAction }>).detail
       if (toastTimer.current) clearTimeout(toastTimer.current)
-      setToastMsg({ message, tone: tone as 'error' | 'warn' | 'info' })
+      setToastMsg({ message, tone: tone as 'error' | 'warn' | 'info', action })
       toastTimer.current = setTimeout(() => setToastMsg(null), 5000)
     }
     window.addEventListener('ananke:toast', handler)
@@ -145,6 +147,7 @@ export function App() {
 
   const activeScreen = ws ? offsetToScreenIndex(ws.canvasOffset, vpW, vpH) : 0
   const activeCollapsedIds = useMemo(() => new Set(ws?.screenCollapsed?.[activeScreen] ?? []), [ws, activeScreen])
+  const collapsedIdsArr = useMemo(() => Array.from(activeCollapsedIds), [activeCollapsedIds])
   const { col: screenCol, row: screenRow } = screenIndexToColRow(activeScreen)
   const screenPanesCount = ws ? ws.panes.filter((p) => paneOnScreen(p, screenCol, screenRow)).length : 0
   const activeLayoutId = ws?.screenLayouts?.[activeScreen] ?? bestLayout(screenPanesCount).id
@@ -200,7 +203,7 @@ export function App() {
     closePane
   })
 
-  useAppKeyboardShortcuts({ snap, ws, setSnap, closePane, handleLayoutSelect, screenPanesCount })
+  useAppKeyboardShortcuts({ snap, ws, setSnap, closePane, handleLayoutSelect, screenPanesCount, onShowShortcuts: () => setShortcutsOpen(true) })
 
   const copyDebugInfo = useCallback(() => {
     if (!ws) return
@@ -211,7 +214,12 @@ export function App() {
 
   // Browser panes stay mounted even when collapsed so the WebContentsView is not destroyed.
   // All other pane types are unmounted when collapsed (saves memory/CPU).
-  const displayWsForCanvas = displayWs ? { ...displayWs, panes: displayWs.panes.filter(p => !activeCollapsedIds.has(p.id) || p.type === 'browser') } : displayWs
+  // PERF-14: memoize so CanvasWorkspace/TaskbarStrip receive a stable object reference when
+  // neither displayWs nor activeCollapsedIds has changed (avoids identity-based prop churn).
+  const displayWsForCanvas = useMemo(
+    () => displayWs ? { ...displayWs, panes: displayWs.panes.filter(p => !activeCollapsedIds.has(p.id) || p.type === 'browser') } : displayWs,
+    [displayWs, activeCollapsedIds]
+  )
 
   useEffect(() => {
     if (drawer === 'none') return
@@ -260,6 +268,15 @@ export function App() {
             role="alert"
           >
             {toastMsg.tone === 'error' ? '⛔' : toastMsg.tone === 'info' ? 'ℹ' : '⚠'} {toastMsg.message}
+            {toastMsg.action && (
+              <button
+                type="button"
+                style={{ marginLeft: 'var(--space-sm)', fontWeight: 600 }}
+                onClick={() => { toastMsg.action!.onClick(); dismissToast() }}
+              >
+                {toastMsg.action.label}
+              </button>
+            )}
             <button type="button" aria-label="Dismiss notification" onClick={dismissToast}>✕</button>
           </div>
         )}
@@ -286,9 +303,10 @@ export function App() {
           onCanvasOffsetChange={handleCanvasOffsetChange}
           onViewportResize={handleViewportResize}
           allPanes={displayWs.panes}
-          collapsedIds={Array.from(activeCollapsedIds)}
+          collapsedIds={collapsedIdsArr}
           onRestorePane={(id) => void handleRestorePane(id)}
-          onCloseCollapsed={(id) => void handleCloseCollapsed(id)} />
+          onCloseCollapsed={(id) => void handleCloseCollapsed(id)}
+          onAddPane={(type) => void addPane(type)} />
         {diagOpen && (
           <DiagOverlay
             ws={ws}
@@ -341,6 +359,7 @@ export function App() {
           onCancel={() => setRepairConfirm(null)}
         />
       )}
+      {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
       {tomlEditorOpen && <TomlEditorModal onClose={(s) => void closeTomlEditor(s)} />}
       {wsConfirm && (
         <ConfirmModal

@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import type { Tab } from '../store'
 import type { ProtoDiscovery, MessageSchema, GrpcMessage, Variable } from '../../../shared/api-toolkit-contracts'
@@ -17,7 +18,20 @@ interface Props {
 type SourceMode = 'text' | 'file' | 'reflection'
 
 export function GrpcPanel({ tab }: Props) {
-  const { setGrpcEndpoint, setGrpcServiceMethod, setGrpcMessageJson, setGrpcMetadata, setGrpcTls, setGrpcDiscovery, updateTab, environments, activeEnvironmentId, addHistoryEntry } = useStore()
+  const { setGrpcEndpoint, setGrpcServiceMethod, setGrpcMessageJson, setGrpcMetadata, setGrpcTls, setGrpcDiscovery, updateTab, environments, activeEnvironmentId, addHistoryEntry } = useStore(
+    useShallow((s) => ({
+      setGrpcEndpoint: s.setGrpcEndpoint,
+      setGrpcServiceMethod: s.setGrpcServiceMethod,
+      setGrpcMessageJson: s.setGrpcMessageJson,
+      setGrpcMetadata: s.setGrpcMetadata,
+      setGrpcTls: s.setGrpcTls,
+      setGrpcDiscovery: s.setGrpcDiscovery,
+      updateTab: s.updateTab,
+      environments: s.environments,
+      activeEnvironmentId: s.activeEnvironmentId,
+      addHistoryEntry: s.addHistoryEntry,
+    }))
+  )
   const req = tab.grpcRequest
   const [sourceMode, setSourceMode] = useState<SourceMode>((req.protoSource.type as SourceMode) ?? 'text')
   const [protoText, setProtoText] = useState(req.protoSource.type === 'text' ? req.protoSource.content : '')
@@ -122,7 +136,7 @@ export function GrpcPanel({ tab }: Props) {
           onChange={(e) => setGrpcEndpoint(tab.id, e.target.value)}
         />
         <select
-          className="select"
+          className="atk-select"
           value={req.tls.mode}
           onChange={(e) => setGrpcTls(tab.id, { ...req.tls, mode: e.target.value as 'none' | 'tls' | 'mtls' })}
           title="TLS mode"
@@ -211,7 +225,7 @@ export function GrpcPanel({ tab }: Props) {
           <button className="send-btn" style={{ fontSize: 10, padding: '3px 12px' }} onClick={discover} disabled={discovering}>
             {discovering ? 'Discovering…' : 'Discover services'}
           </button>
-          {discovering && <div className="spinner" />}
+          {discovering && <div className="atk-spinner" />}
           {discoverError && <span style={{ color: 'var(--status-err)', fontSize: 10 }}>{discoverError}</span>}
         </div>
       </div>

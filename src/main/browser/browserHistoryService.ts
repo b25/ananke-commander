@@ -1,5 +1,6 @@
 import Store from 'electron-store'
 import { isNavigationAllowed } from '../security/browserSecurity.js'
+import { pruneHistories } from './browserHistoryPrune.js'
 
 export type HistoryEntry = { url: string; timestamp: number }
 
@@ -82,6 +83,21 @@ export class BrowserHistoryService {
   /** Drop a pane's history entirely (on pane destroy). */
   delete(paneId: string): void {
     this.histories.delete(paneId)
+    this.persist()
+  }
+
+  /**
+   * Startup prune: remove history buckets for panes that no longer exist in
+   * the persisted workspace state, then schedule a single persist. Called once
+   * at app startup after both this service and the StateStore are ready.
+   *
+   * "Orphaned" means the paneId is not present in ANY workspace — not merely
+   * off-screen or collapsed (those panes still exist in state and are kept).
+   */
+  pruneOrphans(livePaneIds: Set<string> | string[]): void {
+    const liveSet = livePaneIds instanceof Set ? livePaneIds : new Set(livePaneIds)
+    const pruned = pruneHistories(Object.fromEntries(this.histories), liveSet)
+    this.histories = new Map(Object.entries(pruned))
     this.persist()
   }
 }

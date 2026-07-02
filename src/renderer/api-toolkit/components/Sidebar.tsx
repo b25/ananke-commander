@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '../store'
 import { CollectionTree } from './CollectionTree'
 import { HistoryList } from './HistoryList'
@@ -5,11 +6,19 @@ import { EnvEditor } from './EnvEditor'
 import { MockProxyPanel } from './MockProxyPanel'
 
 export function Sidebar() {
-  const { sidebarTab, setSidebarTab, activeEnvironmentId, environments, mockRunning } = useStore()
+  const { sidebarTab, setSidebarTab, activeEnvironmentId, environments, mockRunning } = useStore(
+    useShallow((s) => ({
+      sidebarTab: s.sidebarTab,
+      setSidebarTab: s.setSidebarTab,
+      activeEnvironmentId: s.activeEnvironmentId,
+      environments: s.environments,
+      mockRunning: s.mockRunning,
+    }))
+  )
   const activeEnvName = environments.find((e) => e.id === activeEnvironmentId)?.name
 
   return (
-    <aside className="sidebar">
+    <aside className="atk-sidebar">
       <div className="sidebar-tabs" role="tablist" aria-label="API toolkit sections">
         <button
           type="button"

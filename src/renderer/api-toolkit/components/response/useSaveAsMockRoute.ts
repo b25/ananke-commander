@@ -1,11 +1,18 @@
 import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { Tab } from '../../store'
 import { useStore } from '../../store'
 import type { MockRoute } from '../../../../shared/api-toolkit-contracts'
 
 export function useSaveAsMockRoute(tab: Tab) {
   const [savedAsMock, setSavedAsMock] = useState(false)
-  const { mockData, saveMockData, setSidebarTab } = useStore()
+  const { mockData, saveMockData, setSidebarTab } = useStore(
+    useShallow((s) => ({
+      mockData: s.mockData,
+      saveMockData: s.saveMockData,
+      setSidebarTab: s.setSidebarTab,
+    }))
+  )
 
   async function saveAsMock() {
     if (!tab.httpResponse) return

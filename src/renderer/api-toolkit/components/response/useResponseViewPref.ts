@@ -1,10 +1,16 @@
 import { useEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { Tab } from '../../store'
 import { useStore } from '../../store'
 import { loadResponseViewPrefs, tabResponseViewRaw } from '../../lib/responseViewPrefs'
 
 export function useResponseViewPref(tab: Tab) {
-  const { responseViewRaw, setTabResponseViewRaw } = useStore()
+  const { responseViewRaw, setTabResponseViewRaw } = useStore(
+    useShallow((s) => ({
+      responseViewRaw: s.responseViewRaw,
+      setTabResponseViewRaw: s.setTabResponseViewRaw,
+    }))
+  )
 
   // Re-apply persisted preference when switching tabs (store is module-singleton).
   useEffect(() => {

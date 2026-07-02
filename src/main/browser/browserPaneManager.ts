@@ -367,4 +367,10 @@ export class BrowserPaneManager {
   destroyAll(): void {
     for (const id of [...this.views.keys()]) this.destroy(id)
   }
+
+  /** PERF-13: Prune history buckets for panes not present in any current workspace.
+   *  Delegates to BrowserHistoryService; called once at startup. */
+  pruneHistoryOrphans(livePaneIds: Set<string> | string[]): void {
+    this.history.pruneOrphans(livePaneIds)
+  }
 }

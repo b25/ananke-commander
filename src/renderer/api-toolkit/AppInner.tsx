@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { loadResponseViewPrefs } from './lib/responseViewPrefs'
 import { useStore, useActiveTab } from './store'
 import type { Tab } from './store'
@@ -8,9 +9,25 @@ import { ResponseViewer } from './components/ResponseViewer'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ScrollableTabStrip } from './components/ScrollableTabStrip'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { ensureIpcWired } from './ipcWiring'
+
+// Subscribe to global IPC events once at module load — before any pane mounts.
+// Multiple panes share the singleton store; no per-pane subscription is needed.
+ensureIpcWired()
 
 export function App() {
-  const { tabs, activeTabId, openTab, closeTab, setActiveTab, setCollections, setEnvironments, setHistory, addHistoryEntry } = useStore()
+  const { tabs, activeTabId, openTab, closeTab, setActiveTab, setCollections, setEnvironments, setHistory } = useStore(
+    useShallow((s) => ({
+      tabs: s.tabs,
+      activeTabId: s.activeTabId,
+      openTab: s.openTab,
+      closeTab: s.closeTab,
+      setActiveTab: s.setActiveTab,
+      setCollections: s.setCollections,
+      setEnvironments: s.setEnvironments,
+      setHistory: s.setHistory,
+    }))
+  )
   const activeTab = useActiveTab()
   const initialized = useRef(false)
 
@@ -40,54 +57,17 @@ export function App() {
     }
   }, [])
 
-  // Wire up mock server hit events
-  useEffect(() => {
-    const off = window.ananke.apiToolkit.mock.onRouteHit((routeId, hitCount) => {
-      useStore.getState().updateRouteHitCount(routeId, hitCount)
-    })
-    return () => { off() }
-  }, [])
-
-  // Wire up gRPC stream IPC events
-  useEffect(() => {
-    const off1 = window.ananke.apiToolkit.grpc.onStreamMessage((streamId, msg) => {
-      useStore.getState().addGrpcStreamMessage(streamId, msg)
-    })
-    const off2 = window.ananke.apiToolkit.grpc.onStreamEnd((streamId, status, trailers) => {
-      useStore.getState().endGrpcStream(streamId, status, trailers)
-      // Persist to history (in-memory + durable storage)
-      const tab = useStore.getState().tabs.find((t) => t.id === streamId)
-      if (tab) {
-        const entry = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          protocol: 'grpc' as const,
-          name: tab.grpcRequest.serviceMethod || 'gRPC call',
-          grpcRequest: tab.grpcRequest,
-          grpcResponse: tab.grpcResponse ?? undefined,
-          duration: 0,
-        }
-        addHistoryEntry(entry)
-        void window.ananke.apiToolkit.storage.addHistory(entry)
-      }
-    })
-    const off3 = window.ananke.apiToolkit.grpc.onStreamError((streamId, err) => {
-      useStore.getState().updateTab(streamId, { error: err, loading: false, grpcStreamActive: false })
-    })
-    return () => { off1(); off2(); off3() }
-  }, [])
-
   const effectiveTabId = activeTabId ?? tabs[0]?.id
 
   return (
-    <div className="app-root">
+    <div className="atk-app-root">
       {/* Sidebar */}
       <ErrorBoundary label="Sidebar">
         <Sidebar />
       </ErrorBoundary>
 
       {/* Main area */}
-      <div className="main-area">
+      <div className="atk-main-area">
         {/* Tab bar */}
         <TabBar
           tabs={tabs}
@@ -103,8 +83,8 @@ export function App() {
             <ResizableSplit tab={activeTab} />
           </ErrorBoundary>
         ) : (
-          <div className="empty-state">
-            <div className="empty-state-icon">⚡</div>
+          <div className="atk-empty-state">
+            <div className="atk-empty-state-icon">⚡</div>
             <span>Open a request or create a new one</span>
           </div>
         )}
@@ -194,7 +174,7 @@ function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
               tabIndex={0}
               aria-selected={isActive}
               data-scroll-active={isActive ? 'true' : undefined}
-              className={`tab ${isActive ? 'active' : ''}`}
+              className={`atk-tab ${isActive ? 'active' : ''}`}
               onClick={() => onSelect(tab.id)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -247,7 +227,7 @@ function TabBar({ tabs, activeTabId, onSelect, onClose, onNew }: {
 
 export function ProtocolToggle() {
   const activeTab = useActiveTab()
-  const { updateTab } = useStore()
+  const updateTab = useStore((s) => s.updateTab)
 
   if (!activeTab) return null
 
