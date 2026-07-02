@@ -4,6 +4,9 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { TerminalSessionMeta } from '../../shared/contracts.js'
 import { assertValidSessionId } from './sessionId.js'
+import { mergeSessionEntries } from './terminalSessionMerge.js'
+
+export { mergeSessionEntries }
 
 interface HistoryData {
   sessions: TerminalSessionMeta[]
@@ -21,17 +24,36 @@ export class TerminalSessionStore {
     this.sessionsDir = join(app.getPath('userData'), 'terminal-sessions')
   }
 
-  async save(meta: TerminalSessionMeta, text: string, maxSessions: number): Promise<void> {
-    assertValidSessionId(meta.id)
+  /**
+   * Atomically save multiple sessions in a single read-modify-write.
+   * All .txt files are written first (parallel, each has a unique id), then
+   * the sessions list is read once, merged, trimmed, and written once —
+   * preventing the lost-update race that arises from concurrent save() calls.
+   */
+  async saveMany(
+    entries: Array<{ meta: TerminalSessionMeta; text: string }>,
+    maxSessions: number
+  ): Promise<void> {
+    if (entries.length === 0) return
+    for (const { meta } of entries) assertValidSessionId(meta.id)
     await mkdir(this.sessionsDir, { recursive: true })
-    await writeFile(join(this.sessionsDir, `${meta.id}.txt`), text, 'utf8')
-    const sessions = this.store.get('sessions', [])
-    sessions.unshift(meta)
-    const trimmed = sessions.slice(0, maxSessions)
-    for (const old of sessions.slice(maxSessions)) {
+    // Write all content files in parallel — unique ids mean no conflict.
+    await Promise.all(
+      entries.map(({ meta, text }) =>
+        writeFile(join(this.sessionsDir, `${meta.id}.txt`), text, 'utf8')
+      )
+    )
+    const existing = this.store.get('sessions', [])
+    const incoming = entries.map(e => e.meta)
+    const { kept, toDelete } = mergeSessionEntries(existing, incoming, maxSessions)
+    for (const old of toDelete) {
       try { await unlink(join(this.sessionsDir, `${old.id}.txt`)) } catch { /* ignore */ }
     }
-    this.store.set('sessions', trimmed)
+    this.store.set('sessions', kept)
+  }
+
+  async save(meta: TerminalSessionMeta, text: string, maxSessions: number): Promise<void> {
+    return this.saveMany([{ meta, text }], maxSessions)
   }
 
   list(): TerminalSessionMeta[] {

@@ -53,6 +53,12 @@ let terminals: TerminalManager | null = null
 let browserPanes: BrowserPaneManager | null = null
 let termHistory: TerminalSessionStore | null = null
 
+// Task 28 / CORR-16: Serialize + await terminal session save on quit.
+// pendingQuitSave holds the single combined save promise built in win.on('closed').
+// quitting prevents the before-quit handler from looping when we call app.quit() ourselves.
+let pendingQuitSave: Promise<void> | null = null
+let quitting = false
+
 function getTerminals(): TerminalManager {
   if (!terminals) terminals = new TerminalManager(mainWindow!)
   return terminals
@@ -290,20 +296,28 @@ async function createWindow(): Promise<void> {
   restoreMainWindowDevTools(win, allowDevTools)
 
   win.on('closed', () => {
-    // Auto-save open terminal sessions before shutdown
+    // Auto-save open terminal sessions before shutdown.
+    // Task 28 / CORR-16: use saveMany() for a single atomic read-modify-write
+    // instead of N concurrent save() calls that interleave on the sessions list.
+    // The promise is stored so before-quit can await it before the app exits.
     if (terminals && stateStore && !stateStore.getSettings().privacy.privateMode) {
-      const sessions = terminals.drainAllSessions()
+      const snapshots = terminals.drainAllSessions()
       const max = stateStore.getSettings().privacy.terminalHistoryMax
-      for (const s of sessions) {
-        void getTermHistory().save({
-          id: randomUUID(),
-          paneId: s.paneId,
-          title: s.cwd.split('/').pop() || 'terminal',
-          cwd: s.cwd,
-          startedAt: s.startedAt,
-          endedAt: Date.now(),
-          lineCount: s.text.split('\n').length
-        }, s.text, max)
+      if (snapshots.length > 0) {
+        const store = getTermHistory()
+        const entries = snapshots.map(s => ({
+          meta: {
+            id: randomUUID(),
+            paneId: s.paneId,
+            title: s.cwd.split('/').pop() || 'terminal',
+            cwd: s.cwd,
+            startedAt: s.startedAt,
+            endedAt: Date.now(),
+            lineCount: s.text.split('\n').length
+          },
+          text: s.text
+        }))
+        pendingQuitSave = store.saveMany(entries, max)
       }
     }
     stateStore?.flushSnapshot()
@@ -326,6 +340,19 @@ async function createWindow(): Promise<void> {
 app.whenReady().then(() => {
   installAppMenu()
   void createWindow()
+})
+
+// Task 28 / CORR-16: Await the combined session save before letting the process exit.
+// event.preventDefault() holds the quit; after the promise settles (success or error)
+// we set quitting=true and call app.quit() so the handler skips the await on the
+// second pass — preventing an infinite before-quit loop.
+app.on('before-quit', (event) => {
+  if (quitting || !pendingQuitSave) return
+  event.preventDefault()
+  quitting = true
+  const save = pendingQuitSave
+  pendingQuitSave = null
+  save.then(() => app.quit()).catch(() => app.quit())
 })
 
 app.on('window-all-closed', () => {
