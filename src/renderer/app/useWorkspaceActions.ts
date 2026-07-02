@@ -382,8 +382,13 @@ export function useWorkspaceActions({
       return { ...p, xPct: screenCol + xFrac, yPct: screenRow + yFrac }
     })
 
-    // Delete ALL collapsed panes, keep only visible ones
+    // Close each collapsed pane through the state layer so they enter Recently Closed (restorable).
+    // Previously used replacePanes to silently drop them, which bypassed Recently Closed entirely.
     const allCollapsedIds = new Set(Object.values(ws.screenCollapsed ?? {}).flat())
+    for (const paneId of allCollapsedIds) {
+      await window.ananke.state.closePane(ws.id, paneId)
+    }
+    // Remove victims from the local working set used for layout repair below
     panes = panes.filter((p) => !allCollapsedIds.has(p.id))
 
     // For each screen: fit layout to actual pane count and re-arrange

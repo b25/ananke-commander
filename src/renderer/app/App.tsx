@@ -82,6 +82,8 @@ export function App() {
 
   // Workspace delete confirm modal state
   const [wsConfirm, setWsConfirm] = useState<{ id: string; name: string; paneCount: number } | null>(null)
+  // Repair workspace confirm modal state
+  const [repairConfirm, setRepairConfirm] = useState<{ collapsedCount: number } | null>(null)
   const refresh = useCallback(async () => { setSnap(await window.ananke.state.get()) }, [])
   useEffect(() => { void refresh() }, [refresh])
 
@@ -280,7 +282,14 @@ export function App() {
           onClose={() => setDrawer('none')}
           onEditToml={() => void openTomlEditor()}
           onCopyDebugInfo={copyDebugInfo}
-          onRepairWorkspace={() => void repairWorkspace()}
+          onRepairWorkspace={() => {
+            const collapsedCount = new Set(Object.values(ws.screenCollapsed ?? {}).flat()).size
+            if (collapsedCount === 0) {
+              void repairWorkspace()
+            } else {
+              setRepairConfirm({ collapsedCount })
+            }
+          }}
         />
       )}
       {drawer === 'recent' && (
@@ -291,6 +300,20 @@ export function App() {
           </h3>
           <RecentlyClosedPanel snap={snap} ws={ws} onClose={() => setDrawer('none')} onSnapshot={setSnap} />
         </aside>
+      )}
+      {repairConfirm && (
+        <ConfirmModal
+          title="Repair Workspace"
+          message={`${repairConfirm.collapsedCount} collapsed pane(s) on this workspace will be closed. They remain restorable from Recently Closed.`}
+          confirmLabel="Repair"
+          cancelLabel="Cancel"
+          tone="destructive"
+          onConfirm={() => {
+            setRepairConfirm(null)
+            void repairWorkspace()
+          }}
+          onCancel={() => setRepairConfirm(null)}
+        />
       )}
       {tomlEditorOpen && <TomlEditorModal onClose={(s) => void closeTomlEditor(s)} />}
       {wsConfirm && (
