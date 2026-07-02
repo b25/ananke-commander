@@ -152,7 +152,9 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   const selectedPaths =
     focusedSideLocal === 'left' ? [...leftSelLocal] : [...rightSelLocal]
 
-  const activePath = pane.focusedSide === 'left' ? pane.leftPath : pane.rightPath
+  // Uses focusedSideLocal so mkdir / create-file target the panel the user just clicked,
+  // not the debounce-stale pane.focusedSide (Task 3 fix2 — same root as Issue 1).
+  const activePath = focusedSideLocal === 'left' ? pane.leftPath : pane.rightPath
 
   const runFind = async (side: 'left' | 'right', findState: FindState) => {
     const setFind = side === 'left' ? setLeftFind : setRightFind
@@ -560,7 +562,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 path={pane.leftPath}
                 entries={visibleLeftEntries}
                 selected={leftSel}
-                focused={pane.focusedSide === 'left'}
+                focused={focusedSideLocal === 'left'}
                 focusName={leftFocusName}
                 renaming={renaming?.side === 'left' ? renaming : null}
                 sort={leftSort}
@@ -612,7 +614,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 path={pane.rightPath}
                 entries={visibleRightEntries}
                 selected={rightSel}
-                focused={pane.focusedSide === 'right'}
+                focused={focusedSideLocal === 'right'}
                 focusName={rightFocusName}
                 renaming={renaming?.side === 'right' ? renaming : null}
                 sort={rightSort}

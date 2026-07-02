@@ -173,3 +173,23 @@ Commands run: `npm test` + `npm run typecheck`
 
 - `activePath` (line ~150) and the `focused` prop on `FileList` (lines ~554 and ~605) still read from `pane.focusedSide`. `activePath` affects mkdir/create-file directory and CopyMoveDialog; `focused` affects the visual focus ring. Both could lag 300 ms in the same scenario but were not in scope for this review. A follow-up could apply the same `focusedSideLocal` substitution to those two sites.
 - `cancelSelDebounce` is not wrapped in `useCallback`. The `useEffect(() => () => cancelSelDebounce(), [])` captures the function by reference at mount time; because it accesses only the stable `selDebounceRef`, this is correct but may trigger ESLint `react-hooks/exhaustive-deps`. The `eslint-disable-next-line` comment suppresses the warning.
+
+---
+
+## Fix pass 2 (focusedSideLocal consistency)
+
+Completed the focusedSide-staleness correction from Fix pass 1 by repointing the two remaining behavior/visual reads of `pane.focusedSide` at the synchronous `focusedSideLocal`:
+
+- `activePath` (the left-vs-right path derivation used as the mkdir / create-file target directory and the CopyMoveDialog source): now `focusedSideLocal === 'left' ? pane.leftPath : pane.rightPath`. Prevents a new file/folder being created in the wrong panel's directory for up to 300 ms after a cross-panel click.
+- `<FileList>` `focused` prop on both panels: now `focusedSideLocal === 'left'` / `focusedSideLocal === 'right'` so the focus ring tracks the clicked panel immediately.
+
+Persistence/restore reads of `pane.focusedSide` (the debounced `scheduleSel` flush and pane snapshot) were left intact — `focusedSideLocal` is already set synchronously in `onSelect`, and the debounced persistence path is unchanged.
+
+Note: some keyboard-handler and status-bar reads of `pane.focusedSide` remain (e.g. `openEditor`'s entries selection, F2 rename, Tab, Ctrl+Arrow, status-bar count). These were out of scope for this pass and, unlike `activePath`, do not create files in a wrong directory; they can be repointed in a follow-up for full consistency.
+
+### Test results (fix pass 2)
+
+```
+npm test:           tests 91 / pass 91 / fail 0
+npm run typecheck:  clean (no output, exit 0)
+```
