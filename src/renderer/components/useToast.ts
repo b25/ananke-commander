@@ -9,9 +9,18 @@
  *
  * Works from any renderer context (React components, plain TS modules) because
  * it only dispatches a CustomEvent on `window`.
+ *
+ * Pass an optional `action` to show a labelled button alongside the dismiss ✕.
+ * Clicking the action button invokes the callback AND dismisses the toast.
  */
-export function showToast(message: string, tone: 'error' | 'warn' | 'info' = 'error'): void {
+export type ToastAction = { label: string; onClick: () => void }
+
+export function showToast(
+  message: string,
+  tone: 'error' | 'warn' | 'info' = 'error',
+  action?: ToastAction
+): void {
   window.dispatchEvent(
-    new CustomEvent('ananke:toast', { detail: { message, tone } })
+    new CustomEvent('ananke:toast', { detail: { message, tone, action } })
   )
 }

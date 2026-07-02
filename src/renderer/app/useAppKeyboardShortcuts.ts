@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { AppStateSnapshot, WorkspaceState } from '../../shared/contracts'
 import { bestLayout } from '../lib/layouts'
 import { shouldShellHandleShortcut } from '../lib/keyboardShortcuts'
+import { showToast } from '../components/useToast'
 
 type Params = {
   snap: AppStateSnapshot | null
@@ -48,10 +49,23 @@ export function useAppKeyboardShortcuts({
 
       if (!ws) return
 
-      // Cmd/Ctrl + W: close active pane
+      // Cmd/Ctrl + W: close active pane — shows an Undo toast so the close is recoverable
       if (mod && e.key === 'w' && ws.activePaneId) {
         e.preventDefault()
-        void closePane(ws.activePaneId)
+        const closedPaneId = ws.activePaneId
+        const wsId = ws.id
+        void closePane(closedPaneId)
+        showToast('Pane closed', 'info', {
+          label: 'Undo',
+          onClick: () => {
+            void window.ananke.state.getRecentlyClosed().then((entries) => {
+              const entry = entries.find((rc) => rc.snapshot.id === closedPaneId)
+              if (entry) {
+                void window.ananke.state.restoreClosed(wsId, entry.id).then(setSnap)
+              }
+            })
+          }
+        })
         return
       }
 
