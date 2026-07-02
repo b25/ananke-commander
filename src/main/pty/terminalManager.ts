@@ -123,7 +123,22 @@ export class TerminalManager {
         }
       })
       proc.onExit(({ exitCode }) => {
+        // Flush any buffered output before tearing down the pane (CORR-15 / PERF-9)
+        const pending = this.buffers.get(paneId)
+        if (pending && pending.length > 0) {
+          const data = pending.join('')
+          if (!this.win.isDestroyed() && !this.win.webContents.isDestroyed()) {
+            this.win.webContents.send('pty:data', { paneId, data })
+          }
+        }
+        // Remove this pane from every per-pane map so nothing is retained after exit
         this.procs.delete(paneId)
+        this.buffers.delete(paneId)
+        this.sessionChunks.delete(paneId)
+        this.sessionSizes.delete(paneId)
+        this.sessionMeta.delete(paneId)
+        // Stop the 8 ms flush interval when there are no terminals left
+        if (this.procs.size === 0) this.stopFlushing()
         if (!this.win.isDestroyed() && !this.win.webContents.isDestroyed()) {
           this.win.webContents.send('pty:exit', { paneId, exitCode })
         }
@@ -155,8 +170,6 @@ export class TerminalManager {
           this.win.webContents.send('pty:data', { paneId, data })
         }
       }
-      this.buffers.delete(paneId)
-
       // Send EOF to allow bash/zsh to flush .zsh_history gracefully
       try {
         p.write('\x04') // Ctrl+D
@@ -167,12 +180,16 @@ export class TerminalManager {
         try { p.kill() } catch { /* ignore */ }
       }, 300)
       this.procs.delete(paneId)
-      // Clear session data — renderer already saved via handleClose
-      this.sessionChunks.delete(paneId)
-      this.sessionSizes.delete(paneId)
-      this.sessionMeta.delete(paneId)
-      if (this.procs.size === 0) this.stopFlushing()
     }
+    // Clean up per-pane maps regardless of whether the proc was still alive.
+    // Map.delete is a no-op on an absent key, so this is idempotent: if the
+    // shell already exited naturally (onExit ran first), these deletes are safe
+    // no-ops and we still correctly stop the flush timer when no panes remain.
+    this.buffers.delete(paneId)
+    this.sessionChunks.delete(paneId)
+    this.sessionSizes.delete(paneId)
+    this.sessionMeta.delete(paneId)
+    if (this.procs.size === 0) this.stopFlushing()
   }
 
   /** Drain all accumulated session data for saving on app quit. Clears internal state. */
