@@ -74,6 +74,10 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
   // This prevents one disk write + full-app re-render per arrow key repeat.
   const [leftSelLocal, setLeftSelLocal] = useState<string[]>(pane.leftSelection)
   const [rightSelLocal, setRightSelLocal] = useState<string[]>(pane.rightSelection)
+  // focusedSideLocal is the synchronous counterpart of pane.focusedSide.
+  // pane.focusedSide is only updated via the 300ms debounce flush; during that
+  // window selectedPaths must read from local state to avoid cross-panel operations.
+  const [focusedSideLocal, setFocusedSideLocal] = useState<'left' | 'right'>(pane.focusedSide)
   // Always point at the latest pane so the debounce closure doesn't go stale
   const paneRef = useRef(pane)
   paneRef.current = pane
@@ -92,8 +96,14 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     }
     setLeftSelLocal(pane.leftSelection)
     setRightSelLocal(pane.rightSelection)
+    setFocusedSideLocal(pane.focusedSide)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pane.id, pane.leftPath, pane.rightPath])
+
+  // Issue 2: cancel any in-flight selection debounce on unmount to prevent ghost
+  // mutations firing onUpdate on a pane that no longer exists in the tree.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => cancelSelDebounce(), [])
 
   // Schedule a debounced persist of the current selection to pane state
   const scheduleSel = useCallback((nextLeft: string[], nextRight: string[], side: 'left' | 'right') => {
@@ -136,9 +146,11 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
     (p): p is FileBrowserPaneState => p.type === 'file-browser' && p.id !== pane.id
   )
 
-  // selectedPaths reads from local state so operations (delete, copy…) see the latest selection
+  // selectedPaths reads from local state so operations (delete, copy…) see the latest selection.
+  // Uses focusedSideLocal (not pane.focusedSide) so it is correct even within the 300ms debounce
+  // window before pane.focusedSide is flushed — fixes Issue 1 (wrong-panel operations).
   const selectedPaths =
-    pane.focusedSide === 'left' ? [...leftSelLocal] : [...rightSelLocal]
+    focusedSideLocal === 'left' ? [...leftSelLocal] : [...rightSelLocal]
 
   const activePath = pane.focusedSide === 'left' ? pane.leftPath : pane.rightPath
 
@@ -237,7 +249,10 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
           onUpdate({ ...pane, focusedSide: side, leftSelection: leftSelLocal, rightSelection: newSel })
         }
       } else {
-        onUpdate({ ...pane, focusedSide: side })
+        // File is already in the selection: flush any pending debounced selection so that
+        // fileContextMenuItems sees current pane.leftSelection/rightSelection (Issue 3).
+        cancelSelDebounce()
+        onUpdate({ ...pane, focusedSide: side, leftSelection: leftSelLocal, rightSelection: rightSelLocal })
       }
       setCtxMenu({ x: e.clientX, y: e.clientY, path: entry.path, side })
     },
@@ -562,6 +577,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 onSelect={(paths, add) => {
                   const next = togglePaths(leftSelLocal, paths, add)
                   setLeftSelLocal(next)
+                  setFocusedSideLocal('left')
                   scheduleSel(next, rightSelLocal, 'left')
                 }}
                 onActivate={(entry) => {
@@ -613,6 +629,7 @@ export function FileBrowserPane({ pane, isActive, allPanes, onUpdate, onClose }:
                 onSelect={(paths, add) => {
                   const next = togglePaths(rightSelLocal, paths, add)
                   setRightSelLocal(next)
+                  setFocusedSideLocal('right')
                   scheduleSel(leftSelLocal, next, 'right')
                 }}
                 onActivate={(entry) => {

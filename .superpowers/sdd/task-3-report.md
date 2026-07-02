@@ -122,3 +122,54 @@ After:
   via `onFileContextMenu`, this is safe. Selection-based operations inside `fileContextMenuItems`
   will see the persisted (debounce-flushed) state — acceptable for copy/move/delete actions
   that don't fire per-keystroke.
+
+---
+
+## Fix pass (review findings 1-3)
+
+All three fixes are in `src/renderer/panes/file-browser/FileBrowserPane.tsx`.
+
+### Finding 1 — `focusedSide` debounced → wrong-panel operations for up to 300 ms
+
+Added `const [focusedSideLocal, setFocusedSideLocal] = useState<'left' | 'right'>(pane.focusedSide)` after the existing `leftSelLocal`/`rightSelLocal` state declarations.
+
+In the left `onSelect` handler added `setFocusedSideLocal('left')` before `scheduleSel`; in the right `onSelect` handler added `setFocusedSideLocal('right')`.
+
+Changed `selectedPaths` from `pane.focusedSide === 'left' ?` to `focusedSideLocal === 'left' ?` so F8/delete/copy/move/F2 operations see the side the user just clicked, not the stale persisted side.
+
+In the path-change `useEffect` (`[pane.id, pane.leftPath, pane.rightPath]`) added `setFocusedSideLocal(pane.focusedSide)` alongside the existing `setLeftSelLocal`/`setRightSelLocal` resets, so navigating to a different directory also re-anchors the local focused side.
+
+### Finding 2 — No unmount cleanup; pending debounce fires after pane closes
+
+Added a dedicated unmount-only effect immediately after the path-change effect:
+```typescript
+// eslint-disable-next-line react-hooks/exhaustive-deps
+useEffect(() => () => cancelSelDebounce(), [])
+```
+The empty dep array ensures this only runs the cleanup on unmount. `cancelSelDebounce` is safe to capture at mount time because it only accesses `selDebounceRef`, which is a stable ref object.
+
+### Finding 3 — Context menu on already-selected file doesn't flush pending selection
+
+In `onFileContextMenu`, the `else` branch (file already in selection) previously called `onUpdate({ ...pane, focusedSide: side })`, which wrote `pane.leftSelection`/`pane.rightSelection` from the stale pane snapshot (not the in-flight local state). Changed to:
+```typescript
+cancelSelDebounce()
+onUpdate({ ...pane, focusedSide: side, leftSelection: leftSelLocal, rightSelection: rightSelLocal })
+```
+This mirrors the existing `if` branch (new-file path): cancel the timer, then write current local state immediately so the next render's `fileContextMenuItems` call sees up-to-date selections for copy/move payloads.
+
+### Test results
+
+```
+npm test:
+  tests 91 / pass 91 / fail 0  (all existing tests pass; renderer changes not unit-testable without a React harness)
+
+npm run typecheck:
+  (clean — no output, exit 0)
+```
+
+Commands run: `npm test` + `npm run typecheck`
+
+### Residual concerns
+
+- `activePath` (line ~150) and the `focused` prop on `FileList` (lines ~554 and ~605) still read from `pane.focusedSide`. `activePath` affects mkdir/create-file directory and CopyMoveDialog; `focused` affects the visual focus ring. Both could lag 300 ms in the same scenario but were not in scope for this review. A follow-up could apply the same `focusedSideLocal` substitution to those two sites.
+- `cancelSelDebounce` is not wrapped in `useCallback`. The `useEffect(() => () => cancelSelDebounce(), [])` captures the function by reference at mount time; because it accesses only the stable `selDebounceRef`, this is correct but may trigger ESLint `react-hooks/exhaustive-deps`. The `eslint-disable-next-line` comment suppresses the warning.
