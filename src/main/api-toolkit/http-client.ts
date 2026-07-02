@@ -156,9 +156,10 @@ async function fetchWithRedirectLimit(
 ): Promise<Response> {
   let currentUrl = url
   let currentHeaders = { ...headers }
+  let currentInit = { ...init }
 
   for (let i = 0; i <= maxRedirects; i++) {
-    const response = await undiciFetch(currentUrl, { ...init, headers: currentHeaders })
+    const response = await undiciFetch(currentUrl, { ...currentInit, headers: currentHeaders })
     if (response.status < 300 || response.status >= 400) return response
 
     const location = response.headers.get('location')
@@ -170,9 +171,28 @@ async function fetchWithRedirectLimit(
       currentHeaders = stripSensitiveHeaders(currentHeaders)
     }
     currentUrl = nextUrl.toString()
+
+    // RFC 7231 §6.4 redirect method/body rewriting:
+    //  303 See Other → always GET, drop body
+    //  301/302 + POST → de-facto GET, drop body (browsers / curl behaviour)
+    //  307/308 → preserve method + body (that is their purpose)
+    const status = response.status
+    const method = (currentInit.method as string | undefined)?.toUpperCase() ?? 'GET'
+    if (status === 303 || ((status === 301 || status === 302) && method === 'POST')) {
+      currentInit = { ...currentInit, method: 'GET', body: undefined }
+      // Strip body-related request headers
+      const next: Record<string, string> = {}
+      for (const [k, v] of Object.entries(currentHeaders)) {
+        const lower = k.toLowerCase()
+        if (lower === 'content-type' || lower === 'content-length' || lower === 'transfer-encoding') continue
+        next[k] = v
+      }
+      currentHeaders = next
+    }
+    // 307 / 308: currentInit unchanged → method + body are preserved automatically
   }
 
-  return await undiciFetch(currentUrl, { ...init, headers: currentHeaders })
+  return await undiciFetch(currentUrl, { ...currentInit, headers: currentHeaders })
 }
 
 export async function sendHttp(
